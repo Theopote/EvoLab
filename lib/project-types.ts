@@ -34,6 +34,7 @@ export interface PlanVersion {
   label: string;
   createdAt: string;
   parentVersionId?: string;
+  metadata?: PlanVersionMetadata;
   rooms: Room[];
   levels: Level[];
   building: Building;
@@ -44,6 +45,18 @@ export interface PlanVersion {
   };
   scores?: VersionScores;
   mep?: MepLayout;
+}
+
+export interface PlanVersionMetadata {
+  strategy?: string;
+  topology?: {
+    circulation?: string;
+    core?: string;
+    daylight?: string;
+    plumbing?: string;
+  };
+  validationWarnings?: string[];
+  repairs?: string[];
 }
 
 export interface Room {

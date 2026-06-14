@@ -26,4 +26,7 @@ The response shape must be:
 
 The PlanVersion must include complete Room[], outline, overallBounds, and recognition confidence should be reflected in warnings when uncertain.
 Prefer independent Level.walls and Level.openings over legacy room doors/windows. Walls should include start, end, thickness, height, type, and roomIds. Openings should include wallId, type, center, width, height, sillHeight when relevant.
+Room polygons must be inside outline, should not overlap, and areaSqm should match polygon area within 20% when scale can be inferred.
+Use metadata.topology to describe recognition assumptions; do not add explanation outside JSON.
+The server will validate, normalize, repair, and rescore the returned PlanVersion.
 `;

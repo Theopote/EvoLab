@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { normalizeProjectVersions } from "@/lib/architecture-model";
 import { requestAnthropicJson } from "@/lib/anthropic-json";
 import { createMockPlanVersions } from "@/lib/mock-api";
+import { postProcessPlanVersions } from "@/lib/plan-postprocess";
 import { generatePlanPrompt } from "@/lib/prompts/generatePlanPrompt";
 import type { PlanVersion, Point } from "@/lib/project-types";
 
@@ -34,7 +34,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       ...data,
-      versions: normalizeProjectVersions(data.versions)
+      versions: postProcessPlanVersions(data.versions)
     });
   } catch (error) {
     return NextResponse.json({

@@ -1,5 +1,5 @@
-import { normalizePlanVersion } from "@/lib/architecture-model";
 import { initialProjectData } from "@/lib/evolab-data";
+import { postProcessPlanVersion } from "@/lib/plan-postprocess";
 import type {
   AnalysisLayerId,
   CopilotFinding,
@@ -42,7 +42,7 @@ export function createMockPlanVersions(outline?: Point[], projectType = "healthc
 
   return ["Central Core", "Dual Corridor", "Service Spine"].map((strategy, index) => {
     const offset = index * 1.8;
-    return normalizePlanVersion(
+    return postProcessPlanVersion(
       withScores(
         {
         ...baseVersion,
@@ -69,7 +69,7 @@ export function createMockPlanVersions(outline?: Point[], projectType = "healthc
 
 export function createMockAnalyzedVersion(): { version: PlanVersion; confidence: number; warnings: string[] } {
   return {
-    version: normalizePlanVersion({
+    version: postProcessPlanVersion({
       ...baseVersion,
       id: "analyzed-plan-001",
       label: "Analyzed Plan / Drawing Import",
@@ -82,7 +82,7 @@ export function createMockAnalyzedVersion(): { version: PlanVersion; confidence:
 
 export function createMockModifiedVersion(currentVersion: PlanVersion, userRequest: string) {
   const shouldMoveCore = /\u6838\u5fc3|core|\u5317/i.test(userRequest);
-  const version: PlanVersion = normalizePlanVersion({
+  const version: PlanVersion = postProcessPlanVersion({
     ...currentVersion,
     id: `${currentVersion.id}-mod-${Date.now()}`,
     label: `${currentVersion.label} / Copilot Revision`,
