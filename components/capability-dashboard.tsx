@@ -7,12 +7,12 @@ interface CapabilityDashboardProps {
 }
 
 const capabilities = [
-  { label: "轮廓到平面", icon: DraftingCompass, status: "阶段 1 数据就绪" },
-  { label: "语义模型", icon: Layers3, status: "ProjectData 驱动" },
-  { label: "分析图层", icon: Waypoints, status: "待阶段 6 接入" },
-  { label: "3D 模型", icon: Box, status: "待阶段 4 接入" },
-  { label: "工程算量", icon: Ruler, status: "待阶段 7 接入" },
-  { label: "方案评分", icon: Activity, status: "mock scores 可读" }
+  { label: "Outline to plan", icon: DraftingCompass, status: "Plan generation ready" },
+  { label: "Semantic model", icon: Layers3, status: "ProjectData driven" },
+  { label: "Analysis layers", icon: Waypoints, status: "Overlay engine ready" },
+  { label: "3D model", icon: Box, status: "R3F model ready" },
+  { label: "Quantity takeoff", icon: Ruler, status: "Rule engine ready" },
+  { label: "Scheme scoring", icon: Activity, status: "Scores available" }
 ];
 
 export function CapabilityDashboard({ project, activeVersion }: CapabilityDashboardProps) {
@@ -20,15 +20,15 @@ export function CapabilityDashboard({ project, activeVersion }: CapabilityDashbo
     <section className="cad-grid overflow-auto p-6">
       <div className="mb-5 flex items-end justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-white">EvoLab 建筑设计工作台</h1>
+          <h1 className="text-2xl font-semibold text-white">EvoLab Design Workspace</h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-muted">
-            阶段 1 已建立统一建筑语义数据模型。平面、模型、分析、系统与算量后续都将由同一份
-            ProjectData 驱动。
+            EvoLab uses one editable architectural data model to drive plan, model, analysis,
+            systems, quantities, sheets and export results.
           </p>
         </div>
         <div className="rounded border border-line bg-panel/80 px-4 py-3 text-right">
           <div className="text-xs text-muted">Active Version</div>
-          <div className="mt-1 text-sm text-white">{activeVersion?.label ?? "无"}</div>
+          <div className="mt-1 text-sm text-white">{activeVersion?.label ?? "None"}</div>
         </div>
       </div>
 
@@ -52,17 +52,17 @@ export function CapabilityDashboard({ project, activeVersion }: CapabilityDashbo
       <div className="mt-5 grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
         <section className="rounded border border-line bg-panel/90 p-4">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-white">当前方案空间数据</h2>
-            <span className="text-xs text-muted">{project.versions.length} 个版本</span>
+            <h2 className="text-sm font-semibold text-white">Active spatial data</h2>
+            <span className="text-xs text-muted">{project.versions.length} versions</span>
           </div>
           <div className="overflow-hidden rounded border border-line">
             <table className="w-full text-left text-sm">
               <thead className="bg-white/[0.04] text-xs uppercase tracking-[0.14em] text-muted">
                 <tr>
-                  <th className="px-3 py-2">房间</th>
-                  <th className="px-3 py-2">类型</th>
-                  <th className="px-3 py-2">分区</th>
-                  <th className="px-3 py-2 text-right">面积</th>
+                  <th className="px-3 py-2">Room</th>
+                  <th className="px-3 py-2">Type</th>
+                  <th className="px-3 py-2">Zone</th>
+                  <th className="px-3 py-2 text-right">Area</th>
                 </tr>
               </thead>
               <tbody>
@@ -71,7 +71,7 @@ export function CapabilityDashboard({ project, activeVersion }: CapabilityDashbo
                     <td className="px-3 py-2 text-slate-100">{room.name}</td>
                     <td className="px-3 py-2 text-muted">{room.type}</td>
                     <td className="px-3 py-2 text-muted">{room.zone}</td>
-                    <td className="px-3 py-2 text-right text-slate-100">{room.areaSqm} ㎡</td>
+                    <td className="px-3 py-2 text-right text-slate-100">{room.areaSqm} sqm</td>
                   </tr>
                 ))}
               </tbody>
@@ -80,13 +80,13 @@ export function CapabilityDashboard({ project, activeVersion }: CapabilityDashbo
         </section>
 
         <section className="rounded border border-line bg-panel/90 p-4">
-          <h2 className="mb-4 text-sm font-semibold text-white">方案评分</h2>
+          <h2 className="mb-4 text-sm font-semibold text-white">Scheme scores</h2>
           <div className="space-y-3">
             {[
-              ["面积效率", activeVersion?.scores?.areaEfficiency],
-              ["流线评分", activeVersion?.scores?.circulationScore],
-              ["采光评分", activeVersion?.scores?.daylightScore],
-              ["机电对齐", activeVersion?.scores?.mepAlignmentScore]
+              ["Area efficiency", activeVersion?.scores?.areaEfficiency],
+              ["Circulation", activeVersion?.scores?.circulationScore],
+              ["Daylight", activeVersion?.scores?.daylightScore],
+              ["MEP alignment", activeVersion?.scores?.mepAlignmentScore]
             ].map(([label, value]) => (
               <div key={label as string}>
                 <div className="mb-1 flex justify-between text-xs">

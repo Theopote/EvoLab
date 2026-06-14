@@ -2,13 +2,13 @@ import type { ProjectData } from "@/lib/project-types";
 
 export const initialProjectData: ProjectData = {
   projectId: "evolab-demo-001",
-  projectName: "EvoLab 医疗综合体概念方案",
+  projectName: "EvoLab Healthcare Concept Study",
   projectType: "healthcare",
   activeVersionId: "scheme-a",
   versions: [
     {
       id: "scheme-a",
-      label: "方案 A / 集中核心筒",
+      label: "Scheme A / Central Core",
       createdAt: "2026-06-14T09:00:00.000Z",
       outline: [
         [0, 0],
@@ -30,7 +30,7 @@ export const initialProjectData: ProjectData = {
       rooms: [
         {
           id: "lobby-01",
-          name: "门诊大厅",
+          name: "Outpatient Lobby",
           type: "lobby",
           zone: "public",
           polygon: [
@@ -49,7 +49,7 @@ export const initialProjectData: ProjectData = {
         },
         {
           id: "corridor-01",
-          name: "主医疗街",
+          name: "Main Medical Street",
           type: "corridor",
           zone: "circulation",
           polygon: [
@@ -66,7 +66,7 @@ export const initialProjectData: ProjectData = {
         },
         {
           id: "consult-01",
-          name: "诊室组团",
+          name: "Consultation Cluster",
           type: "consultation",
           zone: "semi_public",
           polygon: [
@@ -86,7 +86,7 @@ export const initialProjectData: ProjectData = {
         },
         {
           id: "office-01",
-          name: "医护办公",
+          name: "Clinical Offices",
           type: "office",
           zone: "private",
           polygon: [
@@ -105,7 +105,7 @@ export const initialProjectData: ProjectData = {
         },
         {
           id: "core-01",
-          name: "楼梯电梯核心",
+          name: "Stair Elevator Core",
           type: "elevator",
           zone: "circulation",
           polygon: [
@@ -122,7 +122,7 @@ export const initialProjectData: ProjectData = {
         },
         {
           id: "shaft-01",
-          name: "管井",
+          name: "Service Shaft",
           type: "shaft",
           zone: "service",
           polygon: [
@@ -139,7 +139,7 @@ export const initialProjectData: ProjectData = {
         },
         {
           id: "equipment-01",
-          name: "设备机房",
+          name: "Equipment Room",
           type: "equipment_room",
           zone: "service",
           polygon: [

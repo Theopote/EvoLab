@@ -39,13 +39,13 @@ export function createMockPlanVersions(outline?: Point[], projectType = "healthc
     { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity }
   );
 
-  return ["集中核心筒", "双走廊", "服务带"].map((strategy, index) => {
+  return ["Central Core", "Dual Corridor", "Service Spine"].map((strategy, index) => {
     const offset = index * 1.8;
     return withScores(
       {
         ...baseVersion,
         id: `mock-${projectType}-${index + 1}`,
-        label: `方案 ${String.fromCharCode(65 + index)} / ${strategy}`,
+        label: `Scheme ${String.fromCharCode(65 + index)} / ${strategy}`,
         createdAt: new Date().toISOString(),
         outline: sourceOutline,
         overallBounds: {
@@ -69,20 +69,20 @@ export function createMockAnalyzedVersion(): { version: PlanVersion; confidence:
     version: {
       ...baseVersion,
       id: "analyzed-plan-001",
-      label: "识别方案 / 图纸导入",
+      label: "Analyzed Plan / Drawing Import",
       createdAt: new Date().toISOString()
     },
     confidence: 0.78,
-    warnings: ["未提供真实图纸识别结果，当前返回 EvoLab mock 结构化平面。", "门窗和文字标注置信度为示例值。"]
+    warnings: ["No real drawing recognition was run. EvoLab returned mock structured plan data.", "Door, window and text annotation confidence values are examples."]
   };
 }
 
 export function createMockModifiedVersion(currentVersion: PlanVersion, userRequest: string) {
-  const shouldMoveCore = /核心|core|北/.test(userRequest);
+  const shouldMoveCore = /\u6838\u5fc3|core|\u5317/i.test(userRequest);
   const version: PlanVersion = {
     ...currentVersion,
     id: `${currentVersion.id}-mod-${Date.now()}`,
-    label: `${currentVersion.label} / Copilot 修改`,
+    label: `${currentVersion.label} / Copilot Revision`,
     createdAt: new Date().toISOString(),
     parentVersionId: currentVersion.id,
     rooms: currentVersion.rooms.map((room) => {
@@ -108,15 +108,15 @@ export function createMockModifiedVersion(currentVersion: PlanVersion, userReque
     {
       id: "finding-egress",
       tone: "success",
-      text: "已根据请求生成完整可编辑方案版本。",
-      sub: "平面、模型、分析与算量模块可继续共享此 PlanVersion。",
-      actions: [{ id: "recalculate-areas", label: "重新计算面积" }]
+      text: "A complete editable plan version was generated from the request.",
+      sub: "Plan, model, analysis and quantity modules can keep sharing this PlanVersion.",
+      actions: [{ id: "recalculate-areas", label: "Recalculate areas" }]
     },
     {
       id: "finding-risk",
       tone: version.scores?.riskCount ? "warning" : "success",
-      text: version.scores?.riskCount ? "仍有少量规范风险需要后续校核。" : "当前 mock 规则未发现高风险项。",
-      actions: [{ id: "optimize-egress", label: "优化疏散" }]
+      text: version.scores?.riskCount ? "Some compliance risks still need later review." : "No high-risk item was found by the mock rules.",
+      actions: [{ id: "optimize-egress", label: "Optimize egress" }]
     }
   ];
 
@@ -156,8 +156,8 @@ export function createMockMep(version: PlanVersion): { mep: MepLayout; findings:
       {
         id: "mep-alignment",
         tone: "info",
-        text: "已生成概念级 MEP 竖井和主干路由。",
-        sub: "优先沿走廊布置主干，并连接设备房、管井和需给排水房间。"
+        text: "Concept-level MEP shafts and trunk routes were generated.",
+        sub: "Trunks prefer corridor routes and connect equipment rooms, shafts and wet rooms."
       }
     ]
   };

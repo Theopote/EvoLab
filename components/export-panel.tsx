@@ -1,0 +1,152 @@
+"use client";
+
+import { Download, FileArchive, FileCode2, FileJson, FileSpreadsheet, FileText } from "lucide-react";
+import type { ComplianceItem, QuantityResult } from "@/lib/quantity-engine";
+import {
+  createComplianceCsv,
+  createPlanSvg,
+  createQuantityCsv,
+  downloadTextFile,
+  exportProjectJson,
+  exportVersionJson
+} from "@/lib/export-utils";
+import type { PlanVersion, ProjectData } from "@/lib/project-types";
+
+interface ExportPanelProps {
+  project: ProjectData;
+  activeVersion?: PlanVersion;
+  quantities?: QuantityResult;
+  complianceItems: ComplianceItem[];
+}
+
+const plannedExports = [
+  { label: "Drawing PDF", detail: "Needs PDF layout engine", icon: FileText },
+  { label: "glTF model", detail: "Needs geometry serialization", icon: FileArchive },
+  { label: "IFC model", detail: "Needs IFC schema mapping", icon: FileCode2 }
+];
+
+export function ExportPanel({ project, activeVersion, quantities, complianceItems }: ExportPanelProps) {
+  const canExportVersion = Boolean(activeVersion);
+  const canExportQuantities = Boolean(quantities);
+
+  return (
+    <section className="grid min-h-full grid-rows-[auto_minmax(0,1fr)] gap-4">
+      <div className="rounded border border-line bg-panel/90 p-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-base font-semibold text-white">Export Center</h1>
+            <p className="mt-1 text-xs text-muted">
+              Export editable semantic data first; drawings and model formats stay tied to activeVersion.
+            </p>
+          </div>
+          <span className="rounded border border-accent/40 px-2 py-1 text-xs text-accent">
+            {activeVersion?.label ?? "No active version"}
+          </span>
+        </div>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[1fr_0.8fr]">
+        <section className="rounded border border-line bg-panel/90 p-3">
+          <h2 className="mb-3 text-sm font-semibold text-white">Available Exports</h2>
+          <div className="grid gap-3 lg:grid-cols-2">
+            <ExportCard
+              icon={FileJson}
+              label="ProjectData JSON"
+              detail={`${project.versions.length} versions, active: ${project.activeVersionId}`}
+              onClick={() => exportProjectJson(project)}
+            />
+            <ExportCard
+              disabled={!canExportVersion}
+              icon={FileJson}
+              label="Active PlanVersion JSON"
+              detail={activeVersion ? `${activeVersion.rooms.length} rooms` : "No active version"}
+              onClick={() => activeVersion && exportVersionJson(activeVersion)}
+            />
+            <ExportCard
+              disabled={!canExportVersion}
+              icon={FileCode2}
+              label="Active plan SVG"
+              detail="Editable vector floor plan"
+              onClick={() =>
+                activeVersion &&
+                downloadTextFile(`${activeVersion.id}-plan.svg`, createPlanSvg(activeVersion), "image/svg+xml")
+              }
+            />
+            <ExportCard
+              disabled={!canExportQuantities}
+              icon={FileSpreadsheet}
+              label="Quantity CSV"
+              detail={quantities ? `${quantities.rows.length} rows` : "No quantity result"}
+              onClick={() =>
+                quantities &&
+                downloadTextFile(`${project.projectId}-quantities.csv`, createQuantityCsv(quantities), "text/csv")
+              }
+            />
+            <ExportCard
+              disabled={complianceItems.length === 0}
+              icon={FileSpreadsheet}
+              label="Compliance CSV"
+              detail={`${complianceItems.filter((item) => item.status === "warning").length} warnings`}
+              onClick={() =>
+                downloadTextFile(
+                  `${project.projectId}-compliance.csv`,
+                  createComplianceCsv(complianceItems),
+                  "text/csv"
+                )
+              }
+            />
+          </div>
+        </section>
+
+        <section className="rounded border border-line bg-panel/90 p-3">
+          <h2 className="mb-3 text-sm font-semibold text-white">Planned Model / Drawing Exports</h2>
+          <div className="space-y-3">
+            {plannedExports.map((item) => {
+              const Icon = item.icon;
+              return (
+                <div className="rounded border border-line bg-[#0b1118] p-3 opacity-70" key={item.label}>
+                  <div className="mb-2 flex items-center justify-between">
+                    <Icon className="h-4 w-4 text-muted" />
+                    <span className="rounded border border-line px-2 py-1 text-[11px] text-muted">Planned</span>
+                  </div>
+                  <div className="text-sm text-slate-200">{item.label}</div>
+                  <div className="mt-1 text-xs text-muted">{item.detail}</div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      </div>
+    </section>
+  );
+}
+
+function ExportCard({
+  disabled,
+  icon: Icon,
+  label,
+  detail,
+  onClick
+}: {
+  disabled?: boolean;
+  icon: typeof Download;
+  label: string;
+  detail: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      className="rounded border border-line bg-[#0b1118] p-3 text-left hover:border-accent/60 disabled:cursor-not-allowed disabled:opacity-45"
+      disabled={disabled}
+      type="button"
+      onClick={onClick}
+    >
+      <div className="mb-3 flex items-center justify-between">
+        <Icon className="h-4 w-4 text-accent" />
+        <Download className="h-3.5 w-3.5 text-muted" />
+      </div>
+      <div className="text-sm font-medium text-slate-100">{label}</div>
+      <div className="mt-1 text-xs text-muted">{detail}</div>
+    </button>
+  );
+}
