@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { requestAnthropicJson } from "@/lib/anthropic-json";
+import { requestAnthropicTool } from "@/lib/anthropic-tool";
 import { createMockPlanVersions } from "@/lib/mock-api";
 import { postProcessPlanVersions } from "@/lib/plan-postprocess";
 import { generatePlanPrompt } from "@/lib/prompts/generatePlanPrompt";
+import { GeneratePlanToolInputSchema } from "@/lib/schemas/plan-version-schema";
 import type { PlanVersion, Point } from "@/lib/project-types";
 
 interface GeneratePlanRequest {
@@ -22,9 +23,12 @@ export async function POST(request: Request) {
   };
 
   try {
-    const data = await requestAnthropicJson<GeneratePlanResponse>({
+    const data = await requestAnthropicTool({
       system: generatePlanPrompt,
       input: body,
+      toolName: "generate_plan",
+      toolDescription: "Return generated EvoLab architectural plan versions as structured data.",
+      schema: GeneratePlanToolInputSchema,
       maxTokens: 8192
     });
 
