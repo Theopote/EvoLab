@@ -1,4 +1,9 @@
 import type { OpeningElement, PlanVersion, Point, Room } from "@/lib/project-types";
+import {
+  intersectionArea,
+  isPolygonInside,
+  polygonArea as booleanPolygonArea
+} from "@/lib/polygon-ops";
 import { extractWallsFromRooms } from "@/lib/wall-extractor";
 
 export type PlanValidationSeverity = "warning" | "error";
@@ -20,12 +25,7 @@ export function distance(a: Point, b: Point) {
 }
 
 export function polygonArea(points: Point[]) {
-  const area = points.reduce((total, [x, y], index) => {
-    const [nextX, nextY] = points[(index + 1) % points.length];
-    return total + x * nextY - nextX * y;
-  }, 0);
-
-  return Math.abs(area) / 2;
+  return booleanPolygonArea(points);
 }
 
 export function centroid(room: Room): Point {
@@ -43,14 +43,6 @@ function bounds(points: Point[]) {
     }),
     { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity }
   );
-}
-
-function bboxOverlapArea(a: Point[], b: Point[]) {
-  const ab = bounds(a);
-  const bb = bounds(b);
-  const width = Math.min(ab.maxX, bb.maxX) - Math.max(ab.minX, bb.minX);
-  const height = Math.min(ab.maxY, bb.maxY) - Math.max(ab.minY, bb.minY);
-  return width > 0 && height > 0 ? width * height : 0;
 }
 
 function bboxDistance(a: Point[], b: Point[]) {
@@ -152,7 +144,7 @@ export function validatePlanVersion(version: PlanVersion): PlanValidationResult 
       return;
     }
 
-    if (!room.polygon.every((point) => pointInPolygon(point, version.outline))) {
+    if (!isPolygonInside(room.polygon, version.outline, 0.01)) {
       issues.push({ id: "room-outside-outline", severity: "error", message: `${room.name} is not fully inside the building outline.`, roomIds: [room.id] });
     }
 
@@ -165,7 +157,7 @@ export function validatePlanVersion(version: PlanVersion): PlanValidationResult 
 
   version.rooms.forEach((room, index) => {
     version.rooms.slice(index + 1).forEach((otherRoom) => {
-      const overlap = bboxOverlapArea(room.polygon, otherRoom.polygon);
+      const overlap = intersectionArea(room.polygon, otherRoom.polygon);
       const tolerance = Math.min(polygonArea(room.polygon), polygonArea(otherRoom.polygon)) * 0.05;
       if (overlap > Math.max(0.5, tolerance)) {
         issues.push({
@@ -200,7 +192,7 @@ export function validatePlanVersion(version: PlanVersion): PlanValidationResult 
       }
     });
 
-      const shafts = version.rooms.filter((room) => room.type === "shaft");
+  const shafts = version.rooms.filter((room) => room.type === "shaft");
   version.rooms
     .filter((room) => room.needsPlumbing)
     .forEach((room) => {
