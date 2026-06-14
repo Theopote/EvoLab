@@ -15,6 +15,18 @@ export const workspaceTabs = [
 
 export type WorkspaceTab = (typeof workspaceTabs)[number];
 
+export const workspaceTabLabels: Record<WorkspaceTab, string> = {
+  Plan: "平面",
+  Massing: "体量",
+  Model: "模型",
+  Analysis: "分析",
+  Systems: "系统",
+  Quantity: "算量",
+  Render: "渲染",
+  Sheets: "图纸",
+  Export: "导出"
+};
+
 interface TopNavProps {
   project: ProjectData;
   activeTab?: WorkspaceTab;
@@ -47,7 +59,7 @@ export function TopNav({ project, activeTab = "Plan", onTabChange }: TopNavProps
             type="button"
             onClick={() => onTabChange?.(tab)}
           >
-            {tab}
+            {workspaceTabLabels[tab]}
           </button>
         ))}
       </nav>
