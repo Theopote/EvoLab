@@ -1,11 +1,16 @@
 # EvoLab
 
 [![CI](https://github.com/Theopote/EvoLab/actions/workflows/ci.yml/badge.svg)](https://github.com/Theopote/EvoLab/actions/workflows/ci.yml)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-evolab--form.vercel.app-0ea5e9?logo=vercel&logoColor=white)](https://evolab-form.vercel.app/)
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/Theopote/EvoLab&env=ANTHROPIC_API_KEY&envDescription=Optional%20-%20leave%20blank%20to%20run%20in%20mock%20mode)
 
 **AI-assisted architectural design workspace for early-stage building planning.**
 
 EvoLab is not a one-shot image generator. It keeps plan options, analysis overlays, MEP diagrams, quantity takeoff, version comparison, rendering briefs, and exports all tied to one editable semantic data model — so every output traces back to a decision you can change.
+
+Try it instantly: https://evolab-form.vercel.app/
+
+No local setup required. This public demo is configured for reliable mock-mode walkthroughs so architects and investors can evaluate the full business flow directly in browser.
 
 ## Why EvoLab
 
@@ -36,15 +41,9 @@ Real workflow snapshots from this repository build:
 Input conditions → ProjectData → editable PlanVersion → plan / massing / model / analysis / systems / quantities / sheets / export
 ```
 
-## Live Demo
+## Deploy Your Own Demo
 
-Try the public demo now:
-
-- https://evolab-form.vercel.app/
-
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-evolab--form.vercel.app-0ea5e9?logo=vercel&logoColor=white)](https://evolab-form.vercel.app/)
-
-You can also launch your own fork in one click (mock mode supported):
+Launch your own fork in one click (mock mode supported):
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/Theopote/EvoLab&env=ANTHROPIC_API_KEY&envDescription=Optional%20-%20leave%20blank%20to%20run%20in%20mock%20mode)
 
