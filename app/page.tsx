@@ -9,9 +9,12 @@ import { FloorPlan } from "@/components/floor-plan";
 import { BriefForm, type PlanBrief } from "@/components/plan-editor/BriefForm";
 import { OutlineCanvas } from "@/components/plan-editor/OutlineCanvas";
 import { PlanResultGrid } from "@/components/plan-editor/PlanResultGrid";
+import { ComplianceChecklist } from "@/components/quantity/ComplianceChecklist";
+import { QuantityTable } from "@/components/quantity/QuantityTable";
 import { TopNav, type WorkspaceTab } from "@/components/top-nav";
 import { Scene } from "@/components/viewer-3d/Scene";
 import { initialProjectData } from "@/lib/evolab-data";
+import { calculateQuantities, checkCompliance } from "@/lib/quantity-engine";
 import type { AnalysisLayerId, PlanVersion, Point, ProjectData } from "@/lib/project-types";
 
 const tools = [
@@ -54,6 +57,14 @@ export default function Home() {
   const activeVersion = useMemo(
     () => project.versions.find((version) => version.id === project.activeVersionId),
     [project.activeVersionId, project.versions]
+  );
+  const quantities = useMemo(
+    () => (activeVersion ? calculateQuantities(activeVersion) : undefined),
+    [activeVersion]
+  );
+  const complianceItems = useMemo(
+    () => (activeVersion ? checkCompliance(activeVersion) : []),
+    [activeVersion]
   );
 
   function handleGenerated(versions: PlanVersion[]) {
@@ -147,6 +158,17 @@ export default function Home() {
               />
               <DiagramCanvas activeLayers={activeAnalysisLayers} version={activeVersion} />
             </section>
+          ) : activeTab === "Quantity" ? (
+            <section className="grid min-h-full grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)] gap-4">
+              {quantities ? (
+                <QuantityTable quantities={quantities} />
+              ) : (
+                <div className="grid min-h-[520px] place-items-center rounded border border-dashed border-line bg-panel/60 text-sm text-muted">
+                  Select or generate a plan version to calculate quantities.
+                </div>
+              )}
+              <ComplianceChecklist items={complianceItems} />
+            </section>
           ) : (
             <section className="grid min-h-full grid-rows-[minmax(360px,0.9fr)_minmax(320px,1fr)] gap-4">
               <div className="grid min-h-0 grid-cols-[360px_minmax(0,1fr)] gap-4">
@@ -216,6 +238,12 @@ export default function Home() {
               <Info label="Daylight score" value={String(activeVersion?.scores?.daylightScore ?? 0)} />
               <Info label="MEP alignment" value={String(activeVersion?.scores?.mepAlignmentScore ?? 0)} />
               <Info label="Risk count" value={String(activeVersion?.scores?.riskCount ?? 0)} />
+              <Info label="Gross area" value={`${quantities?.summary.grossArea ?? 0} sqm`} />
+              <Info label="Wall area" value={`${quantities?.summary.wallArea ?? 0} sqm`} />
+              <Info
+                label="Compliance warnings"
+                value={String(complianceItems.filter((item) => item.status === "warning").length)}
+              />
             </dl>
           </section>
         </aside>
