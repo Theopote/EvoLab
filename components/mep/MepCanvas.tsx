@@ -1,7 +1,8 @@
 "use client";
 
 import { MEP_LAYERS } from "@/components/mep/MepLayerList";
-import type { MepLayerId, MepLayout, MepRoute, MepSystemType, PlanVersion, Point, Room } from "@/lib/project-types";
+import { routeMepLayout } from "@/lib/mep-router";
+import type { MepLayerId, MepRoute, MepSystemType, PlanVersion, Point, Room } from "@/lib/project-types";
 
 interface MepCanvasProps {
   activeLayers: MepLayerId[];
@@ -26,47 +27,6 @@ function centroid(room: Room): Point {
   return [total[0] / room.polygon.length, total[1] / room.polygon.length];
 }
 
-function createRuleBasedMep(version: PlanVersion): MepLayout {
-  const shaftRooms = version.rooms.filter((room) => room.type === "shaft");
-  const equipmentRooms = version.rooms.filter((room) => room.type === "equipment_room");
-  const corridor = version.rooms.find((room) => room.type === "corridor");
-  const wetRooms = version.rooms.filter((room) => room.needsPlumbing);
-  const primaryShaft: Point =
-    shaftRooms[0] ? centroid(shaftRooms[0]) : equipmentRooms[0] ? centroid(equipmentRooms[0]) : [version.overallBounds.width * 0.7, version.overallBounds.height * 0.55];
-  const trunkStart: Point = corridor ? centroid(corridor) : [version.overallBounds.width * 0.35, version.overallBounds.height * 0.5];
-  const systems: MepSystemType[] = ["hvac", "plumbing_supply", "plumbing_drain", "electrical", "elv", "fire"];
-
-  return {
-    shafts: [
-      {
-        id: "rule-shaft-01",
-        position: primaryShaft,
-        systems
-      }
-    ],
-    routes: systems.map((system, index) => {
-      const targetRooms =
-        system === "plumbing_supply" || system === "plumbing_drain"
-          ? wetRooms
-          : system === "hvac"
-            ? [...equipmentRooms, ...version.rooms.filter((room) => room.zone !== "service")]
-            : version.rooms;
-      const path: Point[] = [
-        [trunkStart[0], trunkStart[1] + index * 0.9],
-        [primaryShaft[0], trunkStart[1] + index * 0.9],
-        primaryShaft
-      ];
-
-      return {
-        id: `rule-route-${system}`,
-        system,
-        path,
-        connectsRoomIds: targetRooms.map((room) => room.id)
-      };
-    })
-  };
-}
-
 function routePoints(route: MepRoute) {
   return route.path.map(([x, y]) => `${x},${y}`).join(" ");
 }
@@ -80,7 +40,7 @@ export function MepCanvas({ activeLayers, version }: MepCanvasProps) {
     );
   }
 
-  const mep = version.mep ?? createRuleBasedMep(version);
+  const mep = version.mep ?? routeMepLayout(version);
   const padding = 8;
   const viewBox = `${-padding} ${-padding} ${version.overallBounds.width + padding * 2} ${
     version.overallBounds.height + padding * 2

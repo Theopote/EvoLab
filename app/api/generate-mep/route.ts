@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requestAnthropicTool } from "@/lib/anthropic-tool";
+import { generateRuleBasedMep } from "@/lib/mep-router";
 import { createMockMep } from "@/lib/mock-api";
 import { mepPrompt } from "@/lib/prompts/mepPrompt";
 import { GenerateMepToolInputSchema } from "@/lib/schemas/mep-schema";
@@ -37,7 +38,12 @@ export async function POST(request: Request) {
       return NextResponse.json(fallback);
     }
 
-    return NextResponse.json(data);
+    const routed = generateRuleBasedMep(body.version, data.mep);
+
+    return NextResponse.json({
+      mep: routed.mep,
+      findings: [...data.findings, ...routed.findings]
+    });
   } catch (error) {
     return NextResponse.json({
       ...fallback,

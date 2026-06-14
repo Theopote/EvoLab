@@ -1,10 +1,10 @@
 import { initialProjectData } from "@/lib/evolab-data";
+import { generateRuleBasedMep } from "@/lib/mep-router";
 import { postProcessPlanVersion } from "@/lib/plan-postprocess";
 import type {
   AnalysisLayerId,
   CopilotFinding,
   MepLayout,
-  MepSystemType,
   PlanVersion,
   Point,
   Room
@@ -349,43 +349,7 @@ export function createMockModifiedVersion(currentVersion: PlanVersion, userReque
 }
 
 export function createMockMep(version: PlanVersion): { mep: MepLayout; findings: CopilotFinding[] } {
-  const shaftRooms = version.rooms.filter((room) => room.type === "shaft" || room.type === "equipment_room");
-  const corridor = version.rooms.find((room) => room.type === "corridor");
-  const shaftPoint: Point = shaftRooms[0]?.polygon[0] ?? [version.overallBounds.width * 0.72, version.overallBounds.height * 0.5];
-  const trunkStart: Point = corridor?.polygon[0] ?? [10, 10];
-  const systems: MepSystemType[] = ["hvac", "plumbing_supply", "plumbing_drain", "electrical", "elv", "fire"];
-
-  return {
-    mep: {
-      shafts: [
-        {
-          id: "mep-shaft-01",
-          position: shaftPoint,
-          systems
-        }
-      ],
-      routes: systems.map((system, index) => ({
-        id: `route-${system}`,
-        system,
-        path: [
-          [trunkStart[0], trunkStart[1] + index],
-          [shaftPoint[0], trunkStart[1] + index],
-          shaftPoint
-        ],
-        connectsRoomIds: version.rooms
-          .filter((room) => room.needsPlumbing || room.type === "equipment_room" || room.type === "shaft")
-          .map((room) => room.id)
-      }))
-    },
-    findings: [
-      {
-        id: "mep-alignment",
-        tone: "info",
-        text: "Concept-level MEP shafts and trunk routes were generated.",
-        sub: "Trunks prefer corridor routes and connect equipment rooms, shafts and wet rooms."
-      }
-    ]
-  };
+  return generateRuleBasedMep(version);
 }
 
 export function createMockDiagram(layers: AnalysisLayerId[]) {

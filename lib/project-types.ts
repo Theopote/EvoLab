@@ -206,6 +206,14 @@ export interface VersionScores {
 export interface MepLayout {
   shafts: MepShaft[];
   routes: MepRoute[];
+  strategy?: MepStrategy;
+}
+
+export interface MepStrategy {
+  systemConcept: string;
+  shaftLogic: string;
+  routingLogic: string;
+  assumptions: string[];
 }
 
 export interface MepShaft {

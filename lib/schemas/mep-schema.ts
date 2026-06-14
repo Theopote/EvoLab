@@ -26,7 +26,15 @@ export const MepLayoutSchema = z.object({
       path: z.array(PointSchema).min(2),
       connectsRoomIds: z.array(z.string())
     })
-  )
+  ),
+  strategy: z
+    .object({
+      systemConcept: z.string().min(1),
+      shaftLogic: z.string().min(1),
+      routingLogic: z.string().min(1),
+      assumptions: z.array(z.string()).default([])
+    })
+    .optional()
 });
 
 export const GenerateMepToolInputSchema = z.object({
