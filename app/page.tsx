@@ -8,6 +8,7 @@ import { DiagramCanvas } from "@/components/diagrams/DiagramCanvas";
 import { DiagramLayerList } from "@/components/diagrams/DiagramLayerList";
 import { ExportPanel } from "@/components/export-panel";
 import { FloorPlan } from "@/components/floor-plan";
+import { MassingPanel } from "@/components/massing-panel";
 import { MepCanvas } from "@/components/mep/MepCanvas";
 import { MepLayerList, type MepLayerId } from "@/components/mep/MepLayerList";
 import { BriefForm, type PlanBrief } from "@/components/plan-editor/BriefForm";
@@ -15,6 +16,7 @@ import { OutlineCanvas } from "@/components/plan-editor/OutlineCanvas";
 import { PlanResultGrid } from "@/components/plan-editor/PlanResultGrid";
 import { ComplianceChecklist } from "@/components/quantity/ComplianceChecklist";
 import { QuantityTable } from "@/components/quantity/QuantityTable";
+import { RenderPanel } from "@/components/render-panel";
 import { TopNav, type WorkspaceTab } from "@/components/top-nav";
 import { VersionCompareGrid } from "@/components/version-compare/VersionCompareGrid";
 import { Scene } from "@/components/viewer-3d/Scene";
@@ -222,6 +224,8 @@ export default function Home() {
               </div>
               <Scene version={activeVersion} />
             </section>
+          ) : activeTab === "Massing" ? (
+            <MassingPanel activeVersion={activeVersion} onOpenModel={() => setActiveTab("Model")} />
           ) : activeTab === "Analysis" ? (
             <section className="grid min-h-full grid-cols-[320px_minmax(0,1fr)] gap-4">
               <DiagramLayerList
@@ -259,6 +263,8 @@ export default function Home() {
               )}
               <ComplianceChecklist items={complianceItems} />
             </section>
+          ) : activeTab === "Render" ? (
+            <RenderPanel activeVersion={activeVersion} />
           ) : activeTab === "Sheets" ? (
             <VersionCompareGrid
               versions={project.versions}
