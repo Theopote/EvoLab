@@ -50,6 +50,30 @@ export function FloorPlanCanvas({
 
   const level = version.levels[0];
   const setback = createSetbackBoundary(version.outline, 3);
+  const selectedRoom = selectedRoomId ? version.rooms.find((room) => room.id === selectedRoomId) : undefined;
+  const selectedWall = selectedWallId ? level?.walls.find((wall) => wall.id === selectedWallId) : undefined;
+  const selectedOpening = selectedOpeningId
+    ? level?.openings.find((opening) => opening.id === selectedOpeningId)
+    : undefined;
+  const hud = selectedRoom
+    ? {
+        type: "ROOM",
+        id: selectedRoom.id,
+        details: `${selectedRoom.name} / ${selectedRoom.areaSqm} sqm`
+      }
+    : selectedWall
+    ? {
+        type: "WALL",
+        id: selectedWall.id,
+        details: `${selectedWall.type} / ${selectedWall.thickness.toFixed(2)} m`
+      }
+    : selectedOpening
+    ? {
+        type: "OPENING",
+        id: selectedOpening.id,
+        details: `${selectedOpening.type} / ${selectedOpening.width.toFixed(2)} x ${selectedOpening.height.toFixed(2)} m`
+      }
+    : undefined;
 
   return (
     <div className={className}>
@@ -96,6 +120,13 @@ export function FloorPlanCanvas({
         <div className="absolute bottom-3 left-3 rounded border border-line bg-[#081018]/90 px-2 py-1 text-xs text-muted">
           1 grid = 1 m / {version.label}
         </div>
+        {interactive && hud ? (
+          <div className="absolute bottom-3 right-3 rounded border border-accent/35 bg-[#081018]/95 px-3 py-2 text-xs">
+            <div className="font-semibold tracking-wide text-accent">{hud.type}</div>
+            <div className="mt-0.5 text-slate-100">{hud.id}</div>
+            <div className="mt-0.5 text-muted">{hud.details}</div>
+          </div>
+        ) : null}
       </div>
     </div>
   );

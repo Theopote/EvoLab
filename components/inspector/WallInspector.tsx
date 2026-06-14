@@ -1,13 +1,25 @@
 "use client";
 
+import { useState } from "react";
 import { wallLength } from "@/components/floor-plan/floor-plan-utils";
 import { useEvoProject } from "@/lib/project-store";
 
 export function WallInspector() {
   const { selectedWall } = useEvoProject();
+  const [copied, setCopied] = useState<string | null>(null);
 
   if (!selectedWall) {
     return null;
+  }
+
+  async function copyValue(label: string, value: string) {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(label);
+      setTimeout(() => setCopied((current) => (current === label ? null : current)), 1200);
+    } catch {
+      setCopied(null);
+    }
   }
 
   return (
@@ -18,21 +30,50 @@ export function WallInspector() {
       </div>
 
       <dl className="space-y-3 text-sm">
-        <Info label="id" value={selectedWall.id} />
+        <Info label="id" value={selectedWall.id} canCopy copied={copied === "id"} onCopy={() => copyValue("id", selectedWall.id)} />
         <Info label="type" value={selectedWall.type} />
         <Info label="thickness" value={`${selectedWall.thickness.toFixed(2)} m`} />
         <Info label="height" value={`${selectedWall.height.toFixed(2)} m`} />
         <Info label="length" value={`${wallLength(selectedWall).toFixed(2)} m`} />
-        <Info label="roomIds" value={selectedWall.roomIds.join(", ") || "-"} />
+        <Info
+          label="roomIds"
+          value={selectedWall.roomIds.join(", ") || "-"}
+          canCopy
+          copied={copied === "roomIds"}
+          onCopy={() => copyValue("roomIds", selectedWall.roomIds.join(", "))}
+        />
       </dl>
     </section>
   );
 }
 
-function Info({ label, value }: { label: string; value: string }) {
+function Info({
+  label,
+  value,
+  canCopy,
+  copied,
+  onCopy
+}: {
+  label: string;
+  value: string;
+  canCopy?: boolean;
+  copied?: boolean;
+  onCopy?: () => void;
+}) {
   return (
     <div className="rounded border border-line bg-white/[0.03] p-3">
-      <dt className="text-xs text-muted">{label}</dt>
+      <dt className="flex items-center justify-between text-xs text-muted">
+        <span>{label}</span>
+        {canCopy ? (
+          <button
+            className="rounded border border-line px-1.5 py-0.5 text-[10px] text-slate-200"
+            type="button"
+            onClick={onCopy}
+          >
+            {copied ? "copied" : "copy"}
+          </button>
+        ) : null}
+      </dt>
       <dd className="mt-1 break-all text-slate-100">{value}</dd>
     </div>
   );

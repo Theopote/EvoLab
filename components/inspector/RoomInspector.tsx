@@ -105,6 +105,12 @@ export function RoomInspector() {
     updateRoom(room.id, patch);
   }
 
+  function handleAutoSave() {
+    if (canSave) {
+      updateRoom(room.id, patch);
+    }
+  }
+
   function handleReset() {
     setDraft({
       name: room.name,
@@ -150,12 +156,15 @@ export function RoomInspector() {
         </div>
       ) : null}
 
+      <p className="mb-3 text-[11px] text-muted">Edits auto-save when a field loses focus.</p>
+
       <div className="space-y-3 text-sm">
         <ReadOnlyField label="id" value={room.id} />
         <TextField
           label="name"
           value={draft.name}
           onChange={(value) => setDraft((current) => ({ ...current, name: value }))}
+          onBlur={handleAutoSave}
         />
         {errors.name ? <FieldError message={errors.name} /> : null}
         <SelectField
@@ -163,12 +172,14 @@ export function RoomInspector() {
           value={draft.type}
           options={roomTypes}
           onChange={(value) => setDraft((current) => ({ ...current, type: value as RoomType }))}
+          onBlur={handleAutoSave}
         />
         <SelectField
           label="zone"
           value={draft.zone}
           options={zones}
           onChange={(value) => setDraft((current) => ({ ...current, zone: value as FunctionZone }))}
+          onBlur={handleAutoSave}
         />
         <NumberField
           label="areaSqm"
@@ -176,6 +187,7 @@ export function RoomInspector() {
           step={0.1}
           min={0}
           onChange={(value) => setDraft((current) => ({ ...current, areaSqm: value }))}
+          onBlur={handleAutoSave}
         />
         {errors.areaSqm ? <FieldError message={errors.areaSqm} /> : null}
         <NumberField
@@ -184,22 +196,26 @@ export function RoomInspector() {
           step={0.1}
           min={2}
           onChange={(value) => setDraft((current) => ({ ...current, ceilingHeight: value }))}
+          onBlur={handleAutoSave}
         />
         {errors.ceilingHeight ? <FieldError message={errors.ceilingHeight} /> : null}
         <TextField
           label="orientation"
           value={draft.orientation}
           onChange={(value) => setDraft((current) => ({ ...current, orientation: value }))}
+          onBlur={handleAutoSave}
         />
         <ToggleField
           label="needsDaylight"
           checked={draft.needsDaylight}
           onChange={(checked) => setDraft((current) => ({ ...current, needsDaylight: checked }))}
+          onBlur={handleAutoSave}
         />
         <ToggleField
           label="needsPlumbing"
           checked={draft.needsPlumbing}
           onChange={(checked) => setDraft((current) => ({ ...current, needsPlumbing: checked }))}
+          onBlur={handleAutoSave}
         />
       </div>
     </section>
@@ -218,11 +234,13 @@ function ReadOnlyField({ label, value }: { label: string; value: string }) {
 function TextField({
   label,
   value,
-  onChange
+  onChange,
+  onBlur
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
+  onBlur?: () => void;
 }) {
   return (
     <div>
@@ -231,6 +249,7 @@ function TextField({
         className="w-full rounded border border-line bg-black/20 px-2 py-2 text-slate-100 outline-none transition focus:border-accent/60"
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        onBlur={onBlur}
       />
     </div>
   );
@@ -240,12 +259,14 @@ function SelectField({
   label,
   value,
   options,
-  onChange
+  onChange,
+  onBlur
 }: {
   label: string;
   value: string;
   options: string[];
   onChange: (value: string) => void;
+  onBlur?: () => void;
 }) {
   return (
     <div>
@@ -254,6 +275,7 @@ function SelectField({
         className="w-full rounded border border-line bg-black/20 px-2 py-2 text-slate-100 outline-none transition focus:border-accent/60"
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        onBlur={onBlur}
       >
         {options.map((option) => (
           <option key={option} value={option}>
@@ -270,13 +292,15 @@ function NumberField({
   value,
   min,
   step,
-  onChange
+  onChange,
+  onBlur
 }: {
   label: string;
   value: string;
   min?: number;
   step?: number;
   onChange: (value: string) => void;
+  onBlur?: () => void;
 }) {
   return (
     <div>
@@ -288,6 +312,7 @@ function NumberField({
         type="number"
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        onBlur={onBlur}
       />
     </div>
   );
@@ -300,16 +325,23 @@ function FieldError({ message }: { message: string }) {
 function ToggleField({
   label,
   checked,
-  onChange
+  onChange,
+  onBlur
 }: {
   label: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
+  onBlur?: () => void;
 }) {
   return (
     <label className="flex items-center justify-between rounded border border-line bg-black/20 px-2 py-2 text-slate-100">
       <span className="text-xs uppercase tracking-wide text-muted">{label}</span>
-      <input checked={checked} type="checkbox" onChange={(event) => onChange(event.target.checked)} />
+      <input
+        checked={checked}
+        type="checkbox"
+        onBlur={onBlur}
+        onChange={(event) => onChange(event.target.checked)}
+      />
     </label>
   );
 }
