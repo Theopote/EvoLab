@@ -7,9 +7,17 @@
 
 EvoLab is not a one-shot image generator. It keeps plan options, analysis overlays, MEP diagrams, quantity takeoff, version comparison, rendering briefs, and exports all tied to one editable semantic data model — so every output traces back to a decision you can change.
 
+## Why EvoLab
+
+- End-to-end workflow from editable plan data to 2.5D/3D, systems, analysis, quantities, and export.
+- AI is used for structured decisions and generation, while geometric and quantity outputs stay deterministic.
+- Mock mode keeps the full product experience available for demos without requiring cloud keys.
+
 ---
 
 ## Screenshots
+
+Real workflow snapshots from this repository build:
 
 
 | Draw outline & brief | Generated plan options | 3D model |
@@ -30,7 +38,7 @@ Input conditions → ProjectData → editable PlanVersion → plan / massing / m
 
 ## Live Demo
 
-Deploy your own instance with one click — no API key required (runs in mock mode):
+Public demo URL is not pinned yet. You can launch your own demo in one click (mock mode supported):
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/Theopote/EvoLab&env=ANTHROPIC_API_KEY&envDescription=Optional%20-%20leave%20blank%20to%20run%20in%20mock%20mode)
 
@@ -70,6 +78,31 @@ This repository contains a working Next.js prototype with:
 - @anthropic-ai/sdk
 
 ## Getting Started
+
+Quick start in local mock mode:
+
+```bash
+npm install
+```
+
+Create `.env.local`:
+
+```env
+NEXT_PUBLIC_MOCK_MODE=true
+ANTHROPIC_API_KEY=your_key_here
+```
+
+Then run:
+
+```bash
+npm run dev
+```
+
+Production or real AI testing can disable mock mode by setting `NEXT_PUBLIC_MOCK_MODE=false` and providing a valid API key.
+
+---
+
+Standard setup:
 
 Install dependencies:
 
@@ -444,7 +477,8 @@ The current implementation has been checked with:
 
 ```bash
 npm run typecheck
+npm run lint
 npm run build
 ```
 
-A source scan was also used to confirm there are no old `MorphoLab`, `Morpho`, or `morpho-data` references.
+CI runs these checks on push and pull request via `.github/workflows/ci.yml`.
