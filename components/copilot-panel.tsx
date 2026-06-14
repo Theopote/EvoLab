@@ -7,9 +7,9 @@ import type {
   CopilotFinding,
   CopilotMessage,
   PlanVersion,
-  Point
+  Point,
+  WorkspaceTab
 } from "@/lib/project-types";
-import type { WorkspaceTab } from "@/components/top-nav";
 
 interface CopilotPanelProps {
   activeVersion?: PlanVersion;

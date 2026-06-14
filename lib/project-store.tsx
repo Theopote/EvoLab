@@ -1,12 +1,18 @@
 "use client";
 
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
-import type { PlanBrief } from "@/components/plan-editor/BriefForm";
-import type { WorkspaceTab } from "@/components/top-nav";
 import { initialProjectData } from "@/lib/evolab-data";
 import { calculateQuantities, checkCompliance, type ComplianceItem, type QuantityResult } from "@/lib/quantity-engine";
-import type { AnalysisLayerId, MepLayout, PlanVersion, Point, ProjectData } from "@/lib/project-types";
-import type { MepLayerId } from "@/components/mep/MepLayerList";
+import type {
+  AnalysisLayerId,
+  DesignBrief,
+  MepLayerId,
+  MepLayout,
+  PlanVersion,
+  Point,
+  ProjectData,
+  WorkspaceTab
+} from "@/lib/project-types";
 
 const defaultOutline: Point[] = [
   [0, 0],
@@ -15,7 +21,7 @@ const defaultOutline: Point[] = [
   [0, 42]
 ];
 
-const defaultBrief: PlanBrief = {
+const defaultBrief: DesignBrief = {
   projectType: initialProjectData.projectType,
   description:
     "Outpatient clinic with clear public waiting, clinical rooms, staff work area, compact core, shafts aligned with equipment room, and strong south daylight.",
@@ -30,7 +36,7 @@ interface EvoProjectContextValue {
   activeVersion?: PlanVersion;
   outline: Point[];
   outlineClosed: boolean;
-  brief: PlanBrief;
+  brief: DesignBrief;
   activeTab: WorkspaceTab;
   activeAnalysisLayers: AnalysisLayerId[];
   activeMepLayers: MepLayerId[];
@@ -41,16 +47,16 @@ interface EvoProjectContextValue {
   setActiveTab: (tab: WorkspaceTab) => void;
   setOutline: (outline: Point[]) => void;
   setOutlineClosed: (closed: boolean) => void;
-  setBrief: (brief: PlanBrief) => void;
+  updateBrief: (brief: DesignBrief) => void;
   setActiveAnalysisLayers: (layers: AnalysisLayerId[]) => void;
   setActiveMepLayers: (layers: MepLayerId[]) => void;
-  handleGenerated: (versions: PlanVersion[]) => void;
-  handleSelectVersion: (version: PlanVersion) => void;
-  handleVersionUpdated: (version: PlanVersion) => void;
-  handleGenerateMep: () => Promise<void>;
-  handleGenerateModel: (version: PlanVersion) => void;
-  handleRefineVersion: (version: PlanVersion) => void;
-  handleCopilotRegenerate: () => void;
+  replaceVersions: (versions: PlanVersion[], projectType?: string) => void;
+  setActiveVersion: (version: PlanVersion) => void;
+  updateActiveVersion: (version: PlanVersion) => void;
+  generateMep: () => Promise<void>;
+  openModelForVersion: (version: PlanVersion) => void;
+  refineVersion: (version: PlanVersion) => void;
+  returnToPlanGeneration: () => void;
 }
 
 const EvoProjectContext = createContext<EvoProjectContextValue | null>(null);
@@ -59,7 +65,7 @@ export function EvoProjectProvider({ children }: { children: ReactNode }) {
   const [project, setProject] = useState<ProjectData>(initialProjectData);
   const [outline, setOutline] = useState<Point[]>(defaultOutline);
   const [outlineClosed, setOutlineClosed] = useState(true);
-  const [brief, setBrief] = useState<PlanBrief>(defaultBrief);
+  const [brief, setBrief] = useState<DesignBrief>(defaultBrief);
   const [activeTab, setActiveTab] = useState<WorkspaceTab>("Plan");
   const [activeAnalysisLayers, setActiveAnalysisLayers] = useState<AnalysisLayerId[]>([
     "function_zones",
@@ -91,16 +97,20 @@ export function EvoProjectProvider({ children }: { children: ReactNode }) {
     [activeVersion]
   );
 
-  function handleGenerated(versions: PlanVersion[]) {
+  function updateBrief(nextBrief: DesignBrief) {
+    setBrief(nextBrief);
+  }
+
+  function replaceVersions(versions: PlanVersion[], projectType = brief.projectType) {
     setProject((current) => ({
       ...current,
-      projectType: brief.projectType,
+      projectType,
       versions,
       activeVersionId: versions[0]?.id ?? current.activeVersionId
     }));
   }
 
-  function handleSelectVersion(version: PlanVersion) {
+  function setActiveVersion(version: PlanVersion) {
     setProject((current) => {
       const exists = current.versions.some((item) => item.id === version.id);
 
@@ -112,7 +122,7 @@ export function EvoProjectProvider({ children }: { children: ReactNode }) {
     });
   }
 
-  function handleVersionUpdated(version: PlanVersion) {
+  function updateActiveVersion(version: PlanVersion) {
     setProject((current) => {
       const nextVersions = current.versions.some((item) => item.id === version.id)
         ? current.versions.map((item) => (item.id === version.id ? version : item))
@@ -126,21 +136,21 @@ export function EvoProjectProvider({ children }: { children: ReactNode }) {
     });
   }
 
-  function handleCopilotRegenerate() {
+  function returnToPlanGeneration() {
     setActiveTab("Plan");
   }
 
-  function handleGenerateModel(version: PlanVersion) {
-    handleSelectVersion(version);
+  function openModelForVersion(version: PlanVersion) {
+    setActiveVersion(version);
     setActiveTab("Model");
   }
 
-  function handleRefineVersion(version: PlanVersion) {
-    handleSelectVersion(version);
+  function refineVersion(version: PlanVersion) {
+    setActiveVersion(version);
     setActiveTab("Plan");
   }
 
-  async function handleGenerateMep() {
+  async function generateMep() {
     if (!activeVersion || isGeneratingMep) {
       return;
     }
@@ -165,7 +175,7 @@ export function EvoProjectProvider({ children }: { children: ReactNode }) {
         throw new Error("generate-mep did not return a MepLayout.");
       }
 
-      handleVersionUpdated({
+      updateActiveVersion({
         ...activeVersion,
         mep: data.mep,
         scores: activeVersion.scores
@@ -203,16 +213,16 @@ export function EvoProjectProvider({ children }: { children: ReactNode }) {
       setActiveTab,
       setOutline,
       setOutlineClosed,
-      setBrief,
+      updateBrief,
       setActiveAnalysisLayers,
       setActiveMepLayers,
-      handleGenerated,
-      handleSelectVersion,
-      handleVersionUpdated,
-      handleGenerateMep,
-      handleGenerateModel,
-      handleRefineVersion,
-      handleCopilotRegenerate
+      replaceVersions,
+      setActiveVersion,
+      updateActiveVersion,
+      generateMep,
+      openModelForVersion,
+      refineVersion,
+      returnToPlanGeneration
     }),
     [
       activeAnalysisLayers,

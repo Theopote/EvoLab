@@ -1,30 +1,16 @@
 import { Cloud, Share2, Sparkles } from "lucide-react";
-import type { ProjectData } from "@/lib/project-types";
-
-export const workspaceTabs = [
-  "Plan",
-  "Massing",
-  "Model",
-  "Analysis",
-  "Systems",
-  "Quantity",
-  "Render",
-  "Sheets",
-  "Export"
-] as const;
-
-export type WorkspaceTab = (typeof workspaceTabs)[number];
+import { workspaceTabs, type ProjectData, type WorkspaceTab } from "@/lib/project-types";
 
 export const workspaceTabLabels: Record<WorkspaceTab, string> = {
-  Plan: "平面",
-  Massing: "体量",
-  Model: "模型",
-  Analysis: "分析",
-  Systems: "系统",
-  Quantity: "算量",
-  Render: "渲染",
-  Sheets: "图纸",
-  Export: "导出"
+  Plan: "Plan",
+  Massing: "Massing",
+  Model: "Model",
+  Analysis: "Analysis",
+  Systems: "Systems",
+  Quantity: "Quantity",
+  Render: "Render",
+  Sheets: "Sheets",
+  Export: "Export"
 };
 
 interface TopNavProps {

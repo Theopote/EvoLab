@@ -1,7 +1,7 @@
 "use client";
 
-import { MEP_LAYERS, type MepLayerId } from "@/components/mep/MepLayerList";
-import type { MepLayout, MepRoute, MepSystemType, PlanVersion, Point, Room } from "@/lib/project-types";
+import { MEP_LAYERS } from "@/components/mep/MepLayerList";
+import type { MepLayerId, MepLayout, MepRoute, MepSystemType, PlanVersion, Point, Room } from "@/lib/project-types";
 
 interface MepCanvasProps {
   activeLayers: MepLayerId[];

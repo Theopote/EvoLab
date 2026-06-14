@@ -6,6 +6,29 @@ export interface ProjectData {
   activeVersionId: string;
 }
 
+export const workspaceTabs = [
+  "Plan",
+  "Massing",
+  "Model",
+  "Analysis",
+  "Systems",
+  "Quantity",
+  "Render",
+  "Sheets",
+  "Export"
+] as const;
+
+export type WorkspaceTab = (typeof workspaceTabs)[number];
+
+export interface DesignBrief {
+  projectType: string;
+  description: string;
+  floors: number;
+  targetArea: number;
+  corePreference: string;
+  orientationPreference: string;
+}
+
 export interface PlanVersion {
   id: string;
   label: string;
@@ -101,6 +124,8 @@ export type MepSystemType =
   | "electrical"
   | "elv"
   | "fire";
+
+export type MepLayerId = MepSystemType | "shafts" | "equipment_rooms";
 
 export type AnalysisLayerId =
   | "function_zones"

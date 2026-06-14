@@ -3,13 +3,12 @@
 import { Check, Loader2, RefreshCcw } from "lucide-react";
 import { useState } from "react";
 import { FloorPlan } from "@/components/floor-plan";
-import type { PlanBrief } from "@/components/plan-editor/BriefForm";
-import type { PlanVersion, Point } from "@/lib/project-types";
+import type { DesignBrief, PlanVersion, Point } from "@/lib/project-types";
 
 interface PlanResultGridProps {
   outline: Point[];
   closed: boolean;
-  brief: PlanBrief;
+  brief: DesignBrief;
   versions: PlanVersion[];
   activeVersionId: string;
   onGenerated: (versions: PlanVersion[]) => void;

@@ -1,8 +1,6 @@
 "use client";
 
-import type { MepSystemType } from "@/lib/project-types";
-
-export type MepLayerId = MepSystemType | "shafts" | "equipment_rooms";
+import type { MepLayerId } from "@/lib/project-types";
 
 export interface MepLayer {
   id: MepLayerId;

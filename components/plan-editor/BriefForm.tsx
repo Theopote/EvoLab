@@ -1,19 +1,11 @@
 "use client";
 
 import { Wand2 } from "lucide-react";
-
-export interface PlanBrief {
-  projectType: string;
-  description: string;
-  floors: number;
-  targetArea: number;
-  corePreference: string;
-  orientationPreference: string;
-}
+import type { DesignBrief } from "@/lib/project-types";
 
 interface BriefFormProps {
-  value: PlanBrief;
-  onChange: (value: PlanBrief) => void;
+  value: DesignBrief;
+  onChange: (value: DesignBrief) => void;
 }
 
 const chips = [
@@ -31,7 +23,7 @@ const chips = [
 ];
 
 export function BriefForm({ value, onChange }: BriefFormProps) {
-  function update<K extends keyof PlanBrief>(key: K, nextValue: PlanBrief[K]) {
+  function update<K extends keyof DesignBrief>(key: K, nextValue: DesignBrief[K]) {
     onChange({ ...value, [key]: nextValue });
   }
 

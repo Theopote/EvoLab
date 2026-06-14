@@ -1,7 +1,7 @@
 "use client";
 
 import { Boxes, DraftingCompass, MousePointer2, Upload, Waypoints } from "lucide-react";
-import type { WorkspaceTab } from "@/components/top-nav";
+import type { WorkspaceTab } from "@/lib/project-types";
 
 interface ToolPaletteProps {
   activeTab: WorkspaceTab;
@@ -14,11 +14,11 @@ const tools: {
   icon: typeof MousePointer2;
   targetTab?: WorkspaceTab;
 }[] = [
-  { label: "选择", title: "选择", icon: MousePointer2 },
-  { label: "轮廓", title: "轮廓", icon: DraftingCompass, targetTab: "Plan" },
-  { label: "上传", title: "上传", icon: Upload },
-  { label: "流线", title: "流线", icon: Waypoints, targetTab: "Analysis" },
-  { label: "模型", title: "模型", icon: Boxes, targetTab: "Model" }
+  { label: "Select", title: "Select", icon: MousePointer2 },
+  { label: "Outline", title: "Draw outline", icon: DraftingCompass, targetTab: "Plan" },
+  { label: "Upload", title: "Upload drawing", icon: Upload },
+  { label: "Flow", title: "Analysis flows", icon: Waypoints, targetTab: "Analysis" },
+  { label: "Model", title: "3D model", icon: Boxes, targetTab: "Model" }
 ];
 
 export function ToolPalette({ activeTab, onTabChange }: ToolPaletteProps) {
