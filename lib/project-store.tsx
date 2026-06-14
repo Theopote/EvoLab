@@ -1,6 +1,8 @@
 "use client";
 
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { produce } from "immer";
+import { type ReactNode } from "react";
+import { create } from "zustand";
 import { normalizePlanVersion, normalizeProjectVersions } from "@/lib/architecture-model";
 import { initialProjectData } from "@/lib/evolab-data";
 import { calculateQuantities, checkCompliance, type ComplianceItem, type QuantityResult } from "@/lib/quantity-engine";
@@ -35,13 +37,15 @@ const defaultBrief: DesignBrief = {
   orientationPreference: "south daylight"
 };
 
-interface EvoProjectContextValue {
+type SelectionType = "none" | "room" | "wall" | "opening";
+
+interface EvoProjectStore {
   project: ProjectData;
   activeVersion?: PlanVersion;
   selectedRoomId?: string;
   selectedWallId?: string;
   selectedOpeningId?: string;
-  selectionType: "none" | "room" | "wall" | "opening";
+  selectionType: SelectionType;
   selectedRoom?: Room;
   selectedWall?: Wall;
   selectedOpening?: OpeningElement;
@@ -77,271 +81,318 @@ interface EvoProjectContextValue {
   returnToPlanGeneration: () => void;
 }
 
-const EvoProjectContext = createContext<EvoProjectContextValue | null>(null);
+function getActiveVersion(project: ProjectData) {
+  return project.versions.find((version) => version.id === project.activeVersionId);
+}
 
-export function EvoProjectProvider({ children }: { children: ReactNode }) {
-  const [project, setProject] = useState<ProjectData>(initialProjectData);
-  const [outline, setOutline] = useState<Point[]>(defaultOutline);
-  const [outlineClosed, setOutlineClosed] = useState(true);
-  const [brief, setBrief] = useState<DesignBrief>(defaultBrief);
-  const [activeTab, setActiveTab] = useState<WorkspaceTab>("Plan");
-  const [activeAnalysisLayers, setActiveAnalysisLayers] = useState<AnalysisLayerId[]>([
-    "function_zones",
-    "patient_flow",
-    "egress_path",
-    "daylight"
-  ]);
-  const [activeMepLayers, setActiveMepLayers] = useState<MepLayerId[]>([
-    "hvac",
-    "plumbing_supply",
-    "plumbing_drain",
-    "electrical",
-    "shafts",
-    "equipment_rooms"
-  ]);
-  const [isGeneratingMep, setIsGeneratingMep] = useState(false);
-  const [mepError, setMepError] = useState<string | null>(null);
-  const [selectedRoomId, setSelectedRoomId] = useState<string | undefined>(undefined);
-  const [selectedWallId, setSelectedWallId] = useState<string | undefined>(undefined);
-  const [selectedOpeningId, setSelectedOpeningId] = useState<string | undefined>(undefined);
-  const [selectionType, setSelectionType] = useState<"none" | "room" | "wall" | "opening">("none");
+function clearSelectionDraft(state: EvoProjectStore) {
+  state.selectionType = "none";
+  state.selectedRoomId = undefined;
+  state.selectedWallId = undefined;
+  state.selectedOpeningId = undefined;
+  state.selectedRoom = undefined;
+  state.selectedWall = undefined;
+  state.selectedOpening = undefined;
+}
 
-  const activeVersion = useMemo(
-    () => project.versions.find((version) => version.id === project.activeVersionId),
-    [project.activeVersionId, project.versions]
-  );
-  const quantities = useMemo(
-    () => (activeVersion ? calculateQuantities(activeVersion) : undefined),
-    [activeVersion]
-  );
-  const complianceItems = useMemo(
-    () => (activeVersion ? checkCompliance(activeVersion) : []),
-    [activeVersion]
-  );
-  const selectedRoom = useMemo(
-    () => activeVersion?.rooms.find((room) => room.id === selectedRoomId),
-    [activeVersion, selectedRoomId]
-  );
-  const selectedWall = useMemo(
-    () => activeVersion?.levels[0]?.walls.find((wall) => wall.id === selectedWallId),
-    [activeVersion, selectedWallId]
-  );
-  const selectedOpening = useMemo(
-    () => activeVersion?.levels[0]?.openings.find((opening) => opening.id === selectedOpeningId),
-    [activeVersion, selectedOpeningId]
-  );
+function validateSelectionDraft(state: EvoProjectStore) {
+  const version = state.activeVersion;
 
-  function clearSelection() {
-    setSelectionType("none");
-    setSelectedRoomId(undefined);
-    setSelectedWallId(undefined);
-    setSelectedOpeningId(undefined);
+  if (!version || state.selectionType === "none") {
+    if (!version) {
+      clearSelectionDraft(state);
+    }
+    return;
   }
 
-  function selectRoom(roomId: string) {
-    setSelectionType("room");
-    setSelectedRoomId(roomId);
-    setSelectedWallId(undefined);
-    setSelectedOpeningId(undefined);
+  if (state.selectionType === "room") {
+    if (!state.selectedRoomId || !version.rooms.some((room) => room.id === state.selectedRoomId)) {
+      clearSelectionDraft(state);
+    }
+    return;
   }
 
-  function selectWall(wallId: string) {
-    setSelectionType("wall");
-    setSelectedWallId(wallId);
-    setSelectedRoomId(undefined);
-    setSelectedOpeningId(undefined);
+  if (state.selectionType === "wall") {
+    if (!state.selectedWallId || !version.levels[0]?.walls.some((wall) => wall.id === state.selectedWallId)) {
+      clearSelectionDraft(state);
+    }
+    return;
   }
 
-  function selectOpening(openingId: string) {
-    setSelectionType("opening");
-    setSelectedOpeningId(openingId);
-    setSelectedRoomId(undefined);
-    setSelectedWallId(undefined);
+  if (!state.selectedOpeningId || !version.levels[0]?.openings.some((opening) => opening.id === state.selectedOpeningId)) {
+    clearSelectionDraft(state);
+  }
+}
+
+function refreshDerivedDraft(state: EvoProjectStore) {
+  const activeVersion = getActiveVersion(state.project);
+
+  state.activeVersion = activeVersion;
+  state.quantities = activeVersion ? calculateQuantities(activeVersion) : undefined;
+  state.complianceItems = activeVersion ? checkCompliance(activeVersion) : [];
+  state.selectedRoom = activeVersion?.rooms.find((room) => room.id === state.selectedRoomId);
+  state.selectedWall = activeVersion?.levels[0]?.walls.find((wall) => wall.id === state.selectedWallId);
+  state.selectedOpening = activeVersion?.levels[0]?.openings.find((opening) => opening.id === state.selectedOpeningId);
+
+  validateSelectionDraft(state);
+}
+
+function commitNormalizedVersionDraft(state: EvoProjectStore, normalizedVersion: PlanVersion, resetSelection = false) {
+  state.project.versions = state.project.versions.some((item) => item.id === normalizedVersion.id)
+    ? state.project.versions.map((item) => (item.id === normalizedVersion.id ? normalizedVersion : item))
+    : [...state.project.versions, normalizedVersion];
+  state.project.activeVersionId = normalizedVersion.id;
+
+  if (resetSelection) {
+    clearSelectionDraft(state);
   }
 
-  function validateSelectionForVersion(version: PlanVersion) {
-    if (selectionType === "room") {
-      if (selectedRoomId && version.rooms.some((room) => room.id === selectedRoomId)) {
-        return;
-      }
-      clearSelection();
+  refreshDerivedDraft(state);
+}
+
+function createInitialState(): Omit<
+  EvoProjectStore,
+  | "setActiveTab"
+  | "setOutline"
+  | "setOutlineClosed"
+  | "updateBrief"
+  | "setActiveAnalysisLayers"
+  | "setActiveMepLayers"
+  | "selectRoom"
+  | "selectWall"
+  | "selectOpening"
+  | "clearSelection"
+  | "updateRoom"
+  | "updateWall"
+  | "updateOpening"
+  | "replaceVersions"
+  | "setActiveVersion"
+  | "updateActiveVersion"
+  | "generateMep"
+  | "openModelForVersion"
+  | "refineVersion"
+  | "returnToPlanGeneration"
+> {
+  const activeVersion = getActiveVersion(initialProjectData);
+
+  return {
+    project: initialProjectData,
+    activeVersion,
+    selectedRoomId: undefined,
+    selectedWallId: undefined,
+    selectedOpeningId: undefined,
+    selectionType: "none",
+    selectedRoom: undefined,
+    selectedWall: undefined,
+    selectedOpening: undefined,
+    outline: defaultOutline,
+    outlineClosed: true,
+    brief: defaultBrief,
+    activeTab: "Plan",
+    activeAnalysisLayers: ["function_zones", "patient_flow", "egress_path", "daylight"],
+    activeMepLayers: ["hvac", "plumbing_supply", "plumbing_drain", "electrical", "shafts", "equipment_rooms"],
+    isGeneratingMep: false,
+    mepError: null,
+    quantities: activeVersion ? calculateQuantities(activeVersion) : undefined,
+    complianceItems: activeVersion ? checkCompliance(activeVersion) : []
+  };
+}
+
+export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
+  ...createInitialState(),
+  setActiveTab: (tab) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        state.activeTab = tab;
+      })
+    ),
+  setOutline: (outline) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        state.outline = outline;
+      })
+    ),
+  setOutlineClosed: (closed) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        state.outlineClosed = closed;
+      })
+    ),
+  updateBrief: (brief) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        state.brief = brief;
+      })
+    ),
+  setActiveAnalysisLayers: (layers) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        state.activeAnalysisLayers = layers;
+      })
+    ),
+  setActiveMepLayers: (layers) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        state.activeMepLayers = layers;
+      })
+    ),
+  selectRoom: (roomId) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        state.selectionType = "room";
+        state.selectedRoomId = roomId;
+        state.selectedWallId = undefined;
+        state.selectedOpeningId = undefined;
+        refreshDerivedDraft(state);
+      })
+    ),
+  selectWall: (wallId) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        state.selectionType = "wall";
+        state.selectedWallId = wallId;
+        state.selectedRoomId = undefined;
+        state.selectedOpeningId = undefined;
+        refreshDerivedDraft(state);
+      })
+    ),
+  selectOpening: (openingId) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        state.selectionType = "opening";
+        state.selectedOpeningId = openingId;
+        state.selectedRoomId = undefined;
+        state.selectedWallId = undefined;
+        refreshDerivedDraft(state);
+      })
+    ),
+  clearSelection: () =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        clearSelectionDraft(state);
+      })
+    ),
+  updateRoom: (roomId, patch) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        if (!state.activeVersion?.rooms.some((room) => room.id === roomId)) {
+          return;
+        }
+
+        commitNormalizedVersionDraft(
+          state,
+          normalizePlanVersion({
+            ...state.activeVersion,
+            rooms: state.activeVersion.rooms.map((room) => (room.id === roomId ? { ...room, ...patch, id: room.id } : room))
+          })
+        );
+      })
+    ),
+  updateWall: (wallId, patch) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        if (!state.activeVersion) {
+          return;
+        }
+
+        const normalized = normalizePlanVersion(state.activeVersion);
+        const level = normalized.levels[0];
+
+        if (!level?.walls.some((wall) => wall.id === wallId)) {
+          return;
+        }
+
+        const nextLevels = normalized.levels.map((item) =>
+          item.id === level.id
+            ? {
+                ...item,
+                walls: item.walls.map((wall) => (wall.id === wallId ? { ...wall, ...patch, id: wall.id } : wall))
+              }
+            : item
+        );
+
+        commitNormalizedVersionDraft(state, {
+          ...normalized,
+          levels: nextLevels,
+          building: {
+            ...normalized.building,
+            levels: nextLevels
+          }
+        });
+      })
+    ),
+  updateOpening: (openingId, patch) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        if (!state.activeVersion) {
+          return;
+        }
+
+        const normalized = normalizePlanVersion(state.activeVersion);
+        const level = normalized.levels[0];
+
+        if (!level?.openings.some((opening) => opening.id === openingId)) {
+          return;
+        }
+
+        const nextLevels = normalized.levels.map((item) =>
+          item.id === level.id
+            ? {
+                ...item,
+                openings: item.openings.map((opening) =>
+                  opening.id === openingId ? { ...opening, ...patch, id: opening.id } : opening
+                )
+              }
+            : item
+        );
+
+        commitNormalizedVersionDraft(state, {
+          ...normalized,
+          levels: nextLevels,
+          building: {
+            ...normalized.building,
+            levels: nextLevels
+          }
+        });
+      })
+    ),
+  replaceVersions: (versions, projectType = get().brief.projectType) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        const normalizedVersions = normalizeProjectVersions(versions);
+
+        state.project.projectType = projectType;
+        state.project.versions = normalizedVersions;
+        state.project.activeVersionId = normalizedVersions[0]?.id ?? state.project.activeVersionId;
+        clearSelectionDraft(state);
+        refreshDerivedDraft(state);
+      })
+    ),
+  setActiveVersion: (version) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        commitNormalizedVersionDraft(state, normalizePlanVersion(version), true);
+      })
+    ),
+  updateActiveVersion: (version) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        commitNormalizedVersionDraft(state, normalizePlanVersion(version));
+      })
+    ),
+  generateMep: async () => {
+    const activeVersion = get().activeVersion;
+
+    if (!activeVersion || get().isGeneratingMep) {
       return;
     }
 
-    if (selectionType === "wall") {
-      if (selectedWallId && version.levels[0]?.walls.some((wall) => wall.id === selectedWallId)) {
-        return;
-      }
-      clearSelection();
-      return;
-    }
-
-    if (selectionType === "opening") {
-      if (selectedOpeningId && version.levels[0]?.openings.some((opening) => opening.id === selectedOpeningId)) {
-        return;
-      }
-      clearSelection();
-    }
-  }
-
-  function commitNormalizedVersion(normalizedVersion: PlanVersion, resetSelection = false) {
-    setProject((current) => {
-      const nextVersions = current.versions.some((item) => item.id === normalizedVersion.id)
-        ? current.versions.map((item) => (item.id === normalizedVersion.id ? normalizedVersion : item))
-        : [...current.versions, normalizedVersion];
-
-      return {
-        ...current,
-        versions: nextVersions,
-        activeVersionId: normalizedVersion.id
-      };
-    });
-
-    if (resetSelection) {
-      clearSelection();
-      return;
-    }
-
-    validateSelectionForVersion(normalizedVersion);
-  }
-
-  function commitVersionUpdate(version: PlanVersion, resetSelection = false) {
-    commitNormalizedVersion(normalizePlanVersion(version), resetSelection);
-  }
-
-  function updateBrief(nextBrief: DesignBrief) {
-    setBrief(nextBrief);
-  }
-
-  function replaceVersions(versions: PlanVersion[], projectType = brief.projectType) {
-    const normalizedVersions = normalizeProjectVersions(versions);
-
-    setProject((current) => ({
-      ...current,
-      projectType,
-      versions: normalizedVersions,
-      activeVersionId: normalizedVersions[0]?.id ?? current.activeVersionId
-    }));
-
-    clearSelection();
-  }
-
-  function setActiveVersion(version: PlanVersion) {
-    commitVersionUpdate(version, true);
-  }
-
-  function updateActiveVersion(version: PlanVersion) {
-    commitVersionUpdate(version);
-  }
-
-  function updateRoom(roomId: string, patch: Partial<Room>) {
-    if (!activeVersion) {
-      return;
-    }
-
-    const roomExists = activeVersion.rooms.some((room) => room.id === roomId);
-
-    if (!roomExists) {
-      return;
-    }
-
-    const nextVersion: PlanVersion = {
-      ...activeVersion,
-      rooms: activeVersion.rooms.map((room) => (room.id === roomId ? { ...room, ...patch, id: room.id } : room))
-    };
-
-    commitVersionUpdate(nextVersion);
-  }
-
-  function updateWall(wallId: string, patch: Partial<Wall>) {
-    if (!activeVersion) {
-      return;
-    }
-
-    const normalized = normalizePlanVersion(activeVersion);
-    const level = normalized.levels[0];
-
-    if (!level?.walls.some((wall) => wall.id === wallId)) {
-      return;
-    }
-
-    const nextLevels = normalized.levels.map((item) => {
-      if (item.id !== level.id) {
-        return item;
-      }
-
-      return {
-        ...item,
-        walls: item.walls.map((wall) => (wall.id === wallId ? { ...wall, ...patch, id: wall.id } : wall))
-      };
-    });
-
-    commitNormalizedVersion({
-      ...normalized,
-      levels: nextLevels,
-      building: {
-        ...normalized.building,
-        levels: nextLevels
-      }
-    });
-  }
-
-  function updateOpening(openingId: string, patch: Partial<OpeningElement>) {
-    if (!activeVersion) {
-      return;
-    }
-
-    const normalized = normalizePlanVersion(activeVersion);
-    const level = normalized.levels[0];
-
-    if (!level?.openings.some((opening) => opening.id === openingId)) {
-      return;
-    }
-
-    const nextLevels = normalized.levels.map((item) => {
-      if (item.id !== level.id) {
-        return item;
-      }
-
-      return {
-        ...item,
-        openings: item.openings.map((opening) =>
-          opening.id === openingId ? { ...opening, ...patch, id: opening.id } : opening
-        )
-      };
-    });
-
-    commitNormalizedVersion({
-      ...normalized,
-      levels: nextLevels,
-      building: {
-        ...normalized.building,
-        levels: nextLevels
-      }
-    });
-  }
-
-  function returnToPlanGeneration() {
-    setActiveTab("Plan");
-  }
-
-  function openModelForVersion(version: PlanVersion) {
-    setActiveVersion(version);
-    setActiveTab("Model");
-  }
-
-  function refineVersion(version: PlanVersion) {
-    setActiveVersion(version);
-    setActiveTab("Plan");
-  }
-
-  async function generateMep() {
-    if (!activeVersion || isGeneratingMep) {
-      return;
-    }
-
-    setIsGeneratingMep(true);
-    setMepError(null);
+    set(
+      produce<EvoProjectStore>((state) => {
+        state.isGeneratingMep = true;
+        state.mepError = null;
+      })
+    );
 
     try {
       const response = await fetch("/api/generate-mep", {
@@ -360,101 +411,76 @@ export function EvoProjectProvider({ children }: { children: ReactNode }) {
         throw new Error("generate-mep did not return a MepLayout.");
       }
 
-      updateActiveVersion({
-        ...activeVersion,
-        mep: data.mep,
-        scores: activeVersion.scores
-          ? {
-              ...activeVersion.scores,
-              mepAlignmentScore: Math.min(100, activeVersion.scores.mepAlignmentScore + 4)
-            }
-          : activeVersion.scores
-      });
+      set(
+        produce<EvoProjectStore>((state) => {
+          const currentVersion = state.activeVersion;
 
-      if (data.warning) {
-        setMepError(`Fallback MEP generated: ${data.warning}`);
-      }
+          if (!currentVersion) {
+            return;
+          }
+
+          commitNormalizedVersionDraft(state, {
+            ...currentVersion,
+            mep: data.mep,
+            scores: currentVersion.scores
+              ? {
+                  ...currentVersion.scores,
+                  mepAlignmentScore: Math.min(100, currentVersion.scores.mepAlignmentScore + 4)
+                }
+              : currentVersion.scores
+          });
+
+          if (data.warning) {
+            state.mepError = `Fallback MEP generated: ${data.warning}`;
+          }
+        })
+      );
     } catch (error) {
-      setMepError(error instanceof Error ? error.message : "Failed to generate MEP.");
+      set(
+        produce<EvoProjectStore>((state) => {
+          state.mepError = error instanceof Error ? error.message : "Failed to generate MEP.";
+        })
+      );
     } finally {
-      setIsGeneratingMep(false);
+      set(
+        produce<EvoProjectStore>((state) => {
+          state.isGeneratingMep = false;
+        })
+      );
     }
-  }
+  },
+  openModelForVersion: (version) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        commitNormalizedVersionDraft(state, normalizePlanVersion(version), true);
+        state.activeTab = "Model";
+      })
+    ),
+  refineVersion: (version) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        commitNormalizedVersionDraft(state, normalizePlanVersion(version), true);
+        state.activeTab = "Plan";
+      })
+    ),
+  returnToPlanGeneration: () =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        state.activeTab = "Plan";
+      })
+    )
+}));
 
-  const value = useMemo(
-    () => ({
-      project,
-      activeVersion,
-      selectedRoomId,
-      selectedWallId,
-      selectedOpeningId,
-      selectionType,
-      selectedRoom,
-      selectedWall,
-      selectedOpening,
-      outline,
-      outlineClosed,
-      brief,
-      activeTab,
-      activeAnalysisLayers,
-      activeMepLayers,
-      isGeneratingMep,
-      mepError,
-      quantities,
-      complianceItems,
-      setActiveTab,
-      setOutline,
-      setOutlineClosed,
-      updateBrief,
-      setActiveAnalysisLayers,
-      setActiveMepLayers,
-      selectRoom,
-      selectWall,
-      selectOpening,
-      clearSelection,
-      updateRoom,
-      updateWall,
-      updateOpening,
-      replaceVersions,
-      setActiveVersion,
-      updateActiveVersion,
-      generateMep,
-      openModelForVersion,
-      refineVersion,
-      returnToPlanGeneration
-    }),
-    [
-      activeAnalysisLayers,
-      activeMepLayers,
-      activeTab,
-      activeVersion,
-      brief,
-      complianceItems,
-      isGeneratingMep,
-      mepError,
-      outline,
-      outlineClosed,
-      project,
-      quantities,
-      selectedOpening,
-      selectedOpeningId,
-      selectedRoom,
-      selectedRoomId,
-      selectedWall,
-      selectedWallId,
-      selectionType
-    ]
-  );
-
-  return <EvoProjectContext.Provider value={value}>{children}</EvoProjectContext.Provider>;
+export function EvoProjectProvider({ children }: { children: ReactNode }) {
+  return <>{children}</>;
 }
 
-export function useEvoProject() {
-  const context = useContext(EvoProjectContext);
+export function getEvoProjectSnapshot() {
+  return useEvoProjectStore.getState();
+}
 
-  if (!context) {
-    throw new Error("useEvoProject must be used within EvoProjectProvider.");
-  }
-
-  return context;
+export function useEvoProject(): EvoProjectStore;
+export function useEvoProject<T>(selector: (state: EvoProjectStore) => T): T;
+export function useEvoProject<T>(selector?: (state: EvoProjectStore) => T) {
+  return useEvoProjectStore(selector ?? ((state) => state as T));
 }

@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { Text } from "@react-three/drei";
 import { useLayoutEffect, useMemo, useRef } from "react";
 import type { OpeningElement, PlanVersion, Room, Wall } from "@/lib/project-types";
-import { getRoomMaterialSpec, modelPalette } from "@/components/viewer-3d/materials";
+import { getRoomMaterialSpec, type RoomMaterialSpec, modelPalette } from "@/components/viewer-3d/materials";
 import { getPolygonBounds, getPolygonCenter } from "@/components/viewer-3d/wallGeometry";
 
 interface BuildingModelProps {
@@ -48,9 +48,8 @@ export function BuildingModel({ version }: BuildingModelProps) {
         <meshStandardMaterial color={modelPalette.slab} opacity={0.22} transparent />
       </mesh>
 
-      {version.rooms.map((room) => (
-        <RoomMass key={room.id} room={room} />
-      ))}
+      <RoomMassMeshes rooms={version.rooms} />
+      <RoomLabels rooms={version.rooms} />
 
       <InstancedWalls walls={level?.walls ?? []} />
       <InstancedOpenings openings={level?.openings ?? []} />
@@ -58,30 +57,64 @@ export function BuildingModel({ version }: BuildingModelProps) {
   );
 }
 
-function RoomMass({ room }: { room: Room }) {
-  const shape = useMemo(() => createRoomShape(room), [room]);
-  const spec = getRoomMaterialSpec(room.type, room.zone);
-  const roomHeight = Math.max(2.7, room.ceilingHeight + spec.heightBoost);
-  const center = getPolygonCenter(room.polygon);
+function getRoomMaterialKey(spec: RoomMaterialSpec) {
+  return `${spec.color}:${spec.opacity}:${spec.heightBoost}`;
+}
+
+function RoomMassMeshes({ rooms }: { rooms: Room[] }) {
+  const roomGroups = useMemo(() => {
+    const groups = new Map<string, { spec: RoomMaterialSpec; shapes: THREE.Shape[] }>();
+
+    rooms.forEach((room) => {
+      const spec = getRoomMaterialSpec(room.type, room.zone);
+      const key = getRoomMaterialKey(spec);
+      const group = groups.get(key);
+
+      if (group) {
+        group.shapes.push(createRoomShape(room));
+      } else {
+        groups.set(key, { spec, shapes: [createRoomShape(room)] });
+      }
+    });
+
+    return Array.from(groups.entries()).map(([key, group]) => ({ key, ...group }));
+  }, [rooms]);
 
   return (
-    <group>
-      <mesh castShadow receiveShadow position={[0, 0, 0]}>
-        <extrudeGeometry args={[shape, { depth: 0.14, bevelEnabled: false }]} />
-        <meshStandardMaterial color={spec.color} opacity={spec.opacity} transparent side={THREE.DoubleSide} />
-      </mesh>
+    <>
+      {roomGroups.map(({ key, shapes, spec }) => (
+        <mesh key={key} castShadow receiveShadow position={[0, 0, 0]}>
+          <extrudeGeometry args={[shapes, { depth: 0.14, bevelEnabled: false }]} />
+          <meshStandardMaterial color={spec.color} opacity={spec.opacity} transparent side={THREE.DoubleSide} />
+        </mesh>
+      ))}
+    </>
+  );
+}
 
-      <Text
-        color="#dfe8ef"
-        fontSize={1.2}
-        anchorX="center"
-        anchorY="middle"
-        position={[center[0], center[1], -roomHeight - 0.35]}
-        rotation={[0, 0, 0]}
-      >
-        {room.name}
-      </Text>
-    </group>
+function RoomLabels({ rooms }: { rooms: Room[] }) {
+  return (
+    <>
+      {rooms.map((room) => {
+        const spec = getRoomMaterialSpec(room.type, room.zone);
+        const roomHeight = Math.max(2.7, room.ceilingHeight + spec.heightBoost);
+        const center = getPolygonCenter(room.polygon);
+
+        return (
+          <Text
+            key={room.id}
+            color="#dfe8ef"
+            fontSize={1.2}
+            anchorX="center"
+            anchorY="middle"
+            position={[center[0], center[1], -roomHeight - 0.35]}
+            rotation={[0, 0, 0]}
+          >
+            {room.name}
+          </Text>
+        );
+      })}
+    </>
   );
 }
 

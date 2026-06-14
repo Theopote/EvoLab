@@ -1,5 +1,6 @@
 "use client";
 
+import { useShallow } from "zustand/react/shallow";
 import { BottomPanel } from "@/components/bottom-panel";
 import { CopilotPanel } from "@/components/copilot-panel";
 import { DiagramCanvas } from "@/components/diagrams/DiagramCanvas";
@@ -23,7 +24,6 @@ import { Scene } from "@/components/viewer-3d/Scene";
 import { useEvoProject } from "@/lib/project-store";
 
 export function EvoLabWorkspace() {
-  const store = useEvoProject();
   const {
     project,
     activeVersion,
@@ -50,7 +50,35 @@ export function EvoLabWorkspace() {
     openModelForVersion,
     refineVersion,
     returnToPlanGeneration
-  } = store;
+  } = useEvoProject(
+    useShallow((state) => ({
+      project: state.project,
+      activeVersion: state.activeVersion,
+      outline: state.outline,
+      outlineClosed: state.outlineClosed,
+      brief: state.brief,
+      activeTab: state.activeTab,
+      activeAnalysisLayers: state.activeAnalysisLayers,
+      activeMepLayers: state.activeMepLayers,
+      isGeneratingMep: state.isGeneratingMep,
+      mepError: state.mepError,
+      quantities: state.quantities,
+      complianceItems: state.complianceItems,
+      setActiveTab: state.setActiveTab,
+      setOutline: state.setOutline,
+      setOutlineClosed: state.setOutlineClosed,
+      updateBrief: state.updateBrief,
+      setActiveAnalysisLayers: state.setActiveAnalysisLayers,
+      setActiveMepLayers: state.setActiveMepLayers,
+      replaceVersions: state.replaceVersions,
+      setActiveVersion: state.setActiveVersion,
+      updateActiveVersion: state.updateActiveVersion,
+      generateMep: state.generateMep,
+      openModelForVersion: state.openModelForVersion,
+      refineVersion: state.refineVersion,
+      returnToPlanGeneration: state.returnToPlanGeneration
+    }))
+  );
 
   return (
     <main className="flex min-h-screen flex-col bg-canvas text-slate-100">

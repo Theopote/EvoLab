@@ -1,5 +1,6 @@
 "use client";
 
+import { useShallow } from "zustand/react/shallow";
 import type { PlanVersion } from "@/lib/project-types";
 import { CoreSymbolLayer } from "@/components/floor-plan/layers/CoreSymbolLayer";
 import { GridLayer } from "@/components/floor-plan/layers/GridLayer";
@@ -34,7 +35,17 @@ export function FloorPlanCanvas({
     selectWall,
     selectOpening,
     clearSelection
-  } = useEvoProject();
+  } = useEvoProject(
+    useShallow((state) => ({
+      selectedRoomId: state.selectedRoomId,
+      selectedWallId: state.selectedWallId,
+      selectedOpeningId: state.selectedOpeningId,
+      selectRoom: state.selectRoom,
+      selectWall: state.selectWall,
+      selectOpening: state.selectOpening,
+      clearSelection: state.clearSelection
+    }))
+  );
   const selectedRoomId = interactive ? selectedRoomIdProp ?? roomSelectionFromStore : selectedRoomIdProp;
   const selectedWallId = interactive ? wallSelectionFromStore : undefined;
   const selectedOpeningId = interactive ? openingSelectionFromStore : undefined;
