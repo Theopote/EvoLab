@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { OpeningInspector } from "@/components/inspector/OpeningInspector";
 import { ProjectInspector } from "@/components/inspector/ProjectInspector";
 import { RoomInspector } from "@/components/inspector/RoomInspector";
@@ -19,6 +20,17 @@ export function InspectorPanel() {
       : "project";
 
   const isSelectionActive = selectionType !== "none";
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && isSelectionActive) {
+        clearSelection();
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [clearSelection, isSelectionActive]);
 
   return (
     <div className="space-y-3">
