@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.104.1",
     "@next/swc-win32-x64-msvc": "^14.2.16",
     "clsx": "^2.1.1",
     "lucide-react": "^0.468.0",
