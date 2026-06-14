@@ -12,6 +12,7 @@ import { PlanResultGrid } from "@/components/plan-editor/PlanResultGrid";
 import { ComplianceChecklist } from "@/components/quantity/ComplianceChecklist";
 import { QuantityTable } from "@/components/quantity/QuantityTable";
 import { TopNav, type WorkspaceTab } from "@/components/top-nav";
+import { VersionCompareGrid } from "@/components/version-compare/VersionCompareGrid";
 import { Scene } from "@/components/viewer-3d/Scene";
 import { initialProjectData } from "@/lib/evolab-data";
 import { calculateQuantities, checkCompliance } from "@/lib/quantity-engine";
@@ -106,6 +107,16 @@ export default function Home() {
     setActiveTab("Plan");
   }
 
+  function handleGenerateModel(version: PlanVersion) {
+    handleSelectVersion(version);
+    setActiveTab("Model");
+  }
+
+  function handleRefineVersion(version: PlanVersion) {
+    handleSelectVersion(version);
+    setActiveTab("Plan");
+  }
+
   return (
     <main className="flex min-h-screen flex-col bg-canvas text-slate-100">
       <TopNav project={project} activeTab={activeTab} onTabChange={setActiveTab} />
@@ -169,6 +180,14 @@ export default function Home() {
               )}
               <ComplianceChecklist items={complianceItems} />
             </section>
+          ) : activeTab === "Sheets" ? (
+            <VersionCompareGrid
+              versions={project.versions}
+              activeVersionId={project.activeVersionId}
+              onSelectVersion={handleSelectVersion}
+              onGenerateModel={handleGenerateModel}
+              onRefineVersion={handleRefineVersion}
+            />
           ) : (
             <section className="grid min-h-full grid-rows-[minmax(360px,0.9fr)_minmax(320px,1fr)] gap-4">
               <div className="grid min-h-0 grid-cols-[360px_minmax(0,1fr)] gap-4">
