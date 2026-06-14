@@ -6,6 +6,8 @@ import { CopilotPanel } from "@/components/copilot-panel";
 import { DiagramCanvas } from "@/components/diagrams/DiagramCanvas";
 import { DiagramLayerList } from "@/components/diagrams/DiagramLayerList";
 import { FloorPlan } from "@/components/floor-plan";
+import { MepCanvas } from "@/components/mep/MepCanvas";
+import { MepLayerList, type MepLayerId } from "@/components/mep/MepLayerList";
 import { BriefForm, type PlanBrief } from "@/components/plan-editor/BriefForm";
 import { OutlineCanvas } from "@/components/plan-editor/OutlineCanvas";
 import { PlanResultGrid } from "@/components/plan-editor/PlanResultGrid";
@@ -16,7 +18,7 @@ import { VersionCompareGrid } from "@/components/version-compare/VersionCompareG
 import { Scene } from "@/components/viewer-3d/Scene";
 import { initialProjectData } from "@/lib/evolab-data";
 import { calculateQuantities, checkCompliance } from "@/lib/quantity-engine";
-import type { AnalysisLayerId, PlanVersion, Point, ProjectData } from "@/lib/project-types";
+import type { AnalysisLayerId, MepLayout, PlanVersion, Point, ProjectData } from "@/lib/project-types";
 
 const tools = [
   { label: "Select", icon: MousePointer2 },
@@ -54,6 +56,16 @@ export default function Home() {
     "egress_path",
     "daylight"
   ]);
+  const [activeMepLayers, setActiveMepLayers] = useState<MepLayerId[]>([
+    "hvac",
+    "plumbing_supply",
+    "plumbing_drain",
+    "electrical",
+    "shafts",
+    "equipment_rooms"
+  ]);
+  const [isGeneratingMep, setIsGeneratingMep] = useState(false);
+  const [mepError, setMepError] = useState<string | null>(null);
 
   const activeVersion = useMemo(
     () => project.versions.find((version) => version.id === project.activeVersionId),
@@ -117,6 +129,52 @@ export default function Home() {
     setActiveTab("Plan");
   }
 
+  async function handleGenerateMep() {
+    if (!activeVersion || isGeneratingMep) {
+      return;
+    }
+
+    setIsGeneratingMep(true);
+    setMepError(null);
+
+    try {
+      const response = await fetch("/api/generate-mep", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ version: activeVersion })
+      });
+
+      if (!response.ok) {
+        throw new Error(`generate-mep failed with ${response.status}`);
+      }
+
+      const data = (await response.json()) as { mep?: MepLayout; warning?: string };
+
+      if (!data.mep?.routes) {
+        throw new Error("generate-mep did not return a MepLayout.");
+      }
+
+      handleVersionUpdated({
+        ...activeVersion,
+        mep: data.mep,
+        scores: activeVersion.scores
+          ? {
+              ...activeVersion.scores,
+              mepAlignmentScore: Math.min(100, activeVersion.scores.mepAlignmentScore + 4)
+            }
+          : activeVersion.scores
+      });
+
+      if (data.warning) {
+        setMepError(`Fallback MEP generated: ${data.warning}`);
+      }
+    } catch (error) {
+      setMepError(error instanceof Error ? error.message : "Failed to generate MEP.");
+    } finally {
+      setIsGeneratingMep(false);
+    }
+  }
+
   return (
     <main className="flex min-h-screen flex-col bg-canvas text-slate-100">
       <TopNav project={project} activeTab={activeTab} onTabChange={setActiveTab} />
@@ -168,6 +226,24 @@ export default function Home() {
                 onChange={setActiveAnalysisLayers}
               />
               <DiagramCanvas activeLayers={activeAnalysisLayers} version={activeVersion} />
+            </section>
+          ) : activeTab === "Systems" ? (
+            <section className="grid min-h-full grid-cols-[320px_minmax(0,1fr)] gap-4">
+              <div>
+                <MepLayerList
+                  activeLayers={activeMepLayers}
+                  canGenerate={Boolean(activeVersion)}
+                  isGenerating={isGeneratingMep}
+                  onChange={setActiveMepLayers}
+                  onGenerate={handleGenerateMep}
+                />
+                {mepError ? (
+                  <div className="mt-3 rounded border border-warning/40 bg-warning/10 p-2 text-xs leading-5 text-warning">
+                    {mepError}
+                  </div>
+                ) : null}
+              </div>
+              <MepCanvas activeLayers={activeMepLayers} version={activeVersion} />
             </section>
           ) : activeTab === "Quantity" ? (
             <section className="grid min-h-full grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)] gap-4">
@@ -256,6 +332,8 @@ export default function Home() {
               <Info label="Flow score" value={String(activeVersion?.scores?.circulationScore ?? 0)} />
               <Info label="Daylight score" value={String(activeVersion?.scores?.daylightScore ?? 0)} />
               <Info label="MEP alignment" value={String(activeVersion?.scores?.mepAlignmentScore ?? 0)} />
+              <Info label="MEP routes" value={String(activeVersion?.mep?.routes.length ?? 0)} />
+              <Info label="MEP shafts" value={String(activeVersion?.mep?.shafts.length ?? 0)} />
               <Info label="Risk count" value={String(activeVersion?.scores?.riskCount ?? 0)} />
               <Info label="Gross area" value={`${quantities?.summary.grossArea ?? 0} sqm`} />
               <Info label="Wall area" value={`${quantities?.summary.wallArea ?? 0} sqm`} />
