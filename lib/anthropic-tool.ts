@@ -1,12 +1,21 @@
 import Anthropic from "@anthropic-ai/sdk";
+import type { ImageBlockParam, MessageParam, TextBlockParam } from "@anthropic-ai/sdk/resources/messages";
 import { z, type ZodType } from "zod";
 import { hasAnthropicKey } from "@/lib/anthropic-json";
 
 const MODEL = "claude-sonnet-4-20250514";
 
+export type AnthropicImageMediaType = "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+
+export interface AnthropicToolImageInput {
+  base64: string;
+  mediaType: AnthropicImageMediaType;
+}
+
 interface RequestAnthropicToolOptions<T> {
   system: string;
   input: unknown;
+  images?: AnthropicToolImageInput[];
   toolName: string;
   toolDescription: string;
   schema: ZodType<T>;
@@ -31,9 +40,41 @@ function toAnthropicInputSchema(schema: ZodType): AnthropicInputSchema {
   return jsonSchema as AnthropicInputSchema;
 }
 
+function createUserMessage(input: unknown, correctionHint: string | undefined, images?: AnthropicToolImageInput[]): MessageParam {
+  const textBlock: TextBlockParam = {
+    type: "text",
+    text: JSON.stringify({
+      input,
+      correction: correctionHint
+    })
+  };
+
+  if (!images?.length) {
+    return {
+      role: "user",
+      content: textBlock.text
+    };
+  }
+
+  const imageBlocks: ImageBlockParam[] = images.map((image) => ({
+    type: "image",
+    source: {
+      type: "base64",
+      media_type: image.mediaType,
+      data: image.base64
+    }
+  }));
+
+  return {
+    role: "user",
+    content: [...imageBlocks, textBlock]
+  };
+}
+
 export async function requestAnthropicTool<T>({
   system,
   input,
+  images,
   toolName,
   toolDescription,
   schema,
@@ -66,15 +107,7 @@ export async function requestAnthropicTool<T>({
         type: "tool",
         name: toolName
       },
-      messages: [
-        {
-          role: "user",
-          content: JSON.stringify({
-            input,
-            correction: correctionHint
-          })
-        }
-      ]
+      messages: [createUserMessage(input, correctionHint, images)]
     });
     const toolUse = message.content.find(
       (block) => block.type === "tool_use" && block.name === toolName
