@@ -19,6 +19,7 @@ The response shape must be:
 Rules:
 - Return a complete PlanVersion, not a partial diff.
 - Keep room IDs stable where possible.
-- Update geometry, adjacencies, scores, and MEP alignment when affected.
+- Update room polygons, Level.walls, Level.openings, adjacencies, scores, and MEP alignment when affected.
+- Keep doors and windows as OpeningElement objects attached to wallId when available.
 - Findings should describe concrete design consequences and expose actionable CopilotAction buttons when useful.
 `;

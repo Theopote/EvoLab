@@ -14,6 +14,8 @@ Each PlanVersion must include complete fields:
 - label
 - createdAt
 - rooms
+- levels with Level.rooms, Level.walls, and Level.openings when possible
+- building with boundary, floors, cores, and grids when possible
 - outline
 - overallBounds
 - scores
@@ -34,4 +36,6 @@ Planning criteria:
 
 All geometry must use Point tuples in meters: [x, y].
 Rooms must be editable polygons, not image descriptions.
+Walls must be independent Wall elements when available; do not rely only on room polygon edges.
+Door and window geometry should be OpeningElement objects attached to wallId when available.
 `;

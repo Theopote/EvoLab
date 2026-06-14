@@ -62,11 +62,30 @@ export function createPlanSvg(version: PlanVersion) {
   </g>`;
     })
     .join("\n");
+  const level = version.levels[0];
+  const walls = level?.walls
+    .map(
+      (wall) =>
+        `<line x1="${wall.start[0]}" y1="${wall.start[1]}" x2="${wall.end[0]}" y2="${wall.end[1]}" stroke="${
+          wall.type === "external" ? "#e5f6ff" : wall.type === "core" ? "#f0b35b" : "#7d8fa3"
+        }" stroke-width="${wall.thickness}" stroke-linecap="round" />`
+    )
+    .join("\n");
+  const openings = level?.openings
+    .map(
+      (opening) =>
+        `<circle cx="${opening.center[0]}" cy="${opening.center[1]}" r="${
+          opening.type === "door" ? 0.45 : 0.35
+        }" fill="${opening.type === "door" ? "#4fb5c8" : "#84cc16"}" stroke="#081018" stroke-width="0.16" />`
+    )
+    .join("\n");
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" width="${width * 10}" height="${height * 10}">
   <rect x="${-padding}" y="${-padding}" width="${width}" height="${height}" fill="#081018" />
   <polygon points="${polygonPoints(version.outline)}" fill="rgba(255,255,255,0.018)" stroke="#d8edf5" stroke-width="0.35" />
 ${rooms}
+${walls ?? ""}
+${openings ?? ""}
 </svg>
 `;
 }

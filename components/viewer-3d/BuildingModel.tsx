@@ -3,9 +3,9 @@
 import * as THREE from "three";
 import { Text } from "@react-three/drei";
 import { useMemo } from "react";
-import type { PlanVersion, Room } from "@/lib/project-types";
+import type { OpeningElement, PlanVersion, Room, Wall } from "@/lib/project-types";
 import { getRoomMaterialSpec, modelPalette } from "@/components/viewer-3d/materials";
-import { createWallSegments, getPolygonBounds, getPolygonCenter } from "@/components/viewer-3d/wallGeometry";
+import { getPolygonBounds, getPolygonCenter } from "@/components/viewer-3d/wallGeometry";
 
 interface BuildingModelProps {
   version: PlanVersion;
@@ -27,6 +27,7 @@ function createRoomShape(room: Room) {
 export function BuildingModel({ version }: BuildingModelProps) {
   const outlineShape = useMemo(() => createRoomShape({ polygon: version.outline } as Room), [version.outline]);
   const outlineBounds = useMemo(() => getPolygonBounds(version.outline), [version.outline]);
+  const level = version.levels[0];
   const offsetX = -(outlineBounds.minX + outlineBounds.maxX) / 2;
   const offsetZ = -(outlineBounds.minY + outlineBounds.maxY) / 2;
 
@@ -40,6 +41,14 @@ export function BuildingModel({ version }: BuildingModelProps) {
       {version.rooms.map((room) => (
         <RoomMass key={room.id} room={room} />
       ))}
+
+      {level?.walls.map((wall) => (
+        <BuildingWall key={wall.id} wall={wall} />
+      ))}
+
+      {level?.openings.map((opening) => (
+        <OpeningMarker key={opening.id} opening={opening} />
+      ))}
     </group>
   );
 }
@@ -48,10 +57,6 @@ function RoomMass({ room }: { room: Room }) {
   const shape = useMemo(() => createRoomShape(room), [room]);
   const spec = getRoomMaterialSpec(room.type, room.zone);
   const roomHeight = Math.max(2.7, room.ceilingHeight + spec.heightBoost);
-  const walls = useMemo(
-    () => createWallSegments(room.polygon, roomHeight, room.type === "shaft" ? 0.42 : 0.24, room.id),
-    [room.id, room.polygon, room.type, roomHeight]
-  );
   const center = getPolygonCenter(room.polygon);
 
   return (
@@ -60,18 +65,6 @@ function RoomMass({ room }: { room: Room }) {
         <extrudeGeometry args={[shape, { depth: 0.14, bevelEnabled: false }]} />
         <meshStandardMaterial color={spec.color} opacity={spec.opacity} transparent side={THREE.DoubleSide} />
       </mesh>
-
-      {walls.map((wall) => (
-        <mesh
-          castShadow
-          key={wall.id}
-          position={[wall.center[0], wall.center[2], -wall.center[1]]}
-          rotation={[0, 0, wall.angle]}
-        >
-          <boxGeometry args={[wall.length, wall.thickness, wall.height]} />
-          <meshStandardMaterial color={modelPalette.wall} opacity={0.56} transparent />
-        </mesh>
-      ))}
 
       <Text
         color="#dfe8ef"
@@ -84,5 +77,37 @@ function RoomMass({ room }: { room: Room }) {
         {room.name}
       </Text>
     </group>
+  );
+}
+
+function BuildingWall({ wall }: { wall: Wall }) {
+  const dx = wall.end[0] - wall.start[0];
+  const dy = wall.end[1] - wall.start[1];
+  const length = Math.hypot(dx, dy);
+  const angle = Math.atan2(dy, dx);
+  const color = wall.type === "core" ? "#a87534" : wall.type === "external" ? modelPalette.wall : "#738194";
+
+  return (
+    <mesh
+      castShadow
+      receiveShadow
+      position={[(wall.start[0] + wall.end[0]) / 2, wall.height / 2, -(wall.start[1] + wall.end[1]) / 2]}
+      rotation={[0, 0, angle]}
+    >
+      <boxGeometry args={[length, wall.thickness, wall.height]} />
+      <meshStandardMaterial color={color} opacity={wall.type === "partition" ? 0.5 : 0.68} transparent />
+    </mesh>
+  );
+}
+
+function OpeningMarker({ opening }: { opening: OpeningElement }) {
+  const color = opening.type === "door" ? "#4fb5c8" : opening.type === "window" ? "#84cc16" : "#e5edf5";
+  const y = opening.type === "window" ? opening.sillHeight ?? 0.9 : 0.08;
+
+  return (
+    <mesh position={[opening.center[0], y, -opening.center[1]]}>
+      <boxGeometry args={[opening.width, 0.12, Math.max(0.08, opening.height)]} />
+      <meshStandardMaterial color={color} opacity={0.8} transparent />
+    </mesh>
   );
 }
