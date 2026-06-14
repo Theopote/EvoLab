@@ -1,3 +1,5 @@
+"use client";
+
 import { useEvoProject } from "@/lib/project-store";
 
 export function OpeningInspector() {

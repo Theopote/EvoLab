@@ -1,3 +1,5 @@
+"use client";
+
 import { OpeningInspector } from "@/components/inspector/OpeningInspector";
 import { ProjectInspector } from "@/components/inspector/ProjectInspector";
 import { RoomInspector } from "@/components/inspector/RoomInspector";

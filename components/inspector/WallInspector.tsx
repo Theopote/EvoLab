@@ -1,3 +1,5 @@
+"use client";
+
 import { wallLength } from "@/components/floor-plan/floor-plan-utils";
 import { useEvoProject } from "@/lib/project-store";
 

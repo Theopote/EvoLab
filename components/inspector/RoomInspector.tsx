@@ -1,3 +1,5 @@
+"use client";
+
 import type { FunctionZone, RoomType } from "@/lib/project-types";
 import { useEvoProject } from "@/lib/project-store";
 
