@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { requestAnthropicTool } from "@/lib/anthropic-tool";
 import { createMockPlanVersions } from "@/lib/mock-api";
-import { postProcessPlanVersions } from "@/lib/plan-postprocess";
-import { generatePlanPrompt } from "@/lib/prompts/generatePlanPrompt";
-import { GeneratePlanToolInputSchema } from "@/lib/schemas/plan-version-schema";
+import { validatePlanVersion } from "@/lib/plan-validation";
+import { generatePlanTopologyPrompt } from "@/lib/prompts/generatePlanTopologyPrompt";
+import { GeneratePlanToolInputSchema, GeneratePlanTopologyToolInputSchema } from "@/lib/schemas/plan-version-schema";
+import { topologiesToPlanVersions } from "@/lib/topology-geometry";
 import type { PlanVersion, Point } from "@/lib/project-types";
 
 interface GeneratePlanRequest {
@@ -16,6 +17,36 @@ interface GeneratePlanResponse {
   versions: PlanVersion[];
 }
 
+function versionErrorSummary(versions: PlanVersion[]) {
+  return versions.flatMap((version) =>
+    validatePlanVersion(version).issues
+      .filter((issue) => issue.severity === "error")
+      .map((issue) => ({
+        versionId: version.id,
+        issue: issue.id,
+        message: issue.message,
+        roomIds: issue.roomIds
+      }))
+  );
+}
+
+async function requestTopologyPlan(body: GeneratePlanRequest, correction?: unknown) {
+  return requestAnthropicTool({
+    system: generatePlanTopologyPrompt,
+    input: {
+      outline: body.outline,
+      brief: body.brief,
+      projectType: body.projectType,
+      correction
+    },
+    toolName: "generate_plan_topology",
+    toolDescription: "Return EvoLab architectural room topology, target areas, and adjacency graph without final geometry.",
+    schema: GeneratePlanTopologyToolInputSchema,
+    maxTokens: 8192,
+    maxValidationRetries: 1
+  });
+}
+
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as GeneratePlanRequest;
   const fallback: GeneratePlanResponse = {
@@ -23,22 +54,36 @@ export async function POST(request: Request) {
   };
 
   try {
-    const data = await requestAnthropicTool({
-      system: generatePlanPrompt,
-      input: body,
-      toolName: "generate_plan",
-      toolDescription: "Return generated EvoLab architectural plan versions as structured data.",
-      schema: GeneratePlanToolInputSchema,
-      maxTokens: 8192
-    });
+    let topologyData = await requestTopologyPlan(body);
+    let versions = topologiesToPlanVersions(topologyData.versions, body.outline);
+    let geometryErrors = versionErrorSummary(versions);
 
-    if (!Array.isArray(data.versions) || data.versions.length === 0) {
+    if (geometryErrors.length > 0) {
+      topologyData = await requestTopologyPlan(body, {
+        reason: "The deterministic geometry generated from the previous topology failed spatial validation.",
+        errors: geometryErrors,
+        instruction: "Return corrected topology only. Prefer fewer rooms, connected corridors, and compact core/service adjacency."
+      });
+      versions = topologiesToPlanVersions(topologyData.versions, body.outline);
+      geometryErrors = versionErrorSummary(versions);
+    }
+
+    if (versions.length === 0 || geometryErrors.length > 0) {
       return NextResponse.json(fallback);
     }
 
+    const parsed = GeneratePlanToolInputSchema.safeParse({ versions });
+
+    if (!parsed.success) {
+      return NextResponse.json({
+        ...fallback,
+        fallback: true,
+        warning: parsed.error.message
+      });
+    }
+
     return NextResponse.json({
-      ...data,
-      versions: postProcessPlanVersions(data.versions)
+      versions
     });
   } catch (error) {
     return NextResponse.json({

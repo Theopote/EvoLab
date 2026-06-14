@@ -1,12 +1,14 @@
 import { z } from "zod";
 import { CopilotFindingSchema } from "@/lib/schemas/copilot-schema";
 
-export const PointSchema = z.tuple([z.number(), z.number()]);
+const FiniteNumberSchema = z.number().finite();
+
+export const PointSchema = z.tuple([FiniteNumberSchema, FiniteNumberSchema]);
 
 export const OpeningSchema = z.object({
   wall: z.enum(["north", "south", "east", "west"]),
-  position: z.number().min(0).max(1),
-  width: z.number().positive()
+  position: FiniteNumberSchema.min(0).max(1),
+  width: FiniteNumberSchema.positive()
 });
 
 export const RoomSchema = z.object({
@@ -30,8 +32,8 @@ export const RoomSchema = z.object({
   ]),
   zone: z.enum(["public", "semi_public", "private", "service", "circulation"]),
   polygon: z.array(PointSchema).min(3),
-  areaSqm: z.number().positive(),
-  ceilingHeight: z.number().min(2.2).max(12),
+  areaSqm: FiniteNumberSchema.positive(),
+  ceilingHeight: FiniteNumberSchema.min(2.2).max(12),
   orientation: z.string().optional(),
   doors: z.array(OpeningSchema).default([]),
   windows: z.array(OpeningSchema).default([]),
@@ -61,16 +63,16 @@ export const PlanVersionDraftSchema = z.object({
   rooms: z.array(RoomSchema).min(1),
   outline: z.array(PointSchema).min(3),
   overallBounds: z.object({
-    width: z.number().positive(),
-    height: z.number().positive()
+    width: FiniteNumberSchema.positive(),
+    height: FiniteNumberSchema.positive()
   }),
   scores: z
     .object({
-      areaEfficiency: z.number(),
-      circulationScore: z.number(),
-      daylightScore: z.number(),
-      mepAlignmentScore: z.number(),
-      riskCount: z.number()
+      areaEfficiency: FiniteNumberSchema,
+      circulationScore: FiniteNumberSchema,
+      daylightScore: FiniteNumberSchema,
+      mepAlignmentScore: FiniteNumberSchema,
+      riskCount: FiniteNumberSchema
     })
     .optional()
 });
@@ -79,9 +81,46 @@ export const GeneratePlanToolInputSchema = z.object({
   versions: z.array(PlanVersionDraftSchema).min(1).max(3)
 });
 
+export const TopologyRoomSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  type: RoomSchema.shape.type,
+  zone: RoomSchema.shape.zone,
+  targetAreaSqm: FiniteNumberSchema.min(6).max(2000),
+  ceilingHeight: FiniteNumberSchema.min(2.2).max(12).optional(),
+  needsDaylight: z.boolean().default(false),
+  needsPlumbing: z.boolean().default(false),
+  preferredEdge: z.enum(["north", "south", "east", "west", "interior"]).optional(),
+  adjacencyIds: z.array(z.string()).default([])
+});
+
+export const TopologyEdgeSchema = z.object({
+  from: z.string().min(1),
+  to: z.string().min(1),
+  relationship: z.enum(["direct", "near", "separated"]).default("direct")
+});
+
+export const PlanTopologyVersionSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  strategy: z.string().min(1),
+  topology: z.object({
+    circulation: z.string().min(1),
+    core: z.string().min(1),
+    daylight: z.string().min(1),
+    plumbing: z.string().min(1)
+  }),
+  rooms: z.array(TopologyRoomSchema).min(4).max(40),
+  edges: z.array(TopologyEdgeSchema).default([])
+});
+
+export const GeneratePlanTopologyToolInputSchema = z.object({
+  versions: z.array(PlanTopologyVersionSchema).min(1).max(3)
+});
+
 export const AnalyzePlanToolInputSchema = z.object({
   version: PlanVersionDraftSchema,
-  confidence: z.number().min(0).max(1),
+  confidence: FiniteNumberSchema.min(0).max(1),
   warnings: z.array(z.string()).default([])
 });
 
@@ -91,5 +130,8 @@ export const ModifyPlanToolInputSchema = z.object({
 });
 
 export type GeneratePlanToolInput = z.infer<typeof GeneratePlanToolInputSchema>;
+export type GeneratePlanTopologyToolInput = z.infer<typeof GeneratePlanTopologyToolInputSchema>;
+export type PlanTopologyVersion = z.infer<typeof PlanTopologyVersionSchema>;
+export type TopologyRoom = z.infer<typeof TopologyRoomSchema>;
 export type AnalyzePlanToolInput = z.infer<typeof AnalyzePlanToolInputSchema>;
 export type ModifyPlanToolInput = z.infer<typeof ModifyPlanToolInputSchema>;
