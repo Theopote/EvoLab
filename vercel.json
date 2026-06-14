@@ -1,0 +1,7 @@
+{
+  "env": {
+    "NEXT_PUBLIC_MOCK_MODE": "false"
+  },
+  "buildCommand": "npm run build",
+  "framework": "nextjs"
+}

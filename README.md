@@ -1,12 +1,48 @@
 # EvoLab
 
-EvoLab is an AI-assisted architectural design workspace for early-stage building planning. It is not a one-shot image generator. The application keeps plan options, analysis overlays, MEP diagrams, quantity takeoff, version comparison, rendering briefs, and exports tied to one editable semantic data model.
+[![CI](https://github.com/YOUR_USERNAME/EvoLab/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_USERNAME/EvoLab/actions/workflows/ci.yml)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/YOUR_USERNAME/EvoLab&env=ANTHROPIC_API_KEY&envDescription=Optional%20-%20leave%20blank%20to%20run%20in%20mock%20mode)
 
-The core workflow is:
+**AI-assisted architectural design workspace for early-stage building planning.**
+
+EvoLab is not a one-shot image generator. It keeps plan options, analysis overlays, MEP diagrams, quantity takeoff, version comparison, rendering briefs, and exports all tied to one editable semantic data model — so every output traces back to a decision you can change.
+
+---
+
+## Screenshots
+
+> **Add your own screenshots here.** Suggested captures:
+> 1. Outline drawing + brief form (Plan tab, before generation)
+> 2. Plan option grid with 3 generated schemes side-by-side (Plan tab, after generation)
+> 3. 3D white model view (Model tab)
+> 4. MEP diagram overlay (Systems tab)
+> 5. Version compare grid (Sheets tab)
+>
+> Place images in `docs/screenshots/` and replace the placeholders below.
+
+| Draw outline & brief | Generated plan options | 3D model |
+|---|---|---|
+| ![outline](docs/screenshots/01-outline.png) | ![plans](docs/screenshots/02-plans.png) | ![3d](docs/screenshots/03-3d.png) |
+
+| Analysis overlays | MEP systems | Export center |
+|---|---|---|
+| ![analysis](docs/screenshots/04-analysis.png) | ![mep](docs/screenshots/05-mep.png) | ![export](docs/screenshots/06-export.png) |
+
+---
+
+## Core Workflow
 
 ```text
-Input conditions -> ProjectData -> editable PlanVersion -> plan / massing / model / analysis / systems / quantities / sheets / export
+Input conditions → ProjectData → editable PlanVersion → plan / massing / model / analysis / systems / quantities / sheets / export
 ```
+
+## Live Demo
+
+Deploy your own instance with one click — no API key required (runs in mock mode):
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/YOUR_USERNAME/EvoLab&env=ANTHROPIC_API_KEY&envDescription=Optional%20-%20leave%20blank%20to%20run%20in%20mock%20mode)
+
+To force mock mode on any deployment, set `NEXT_PUBLIC_MOCK_MODE=true` in your environment variables. The full UI — 3D model, floor plan, MEP diagrams, quantity takeoff — works without an API key.
 
 ## Current Status
 
@@ -73,9 +109,11 @@ Create `.env.local`:
 
 ```env
 ANTHROPIC_API_KEY=your_key_here
+# Set to "true" to force mock mode regardless of API key (useful for demos/Vercel)
+NEXT_PUBLIC_MOCK_MODE=false
 ```
 
-When the key is missing or still set to `your_key_here`, the API routes return deterministic mock data so the UI remains usable.
+When `ANTHROPIC_API_KEY` is missing or still set to `your_key_here`, **or** when `NEXT_PUBLIC_MOCK_MODE=true`, all API routes return deterministic mock data so the full UI remains usable.
 
 The configured model is:
 

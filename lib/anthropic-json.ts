@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 const MODEL = "claude-sonnet-4-20250514";
 
 export function hasAnthropicKey() {
+  if (process.env.NEXT_PUBLIC_MOCK_MODE === "true") return false;
   const key = process.env.ANTHROPIC_API_KEY;
   return Boolean(key && key !== "your_key_here");
 }
