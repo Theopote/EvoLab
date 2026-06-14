@@ -9,9 +9,12 @@ import type {
   DesignBrief,
   MepLayerId,
   MepLayout,
+  OpeningElement,
   PlanVersion,
   Point,
   ProjectData,
+  Room,
+  Wall,
   WorkspaceTab
 } from "@/lib/project-types";
 
@@ -35,6 +38,13 @@ const defaultBrief: DesignBrief = {
 interface EvoProjectContextValue {
   project: ProjectData;
   activeVersion?: PlanVersion;
+  selectedRoomId?: string;
+  selectedWallId?: string;
+  selectedOpeningId?: string;
+  selectionType: "none" | "room" | "wall" | "opening";
+  selectedRoom?: Room;
+  selectedWall?: Wall;
+  selectedOpening?: OpeningElement;
   outline: Point[];
   outlineClosed: boolean;
   brief: DesignBrief;
@@ -51,6 +61,13 @@ interface EvoProjectContextValue {
   updateBrief: (brief: DesignBrief) => void;
   setActiveAnalysisLayers: (layers: AnalysisLayerId[]) => void;
   setActiveMepLayers: (layers: MepLayerId[]) => void;
+  selectRoom: (roomId: string) => void;
+  selectWall: (wallId: string) => void;
+  selectOpening: (openingId: string) => void;
+  clearSelection: () => void;
+  updateRoom: (roomId: string, patch: Partial<Room>) => void;
+  updateWall: (wallId: string, patch: Partial<Wall>) => void;
+  updateOpening: (openingId: string, patch: Partial<OpeningElement>) => void;
   replaceVersions: (versions: PlanVersion[], projectType?: string) => void;
   setActiveVersion: (version: PlanVersion) => void;
   updateActiveVersion: (version: PlanVersion) => void;
@@ -84,6 +101,10 @@ export function EvoProjectProvider({ children }: { children: ReactNode }) {
   ]);
   const [isGeneratingMep, setIsGeneratingMep] = useState(false);
   const [mepError, setMepError] = useState<string | null>(null);
+  const [selectedRoomId, setSelectedRoomId] = useState<string | undefined>(undefined);
+  const [selectedWallId, setSelectedWallId] = useState<string | undefined>(undefined);
+  const [selectedOpeningId, setSelectedOpeningId] = useState<string | undefined>(undefined);
+  const [selectionType, setSelectionType] = useState<"none" | "room" | "wall" | "opening">("none");
 
   const activeVersion = useMemo(
     () => project.versions.find((version) => version.id === project.activeVersionId),
@@ -97,6 +118,96 @@ export function EvoProjectProvider({ children }: { children: ReactNode }) {
     () => (activeVersion ? checkCompliance(activeVersion) : []),
     [activeVersion]
   );
+  const selectedRoom = useMemo(
+    () => activeVersion?.rooms.find((room) => room.id === selectedRoomId),
+    [activeVersion, selectedRoomId]
+  );
+  const selectedWall = useMemo(
+    () => activeVersion?.levels[0]?.walls.find((wall) => wall.id === selectedWallId),
+    [activeVersion, selectedWallId]
+  );
+  const selectedOpening = useMemo(
+    () => activeVersion?.levels[0]?.openings.find((opening) => opening.id === selectedOpeningId),
+    [activeVersion, selectedOpeningId]
+  );
+
+  function clearSelection() {
+    setSelectionType("none");
+    setSelectedRoomId(undefined);
+    setSelectedWallId(undefined);
+    setSelectedOpeningId(undefined);
+  }
+
+  function selectRoom(roomId: string) {
+    setSelectionType("room");
+    setSelectedRoomId(roomId);
+    setSelectedWallId(undefined);
+    setSelectedOpeningId(undefined);
+  }
+
+  function selectWall(wallId: string) {
+    setSelectionType("wall");
+    setSelectedWallId(wallId);
+    setSelectedRoomId(undefined);
+    setSelectedOpeningId(undefined);
+  }
+
+  function selectOpening(openingId: string) {
+    setSelectionType("opening");
+    setSelectedOpeningId(openingId);
+    setSelectedRoomId(undefined);
+    setSelectedWallId(undefined);
+  }
+
+  function validateSelectionForVersion(version: PlanVersion) {
+    if (selectionType === "room") {
+      if (selectedRoomId && version.rooms.some((room) => room.id === selectedRoomId)) {
+        return;
+      }
+      clearSelection();
+      return;
+    }
+
+    if (selectionType === "wall") {
+      if (selectedWallId && version.levels[0]?.walls.some((wall) => wall.id === selectedWallId)) {
+        return;
+      }
+      clearSelection();
+      return;
+    }
+
+    if (selectionType === "opening") {
+      if (selectedOpeningId && version.levels[0]?.openings.some((opening) => opening.id === selectedOpeningId)) {
+        return;
+      }
+      clearSelection();
+    }
+  }
+
+  function commitNormalizedVersion(normalizedVersion: PlanVersion, resetSelection = false) {
+    setProject((current) => {
+      const nextVersions = current.versions.some((item) => item.id === normalizedVersion.id)
+        ? current.versions.map((item) => (item.id === normalizedVersion.id ? normalizedVersion : item))
+        : [...current.versions, normalizedVersion];
+
+      return {
+        ...current,
+        versions: nextVersions,
+        activeVersionId: normalizedVersion.id
+      };
+    });
+
+    if (resetSelection) {
+      clearSelection();
+      return;
+    }
+
+    validateSelectionForVersion(normalizedVersion);
+  }
+
+  function commitVersionUpdate(version: PlanVersion, resetSelection = false) {
+    commitNormalizedVersion(normalizePlanVersion(version), resetSelection);
+  }
 
   function updateBrief(nextBrief: DesignBrief) {
     setBrief(nextBrief);
@@ -111,35 +222,102 @@ export function EvoProjectProvider({ children }: { children: ReactNode }) {
       versions: normalizedVersions,
       activeVersionId: normalizedVersions[0]?.id ?? current.activeVersionId
     }));
+
+    clearSelection();
   }
 
   function setActiveVersion(version: PlanVersion) {
-    const normalizedVersion = normalizePlanVersion(version);
-
-    setProject((current) => {
-      const exists = current.versions.some((item) => item.id === normalizedVersion.id);
-
-      return {
-        ...current,
-        versions: exists ? current.versions : [...current.versions, normalizedVersion],
-        activeVersionId: normalizedVersion.id
-      };
-    });
+    commitVersionUpdate(version, true);
   }
 
   function updateActiveVersion(version: PlanVersion) {
-    const normalizedVersion = normalizePlanVersion(version);
+    commitVersionUpdate(version);
+  }
 
-    setProject((current) => {
-      const nextVersions = current.versions.some((item) => item.id === normalizedVersion.id)
-        ? current.versions.map((item) => (item.id === normalizedVersion.id ? normalizedVersion : item))
-        : [...current.versions, normalizedVersion];
+  function updateRoom(roomId: string, patch: Partial<Room>) {
+    if (!activeVersion) {
+      return;
+    }
+
+    const roomExists = activeVersion.rooms.some((room) => room.id === roomId);
+
+    if (!roomExists) {
+      return;
+    }
+
+    const nextVersion: PlanVersion = {
+      ...activeVersion,
+      rooms: activeVersion.rooms.map((room) => (room.id === roomId ? { ...room, ...patch, id: room.id } : room))
+    };
+
+    commitVersionUpdate(nextVersion);
+  }
+
+  function updateWall(wallId: string, patch: Partial<Wall>) {
+    if (!activeVersion) {
+      return;
+    }
+
+    const normalized = normalizePlanVersion(activeVersion);
+    const level = normalized.levels[0];
+
+    if (!level?.walls.some((wall) => wall.id === wallId)) {
+      return;
+    }
+
+    const nextLevels = normalized.levels.map((item) => {
+      if (item.id !== level.id) {
+        return item;
+      }
 
       return {
-        ...current,
-        versions: nextVersions,
-        activeVersionId: normalizedVersion.id
+        ...item,
+        walls: item.walls.map((wall) => (wall.id === wallId ? { ...wall, ...patch, id: wall.id } : wall))
       };
+    });
+
+    commitNormalizedVersion({
+      ...normalized,
+      levels: nextLevels,
+      building: {
+        ...normalized.building,
+        levels: nextLevels
+      }
+    });
+  }
+
+  function updateOpening(openingId: string, patch: Partial<OpeningElement>) {
+    if (!activeVersion) {
+      return;
+    }
+
+    const normalized = normalizePlanVersion(activeVersion);
+    const level = normalized.levels[0];
+
+    if (!level?.openings.some((opening) => opening.id === openingId)) {
+      return;
+    }
+
+    const nextLevels = normalized.levels.map((item) => {
+      if (item.id !== level.id) {
+        return item;
+      }
+
+      return {
+        ...item,
+        openings: item.openings.map((opening) =>
+          opening.id === openingId ? { ...opening, ...patch, id: opening.id } : opening
+        )
+      };
+    });
+
+    commitNormalizedVersion({
+      ...normalized,
+      levels: nextLevels,
+      building: {
+        ...normalized.building,
+        levels: nextLevels
+      }
     });
   }
 
@@ -207,6 +385,13 @@ export function EvoProjectProvider({ children }: { children: ReactNode }) {
     () => ({
       project,
       activeVersion,
+      selectedRoomId,
+      selectedWallId,
+      selectedOpeningId,
+      selectionType,
+      selectedRoom,
+      selectedWall,
+      selectedOpening,
       outline,
       outlineClosed,
       brief,
@@ -223,6 +408,13 @@ export function EvoProjectProvider({ children }: { children: ReactNode }) {
       updateBrief,
       setActiveAnalysisLayers,
       setActiveMepLayers,
+      selectRoom,
+      selectWall,
+      selectOpening,
+      clearSelection,
+      updateRoom,
+      updateWall,
+      updateOpening,
       replaceVersions,
       setActiveVersion,
       updateActiveVersion,
@@ -243,7 +435,14 @@ export function EvoProjectProvider({ children }: { children: ReactNode }) {
       outline,
       outlineClosed,
       project,
-      quantities
+      quantities,
+      selectedOpening,
+      selectedOpeningId,
+      selectedRoom,
+      selectedRoomId,
+      selectedWall,
+      selectedWallId,
+      selectionType
     ]
   );
 

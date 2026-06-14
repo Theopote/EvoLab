@@ -1,15 +1,15 @@
 "use client";
 
 import type { PlanVersion } from "@/lib/project-types";
-import { CoreSymbolLayer } from "@/components/floor-plan/CoreSymbolLayer";
-import { LabelLayer } from "@/components/floor-plan/LabelLayer";
-import { OpeningLayer } from "@/components/floor-plan/OpeningLayer";
-import { OutlineLayer } from "@/components/floor-plan/OutlineLayer";
-import { RoomFillLayer } from "@/components/floor-plan/RoomFillLayer";
-import { SelectionLayer } from "@/components/floor-plan/SelectionLayer";
-import { WallLayer } from "@/components/floor-plan/WallLayer";
+import { CoreSymbolLayer } from "@/components/floor-plan/layers/CoreSymbolLayer";
+import { LabelLayer } from "@/components/floor-plan/layers/LabelLayer";
+import { OpeningLayer } from "@/components/floor-plan/layers/OpeningLayer";
+import { OutlineLayer } from "@/components/floor-plan/layers/OutlineLayer";
+import { RoomFillLayer } from "@/components/floor-plan/layers/RoomFillLayer";
+import { SelectionLayer } from "@/components/floor-plan/layers/SelectionLayer";
+import { WallLayer } from "@/components/floor-plan/layers/WallLayer";
 import { getViewBox } from "@/components/floor-plan/floor-plan-utils";
-import { useInteractionStore } from "@/lib/interaction-store";
+import { useEvoProject } from "@/lib/project-store";
 import { createSetbackBoundary } from "@/lib/polygon-offset";
 
 export interface FloorPlanCanvasProps {
@@ -25,11 +25,18 @@ export function FloorPlanCanvas({
   selectedRoomId: selectedRoomIdProp,
   interactive = true
 }: FloorPlanCanvasProps) {
-  const selectedRoomId = useInteractionStore((state) => selectedRoomIdProp ?? state.selectedRoomId);
-  const hoveredRoomId = useInteractionStore((state) => state.hoveredRoomId);
-  const selectRoom = useInteractionStore((state) => state.selectRoom);
-  const hoverRoom = useInteractionStore((state) => state.hoverRoom);
-  const clearSelection = useInteractionStore((state) => state.clearSelection);
+  const {
+    selectedRoomId: roomSelectionFromStore,
+    selectedWallId: wallSelectionFromStore,
+    selectedOpeningId: openingSelectionFromStore,
+    selectRoom,
+    selectWall,
+    selectOpening,
+    clearSelection
+  } = useEvoProject();
+  const selectedRoomId = interactive ? selectedRoomIdProp ?? roomSelectionFromStore : selectedRoomIdProp;
+  const selectedWallId = interactive ? wallSelectionFromStore : undefined;
+  const selectedOpeningId = interactive ? openingSelectionFromStore : undefined;
 
   if (!version) {
     return (
@@ -61,19 +68,29 @@ export function FloorPlanCanvas({
           <OutlineLayer version={version} setback={setback} />
           <RoomFillLayer
             rooms={version.rooms}
-            hoveredRoomId={interactive ? hoveredRoomId : undefined}
             selectedRoomId={selectedRoomId}
-            onHoverRoom={interactive ? hoverRoom : undefined}
             onSelectRoom={interactive ? selectRoom : undefined}
           />
-          <WallLayer walls={level?.walls ?? []} />
-          <OpeningLayer openings={level?.openings ?? []} walls={level?.walls ?? []} />
+          <WallLayer
+            walls={level?.walls ?? []}
+            selectedWallId={selectedWallId}
+            onSelectWall={interactive ? selectWall : undefined}
+          />
+          <OpeningLayer
+            openings={level?.openings ?? []}
+            walls={level?.walls ?? []}
+            selectedOpeningId={selectedOpeningId}
+            onSelectOpening={interactive ? selectOpening : undefined}
+          />
           <CoreSymbolLayer rooms={version.rooms} />
           <LabelLayer version={version} />
           <SelectionLayer
             rooms={version.rooms}
-            hoveredRoomId={interactive ? hoveredRoomId : undefined}
+            walls={level?.walls ?? []}
+            openings={level?.openings ?? []}
             selectedRoomId={selectedRoomId}
+            selectedWallId={selectedWallId}
+            selectedOpeningId={selectedOpeningId}
           />
         </svg>
         <div className="absolute bottom-3 left-3 rounded border border-line bg-[#081018]/90 px-2 py-1 text-xs text-muted">
