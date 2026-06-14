@@ -3,6 +3,8 @@
 import { Boxes, DraftingCompass, MousePointer2, Upload, Waypoints } from "lucide-react";
 import { useMemo, useState } from "react";
 import { CopilotPanel } from "@/components/copilot-panel";
+import { DiagramCanvas } from "@/components/diagrams/DiagramCanvas";
+import { DiagramLayerList } from "@/components/diagrams/DiagramLayerList";
 import { FloorPlan } from "@/components/floor-plan";
 import { BriefForm, type PlanBrief } from "@/components/plan-editor/BriefForm";
 import { OutlineCanvas } from "@/components/plan-editor/OutlineCanvas";
@@ -10,7 +12,7 @@ import { PlanResultGrid } from "@/components/plan-editor/PlanResultGrid";
 import { TopNav, type WorkspaceTab } from "@/components/top-nav";
 import { Scene } from "@/components/viewer-3d/Scene";
 import { initialProjectData } from "@/lib/evolab-data";
-import type { PlanVersion, Point, ProjectData } from "@/lib/project-types";
+import type { AnalysisLayerId, PlanVersion, Point, ProjectData } from "@/lib/project-types";
 
 const tools = [
   { label: "Select", icon: MousePointer2 },
@@ -42,6 +44,12 @@ export default function Home() {
   const [outlineClosed, setOutlineClosed] = useState(true);
   const [brief, setBrief] = useState<PlanBrief>(defaultBrief);
   const [activeTab, setActiveTab] = useState<WorkspaceTab>("Plan");
+  const [activeAnalysisLayers, setActiveAnalysisLayers] = useState<AnalysisLayerId[]>([
+    "function_zones",
+    "patient_flow",
+    "egress_path",
+    "daylight"
+  ]);
 
   const activeVersion = useMemo(
     () => project.versions.find((version) => version.id === project.activeVersionId),
@@ -130,6 +138,14 @@ export default function Home() {
                 </div>
               </div>
               <Scene version={activeVersion} />
+            </section>
+          ) : activeTab === "Analysis" ? (
+            <section className="grid min-h-full grid-cols-[320px_minmax(0,1fr)] gap-4">
+              <DiagramLayerList
+                activeLayers={activeAnalysisLayers}
+                onChange={setActiveAnalysisLayers}
+              />
+              <DiagramCanvas activeLayers={activeAnalysisLayers} version={activeVersion} />
             </section>
           ) : (
             <section className="grid min-h-full grid-rows-[minmax(360px,0.9fr)_minmax(320px,1fr)] gap-4">
