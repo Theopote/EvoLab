@@ -1,0 +1,51 @@
+"use client";
+
+import type { PlanVersion } from "@/lib/project-types";
+import { CoreSymbolLayer } from "@/components/floor-plan/CoreSymbolLayer";
+import { LabelLayer } from "@/components/floor-plan/LabelLayer";
+import { OpeningLayer } from "@/components/floor-plan/OpeningLayer";
+import { OutlineLayer } from "@/components/floor-plan/OutlineLayer";
+import { RoomFillLayer } from "@/components/floor-plan/RoomFillLayer";
+import { SelectionLayer } from "@/components/floor-plan/SelectionLayer";
+import { WallLayer } from "@/components/floor-plan/WallLayer";
+import { getViewBox } from "@/components/floor-plan/floor-plan-utils";
+
+export interface FloorPlanCanvasProps {
+  version?: PlanVersion;
+  className?: string;
+  selectedRoomId?: string;
+}
+
+export function FloorPlanCanvas({ version, className, selectedRoomId }: FloorPlanCanvasProps) {
+  if (!version) {
+    return (
+      <div className={className}>
+        <div className="grid h-full min-h-[420px] place-items-center rounded border border-dashed border-line bg-panel/60 text-sm text-muted">
+          Draw an outline and generate plan options.
+        </div>
+      </div>
+    );
+  }
+
+  const level = version.levels[0];
+
+  return (
+    <div className={className}>
+      <div className="relative min-h-[420px] overflow-hidden rounded border border-line bg-[#081018] shadow-insetGrid">
+        <div className="pointer-events-none absolute inset-0 cad-grid opacity-70" />
+        <svg className="relative h-full min-h-[420px] w-full" viewBox={getViewBox(version)} role="img">
+          <OutlineLayer version={version} />
+          <RoomFillLayer rooms={version.rooms} />
+          <WallLayer walls={level?.walls ?? []} />
+          <OpeningLayer openings={level?.openings ?? []} walls={level?.walls ?? []} />
+          <CoreSymbolLayer rooms={version.rooms} />
+          <LabelLayer version={version} />
+          <SelectionLayer rooms={version.rooms} selectedRoomId={selectedRoomId} />
+        </svg>
+        <div className="absolute bottom-3 left-3 rounded border border-line bg-[#081018]/90 px-2 py-1 text-xs text-muted">
+          1 grid = 1 m / {version.label}
+        </div>
+      </div>
+    </div>
+  );
+}
