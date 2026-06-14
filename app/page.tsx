@@ -2,6 +2,7 @@
 
 import { Boxes, DraftingCompass, MousePointer2, Upload, Waypoints } from "lucide-react";
 import { useMemo, useState } from "react";
+import { CopilotPanel } from "@/components/copilot-panel";
 import { FloorPlan } from "@/components/floor-plan";
 import { BriefForm, type PlanBrief } from "@/components/plan-editor/BriefForm";
 import { OutlineCanvas } from "@/components/plan-editor/OutlineCanvas";
@@ -66,6 +67,24 @@ export default function Home() {
         activeVersionId: version.id
       };
     });
+  }
+
+  function handleVersionUpdated(version: PlanVersion) {
+    setProject((current) => {
+      const nextVersions = current.versions.some((item) => item.id === version.id)
+        ? current.versions.map((item) => (item.id === version.id ? version : item))
+        : [...current.versions, version];
+
+      return {
+        ...current,
+        versions: nextVersions,
+        activeVersionId: version.id
+      };
+    });
+  }
+
+  function handleCopilotRegenerate() {
+    setActiveTab("Plan");
   }
 
   return (
@@ -151,7 +170,21 @@ export default function Home() {
         </section>
 
         <aside className="min-h-0 overflow-auto border-l border-line bg-[#0d141d] p-4">
-          <BriefForm value={brief} onChange={setBrief} />
+          <CopilotPanel
+            activeVersion={activeVersion}
+            activeTab={activeTab}
+            outline={outline}
+            projectType={project.projectType}
+            onVersionUpdated={handleVersionUpdated}
+            onTabChange={setActiveTab}
+            onRegeneratePlan={handleCopilotRegenerate}
+          />
+
+          {activeTab === "Plan" ? (
+            <div className="mt-4">
+              <BriefForm value={brief} onChange={setBrief} />
+            </div>
+          ) : null}
 
           <section className="mt-4 rounded border border-line bg-panel/90 p-3">
             <div className="mb-3 flex items-center justify-between">
