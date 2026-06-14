@@ -1,6 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { zodToJsonSchema } from "zod-to-json-schema";
-import type { ZodType } from "zod";
+import { z, type ZodType } from "zod";
 import { hasAnthropicKey } from "@/lib/anthropic-json";
 
 const MODEL = "claude-sonnet-4-20250514";
@@ -12,6 +11,23 @@ interface RequestAnthropicToolOptions<T> {
   toolDescription: string;
   schema: ZodType<T>;
   maxTokens?: number;
+}
+
+interface AnthropicInputSchema {
+  type: "object";
+  properties?: unknown;
+  required?: string[] | null;
+  [key: string]: unknown;
+}
+
+function toAnthropicInputSchema(schema: ZodType): AnthropicInputSchema {
+  const jsonSchema = z.toJSONSchema(schema) as Record<string, unknown>;
+
+  if (jsonSchema.type !== "object") {
+    throw new Error("Anthropic tool input schema must be a JSON object.");
+  }
+
+  return jsonSchema as AnthropicInputSchema;
 }
 
 export async function requestAnthropicTool<T>({
@@ -29,10 +45,7 @@ export async function requestAnthropicTool<T>({
   const client = new Anthropic({
     apiKey: process.env.ANTHROPIC_API_KEY
   });
-  const inputSchema = zodToJsonSchema(schema, {
-    name: toolName,
-    $refStrategy: "none"
-  });
+  const inputSchema = toAnthropicInputSchema(schema);
   const message = await client.messages.create({
     model: MODEL,
     max_tokens: maxTokens,
