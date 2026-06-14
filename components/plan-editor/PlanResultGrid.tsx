@@ -103,7 +103,11 @@ export function PlanResultGrid({
                 <span className="rounded border border-accent/40 px-2 py-1 text-[11px] text-accent">Active</span>
               ) : null}
             </div>
-            <FloorPlan version={version} className="mb-3 [&>div]:min-h-[180px] [&_svg]:min-h-[180px]" />
+            <FloorPlan
+              version={version}
+              className="mb-3 [&>div]:min-h-[180px] [&_svg]:min-h-[180px]"
+              interactive={false}
+            />
             <div className="mb-3 grid grid-cols-2 gap-2 text-xs">
               <Metric label="Area" value={version.scores?.areaEfficiency} />
               <Metric label="Flow" value={version.scores?.circulationScore} />

@@ -104,7 +104,11 @@ export function VersionCompareGrid({
                   </div>
                 </div>
 
-                <FloorPlan version={version} className="mb-3 [&>div]:min-h-[210px] [&_svg]:min-h-[210px]" />
+                <FloorPlan
+                  version={version}
+                  className="mb-3 [&>div]:min-h-[210px] [&_svg]:min-h-[210px]"
+                  interactive={false}
+                />
 
                 <div className="mb-3 grid grid-cols-5 gap-2 text-xs">
                   <Metric label="Total" value={totalScore} />

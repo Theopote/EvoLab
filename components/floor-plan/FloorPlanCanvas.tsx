@@ -9,14 +9,27 @@ import { RoomFillLayer } from "@/components/floor-plan/RoomFillLayer";
 import { SelectionLayer } from "@/components/floor-plan/SelectionLayer";
 import { WallLayer } from "@/components/floor-plan/WallLayer";
 import { getViewBox } from "@/components/floor-plan/floor-plan-utils";
+import { useInteractionStore } from "@/lib/interaction-store";
 
 export interface FloorPlanCanvasProps {
   version?: PlanVersion;
   className?: string;
   selectedRoomId?: string;
+  interactive?: boolean;
 }
 
-export function FloorPlanCanvas({ version, className, selectedRoomId }: FloorPlanCanvasProps) {
+export function FloorPlanCanvas({
+  version,
+  className,
+  selectedRoomId: selectedRoomIdProp,
+  interactive = true
+}: FloorPlanCanvasProps) {
+  const selectedRoomId = useInteractionStore((state) => selectedRoomIdProp ?? state.selectedRoomId);
+  const hoveredRoomId = useInteractionStore((state) => state.hoveredRoomId);
+  const selectRoom = useInteractionStore((state) => state.selectRoom);
+  const hoverRoom = useInteractionStore((state) => state.hoverRoom);
+  const clearSelection = useInteractionStore((state) => state.clearSelection);
+
   if (!version) {
     return (
       <div className={className}>
@@ -33,14 +46,33 @@ export function FloorPlanCanvas({ version, className, selectedRoomId }: FloorPla
     <div className={className}>
       <div className="relative min-h-[420px] overflow-hidden rounded border border-line bg-[#081018] shadow-insetGrid">
         <div className="pointer-events-none absolute inset-0 cad-grid opacity-70" />
-        <svg className="relative h-full min-h-[420px] w-full" viewBox={getViewBox(version)} role="img">
+        <svg
+          className="relative h-full min-h-[420px] w-full"
+          viewBox={getViewBox(version)}
+          role="img"
+          onClick={() => {
+            if (interactive) {
+              clearSelection();
+            }
+          }}
+        >
           <OutlineLayer version={version} />
-          <RoomFillLayer rooms={version.rooms} />
+          <RoomFillLayer
+            rooms={version.rooms}
+            hoveredRoomId={interactive ? hoveredRoomId : undefined}
+            selectedRoomId={selectedRoomId}
+            onHoverRoom={interactive ? hoverRoom : undefined}
+            onSelectRoom={interactive ? selectRoom : undefined}
+          />
           <WallLayer walls={level?.walls ?? []} />
           <OpeningLayer openings={level?.openings ?? []} walls={level?.walls ?? []} />
           <CoreSymbolLayer rooms={version.rooms} />
           <LabelLayer version={version} />
-          <SelectionLayer rooms={version.rooms} selectedRoomId={selectedRoomId} />
+          <SelectionLayer
+            rooms={version.rooms}
+            hoveredRoomId={interactive ? hoveredRoomId : undefined}
+            selectedRoomId={selectedRoomId}
+          />
         </svg>
         <div className="absolute bottom-3 left-3 rounded border border-line bg-[#081018]/90 px-2 py-1 text-xs text-muted">
           1 grid = 1 m / {version.label}
