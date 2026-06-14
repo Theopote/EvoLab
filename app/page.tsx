@@ -6,6 +6,7 @@ import { BottomPanel } from "@/components/bottom-panel";
 import { CopilotPanel } from "@/components/copilot-panel";
 import { DiagramCanvas } from "@/components/diagrams/DiagramCanvas";
 import { DiagramLayerList } from "@/components/diagrams/DiagramLayerList";
+import { ExportPanel } from "@/components/export-panel";
 import { FloorPlan } from "@/components/floor-plan";
 import { MepCanvas } from "@/components/mep/MepCanvas";
 import { MepLayerList, type MepLayerId } from "@/components/mep/MepLayerList";
@@ -265,6 +266,13 @@ export default function Home() {
               onSelectVersion={handleSelectVersion}
               onGenerateModel={handleGenerateModel}
               onRefineVersion={handleRefineVersion}
+            />
+          ) : activeTab === "Export" ? (
+            <ExportPanel
+              project={project}
+              activeVersion={activeVersion}
+              quantities={quantities}
+              complianceItems={complianceItems}
             />
           ) : (
             <section className="grid min-h-full grid-rows-[minmax(360px,0.9fr)_minmax(320px,1fr)] gap-4">
