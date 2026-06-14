@@ -2,6 +2,7 @@
 
 import type { PlanVersion } from "@/lib/project-types";
 import { CoreSymbolLayer } from "@/components/floor-plan/layers/CoreSymbolLayer";
+import { GridLayer } from "@/components/floor-plan/layers/GridLayer";
 import { LabelLayer } from "@/components/floor-plan/layers/LabelLayer";
 import { OpeningLayer } from "@/components/floor-plan/layers/OpeningLayer";
 import { OutlineLayer } from "@/components/floor-plan/layers/OutlineLayer";
@@ -89,6 +90,7 @@ export function FloorPlanCanvas({
             }
           }}
         >
+          <GridLayer version={version} />
           <OutlineLayer version={version} setback={setback} />
           <RoomFillLayer
             rooms={version.rooms}
