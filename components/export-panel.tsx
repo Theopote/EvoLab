@@ -7,6 +7,7 @@ import {
   createPlanSvg,
   createQuantityCsv,
   downloadTextFile,
+  exportIfcHandoffJson,
   exportProjectJson,
   exportVersionJson
 } from "@/lib/export-utils";
@@ -22,7 +23,7 @@ interface ExportPanelProps {
 const plannedExports = [
   { label: "Drawing PDF", detail: "Needs PDF layout engine", icon: FileText },
   { label: "glTF model", detail: "Needs geometry serialization", icon: FileArchive },
-  { label: "IFC model", detail: "Needs IFC schema mapping", icon: FileCode2 }
+  { label: "IFC STEP file", detail: "Needs IfcOpenShell service", icon: FileCode2 }
 ];
 
 export function ExportPanel({ project, activeVersion, quantities, complianceItems }: ExportPanelProps) {
@@ -94,6 +95,13 @@ export function ExportPanel({ project, activeVersion, quantities, complianceItem
                   "text/csv"
                 )
               }
+            />
+            <ExportCard
+              disabled={!canExportVersion}
+              icon={FileCode2}
+              label="IFC handoff JSON"
+              detail="IfcOpenShell service payload"
+              onClick={() => activeVersion && exportIfcHandoffJson(activeVersion)}
             />
           </div>
         </section>

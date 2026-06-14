@@ -1,4 +1,5 @@
 import type { ComplianceItem, QuantityResult } from "@/lib/quantity-engine";
+import { createIfcExportPayload } from "@/lib/ifc-export-contract";
 import type { PlanVersion, ProjectData, Room } from "@/lib/project-types";
 
 const zoneColors: Record<Room["zone"], string> = {
@@ -120,4 +121,8 @@ export function exportProjectJson(project: ProjectData) {
 
 export function exportVersionJson(version: PlanVersion) {
   downloadTextFile(`${version.id}.json`, JSON.stringify(version, null, 2), "application/json");
+}
+
+export function exportIfcHandoffJson(version: PlanVersion) {
+  downloadTextFile(`${version.id}-ifc-handoff.json`, JSON.stringify(createIfcExportPayload(version), null, 2), "application/json");
 }
