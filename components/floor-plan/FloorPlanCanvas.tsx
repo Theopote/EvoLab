@@ -10,6 +10,7 @@ import { SelectionLayer } from "@/components/floor-plan/SelectionLayer";
 import { WallLayer } from "@/components/floor-plan/WallLayer";
 import { getViewBox } from "@/components/floor-plan/floor-plan-utils";
 import { useInteractionStore } from "@/lib/interaction-store";
+import { createSetbackBoundary } from "@/lib/polygon-offset";
 
 export interface FloorPlanCanvasProps {
   version?: PlanVersion;
@@ -41,6 +42,7 @@ export function FloorPlanCanvas({
   }
 
   const level = version.levels[0];
+  const setback = createSetbackBoundary(version.outline, 3);
 
   return (
     <div className={className}>
@@ -56,7 +58,7 @@ export function FloorPlanCanvas({
             }
           }}
         >
-          <OutlineLayer version={version} />
+          <OutlineLayer version={version} setback={setback} />
           <RoomFillLayer
             rooms={version.rooms}
             hoveredRoomId={interactive ? hoveredRoomId : undefined}

@@ -13,6 +13,8 @@
     "@next/swc-win32-x64-msvc": "^14.2.16",
     "@react-three/drei": "^9.120.5",
     "@react-three/fiber": "^8.17.10",
+    "@types/clipper-lib": "^6.4.0",
+    "clipper-lib": "^6.4.2",
     "clsx": "^2.1.1",
     "immer": "^11.1.8",
     "lucide-react": "^0.468.0",

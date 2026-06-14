@@ -4,6 +4,7 @@ import {
   isPolygonInside,
   polygonArea as booleanPolygonArea
 } from "@/lib/polygon-ops";
+import { createSetbackBoundary } from "@/lib/polygon-offset";
 import { extractWallsFromRooms } from "@/lib/wall-extractor";
 
 export type PlanValidationSeverity = "warning" | "error";
@@ -18,6 +19,10 @@ export interface PlanValidationIssue {
 export interface PlanValidationResult {
   valid: boolean;
   issues: PlanValidationIssue[];
+}
+
+export interface PlanValidationOptions {
+  setbackDistance?: number;
 }
 
 export function distance(a: Point, b: Point) {
@@ -97,11 +102,25 @@ function validateCorridorConnectivity(rooms: Room[]) {
   return corridors.every((room) => visited.has(room.id));
 }
 
-export function validatePlanVersion(version: PlanVersion): PlanValidationResult {
+export function validatePlanVersion(
+  version: PlanVersion,
+  options: PlanValidationOptions = {}
+): PlanValidationResult {
   const issues: PlanValidationIssue[] = [];
+  const setback = options.setbackDistance
+    ? createSetbackBoundary(version.outline, options.setbackDistance)
+    : undefined;
 
   if (version.outline.length < 3) {
     issues.push({ id: "outline-invalid", severity: "error", message: "Outline must contain at least three points." });
+  }
+
+  if (setback && !setback.valid) {
+    issues.push({
+      id: "setback-invalid",
+      severity: "warning",
+      message: `Setback distance ${options.setbackDistance}m leaves no valid buildable boundary.`
+    });
   }
 
   version.rooms.forEach((room) => {
@@ -112,6 +131,15 @@ export function validatePlanVersion(version: PlanVersion): PlanValidationResult 
 
     if (!isPolygonInside(room.polygon, version.outline, 0.01)) {
       issues.push({ id: "room-outside-outline", severity: "error", message: `${room.name} is not fully inside the building outline.`, roomIds: [room.id] });
+    }
+
+    if (setback?.valid && !isPolygonInside(room.polygon, setback.buildable, 0.01)) {
+      issues.push({
+        id: "room-outside-setback",
+        severity: "warning",
+        message: `${room.name} is outside the ${setback.distance}m setback buildable boundary.`,
+        roomIds: [room.id]
+      });
     }
 
     const actualArea = polygonArea(room.polygon);

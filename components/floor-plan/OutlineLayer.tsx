@@ -1,11 +1,13 @@
 import type { PlanVersion } from "@/lib/project-types";
 import { polygonPoints } from "@/components/floor-plan/floor-plan-utils";
+import type { SetbackBoundary } from "@/lib/polygon-offset";
 
 interface OutlineLayerProps {
   version: PlanVersion;
+  setback?: SetbackBoundary;
 }
 
-export function OutlineLayer({ version }: OutlineLayerProps) {
+export function OutlineLayer({ version, setback }: OutlineLayerProps) {
   const grid = version.building.grids[0];
 
   return (
@@ -32,9 +34,23 @@ export function OutlineLayer({ version }: OutlineLayerProps) {
         stroke="#d8edf5"
         strokeWidth="0.35"
       />
+      {setback?.valid ? (
+        <polygon
+          points={polygonPoints(setback.buildable)}
+          fill="rgba(132,204,22,0.035)"
+          stroke="#84cc16"
+          strokeDasharray="0.8 0.5"
+          strokeWidth="0.2"
+        />
+      ) : null}
       <text x={version.overallBounds.width / 2} y={-3.2} fill="#9fb3c8" fontSize="1.25" textAnchor="middle">
         {Math.round(version.overallBounds.width * 10) / 10} m
       </text>
+      {setback?.valid ? (
+        <text x={1} y={version.overallBounds.height + 2.5} fill="#84cc16" fontSize="1.1">
+          Setback {setback.distance}m / buildable {Math.round(setback.areaSqm)} sqm
+        </text>
+      ) : null}
       <text
         x={version.overallBounds.width + 3.2}
         y={version.overallBounds.height / 2}
