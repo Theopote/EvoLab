@@ -38,7 +38,13 @@ Input conditions → ProjectData → editable PlanVersion → plan / massing / m
 
 ## Live Demo
 
-Public demo URL is not pinned yet. You can launch your own demo in one click (mock mode supported):
+Try the public demo now:
+
+- https://evolab-form.vercel.app/
+
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-evolab--form.vercel.app-0ea5e9?logo=vercel&logoColor=white)](https://evolab-form.vercel.app/)
+
+You can also launch your own fork in one click (mock mode supported):
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/Theopote/EvoLab&env=ANTHROPIC_API_KEY&envDescription=Optional%20-%20leave%20blank%20to%20run%20in%20mock%20mode)
 
