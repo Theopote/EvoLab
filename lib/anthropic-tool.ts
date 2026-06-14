@@ -11,6 +11,7 @@ interface RequestAnthropicToolOptions<T> {
   toolDescription: string;
   schema: ZodType<T>;
   maxTokens?: number;
+  maxValidationRetries?: number;
 }
 
 interface AnthropicInputSchema {
@@ -36,7 +37,8 @@ export async function requestAnthropicTool<T>({
   toolName,
   toolDescription,
   schema,
-  maxTokens = 4096
+  maxTokens = 4096,
+  maxValidationRetries = 1
 }: RequestAnthropicToolOptions<T>): Promise<T> {
   if (!hasAnthropicKey()) {
     throw new Error("ANTHROPIC_API_KEY is not configured.");
@@ -46,41 +48,50 @@ export async function requestAnthropicTool<T>({
     apiKey: process.env.ANTHROPIC_API_KEY
   });
   const inputSchema = toAnthropicInputSchema(schema);
-  const message = await client.messages.create({
-    model: MODEL,
-    max_tokens: maxTokens,
-    system,
-    tools: [
-      {
-        name: toolName,
-        description: toolDescription,
-        input_schema: inputSchema
-      }
-    ],
-    tool_choice: {
-      type: "tool",
-      name: toolName
-    },
-    messages: [
-      {
-        role: "user",
-        content: JSON.stringify(input)
-      }
-    ]
-  });
-  const toolUse = message.content.find(
-    (block) => block.type === "tool_use" && block.name === toolName
-  );
+  let correctionHint: string | undefined;
 
-  if (!toolUse || toolUse.type !== "tool_use") {
-    throw new Error(`Anthropic did not return tool_use:${toolName}.`);
+  for (let attempt = 0; attempt <= maxValidationRetries; attempt += 1) {
+    const message = await client.messages.create({
+      model: MODEL,
+      max_tokens: maxTokens,
+      system,
+      tools: [
+        {
+          name: toolName,
+          description: toolDescription,
+          input_schema: inputSchema
+        }
+      ],
+      tool_choice: {
+        type: "tool",
+        name: toolName
+      },
+      messages: [
+        {
+          role: "user",
+          content: JSON.stringify({
+            input,
+            correction: correctionHint
+          })
+        }
+      ]
+    });
+    const toolUse = message.content.find(
+      (block) => block.type === "tool_use" && block.name === toolName
+    );
+
+    if (!toolUse || toolUse.type !== "tool_use") {
+      throw new Error(`Anthropic did not return tool_use:${toolName}.`);
+    }
+
+    const parsed = schema.safeParse(toolUse.input);
+
+    if (parsed.success) {
+      return parsed.data;
+    }
+
+    correctionHint = `The previous ${toolName} tool input failed runtime validation. Return corrected tool input only. Validation error: ${parsed.error.message}`;
   }
 
-  const parsed = schema.safeParse(toolUse.input);
-
-  if (!parsed.success) {
-    throw new Error(`Tool output failed schema validation: ${parsed.error.message}`);
-  }
-
-  return parsed.data;
+  throw new Error(`Tool output failed schema validation after correction.`);
 }

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CopilotFindingSchema } from "@/lib/schemas/copilot-schema";
 
 export const PointSchema = z.tuple([z.number(), z.number()]);
 
@@ -78,4 +79,17 @@ export const GeneratePlanToolInputSchema = z.object({
   versions: z.array(PlanVersionDraftSchema).min(1).max(3)
 });
 
+export const AnalyzePlanToolInputSchema = z.object({
+  version: PlanVersionDraftSchema,
+  confidence: z.number().min(0).max(1),
+  warnings: z.array(z.string()).default([])
+});
+
+export const ModifyPlanToolInputSchema = z.object({
+  version: PlanVersionDraftSchema,
+  findings: z.array(CopilotFindingSchema).default([])
+});
+
 export type GeneratePlanToolInput = z.infer<typeof GeneratePlanToolInputSchema>;
+export type AnalyzePlanToolInput = z.infer<typeof AnalyzePlanToolInputSchema>;
+export type ModifyPlanToolInput = z.infer<typeof ModifyPlanToolInputSchema>;

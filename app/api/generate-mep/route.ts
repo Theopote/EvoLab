@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { requestAnthropicJson } from "@/lib/anthropic-json";
+import { requestAnthropicTool } from "@/lib/anthropic-tool";
 import { createMockMep } from "@/lib/mock-api";
 import { mepPrompt } from "@/lib/prompts/mepPrompt";
+import { GenerateMepToolInputSchema } from "@/lib/schemas/mep-schema";
 import type { CopilotFinding, MepLayout, PlanVersion } from "@/lib/project-types";
 
 interface GenerateMepRequest {
@@ -23,9 +24,12 @@ export async function POST(request: Request) {
   const fallback = createMockMep(body.version);
 
   try {
-    const data = await requestAnthropicJson<GenerateMepResponse>({
+    const data = await requestAnthropicTool({
       system: mepPrompt,
       input: body,
+      toolName: "generate_mep",
+      toolDescription: "Return a conceptual EvoLab MEP layout with shafts, system routes, and findings.",
+      schema: GenerateMepToolInputSchema,
       maxTokens: 4096
     });
 

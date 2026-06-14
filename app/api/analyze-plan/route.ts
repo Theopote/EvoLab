@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { requestAnthropicJson } from "@/lib/anthropic-json";
+import { requestAnthropicTool } from "@/lib/anthropic-tool";
 import { createMockAnalyzedVersion } from "@/lib/mock-api";
 import { postProcessPlanVersion } from "@/lib/plan-postprocess";
 import { analyzePlanPrompt } from "@/lib/prompts/analyzePlanPrompt";
+import { AnalyzePlanToolInputSchema } from "@/lib/schemas/plan-version-schema";
 import type { PlanVersion } from "@/lib/project-types";
 
 interface AnalyzePlanRequest {
@@ -21,12 +22,15 @@ export async function POST(request: Request) {
   const fallback = createMockAnalyzedVersion();
 
   try {
-    const data = await requestAnthropicJson<AnalyzePlanResponse>({
+    const data = await requestAnthropicTool({
       system: analyzePlanPrompt,
       input: {
         fileName: body.fileName,
         imageBase64: body.imageBase64 ? "[base64 image omitted from logs]" : undefined
       },
+      toolName: "analyze_plan",
+      toolDescription: "Return recognized EvoLab architectural plan data, confidence, and recognition warnings.",
+      schema: AnalyzePlanToolInputSchema,
       maxTokens: 8192
     });
 

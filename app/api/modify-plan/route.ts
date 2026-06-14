@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { requestAnthropicJson } from "@/lib/anthropic-json";
+import { requestAnthropicTool } from "@/lib/anthropic-tool";
 import { createMockModifiedVersion } from "@/lib/mock-api";
 import { postProcessPlanVersion } from "@/lib/plan-postprocess";
 import { modifyPlanPrompt } from "@/lib/prompts/modifyPlanPrompt";
+import { ModifyPlanToolInputSchema } from "@/lib/schemas/plan-version-schema";
 import type { CopilotFinding, PlanVersion } from "@/lib/project-types";
 
 interface ModifyPlanRequest {
@@ -28,9 +29,12 @@ export async function POST(request: Request) {
   const fallback = createMockModifiedVersion(body.currentVersion, body.userRequest ?? "");
 
   try {
-    const data = await requestAnthropicJson<ModifyPlanResponse>({
+    const data = await requestAnthropicTool({
       system: modifyPlanPrompt,
       input: body,
+      toolName: "modify_plan",
+      toolDescription: "Return a complete modified EvoLab plan version and concrete Copilot findings.",
+      schema: ModifyPlanToolInputSchema,
       maxTokens: 8192
     });
 
