@@ -2,6 +2,7 @@
 
 import { Boxes, DraftingCompass, MousePointer2, Upload, Waypoints } from "lucide-react";
 import { useMemo, useState } from "react";
+import { BottomPanel } from "@/components/bottom-panel";
 import { CopilotPanel } from "@/components/copilot-panel";
 import { DiagramCanvas } from "@/components/diagrams/DiagramCanvas";
 import { DiagramLayerList } from "@/components/diagrams/DiagramLayerList";
@@ -178,30 +179,31 @@ export default function Home() {
   return (
     <main className="flex min-h-screen flex-col bg-canvas text-slate-100">
       <TopNav project={project} activeTab={activeTab} onTabChange={setActiveTab} />
-      <section className="grid flex-1 grid-cols-[72px_minmax(0,1fr)_380px] overflow-hidden">
-        <aside className="border-r border-line bg-[#0a0f15] p-3">
-          <div className="flex h-full flex-col items-center gap-2">
-            {tools.map((tool, index) => {
-              const Icon = tool.icon;
-              return (
-                <button
-                  className={`grid h-11 w-11 place-items-center rounded border ${
-                    index === 1
-                      ? "border-accent/60 bg-accent/12 text-accent"
-                      : "border-line text-muted hover:border-accent/50 hover:text-accent"
-                  }`}
-                  key={tool.label}
-                  type="button"
-                  title={tool.label}
-                >
-                  <Icon className="h-4 w-4" />
-                </button>
-              );
-            })}
-          </div>
-        </aside>
+      <section className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_218px] overflow-hidden">
+        <div className="grid min-h-0 grid-cols-[72px_minmax(0,1fr)_380px] overflow-hidden">
+          <aside className="border-r border-line bg-[#0a0f15] p-3">
+            <div className="flex h-full flex-col items-center gap-2">
+              {tools.map((tool, index) => {
+                const Icon = tool.icon;
+                return (
+                  <button
+                    className={`grid h-11 w-11 place-items-center rounded border ${
+                      index === 1
+                        ? "border-accent/60 bg-accent/12 text-accent"
+                        : "border-line text-muted hover:border-accent/50 hover:text-accent"
+                    }`}
+                    key={tool.label}
+                    type="button"
+                    title={tool.label}
+                  >
+                    <Icon className="h-4 w-4" />
+                  </button>
+                );
+              })}
+            </div>
+          </aside>
 
-        <section className="cad-grid min-h-0 overflow-auto p-4">
+          <section className="cad-grid min-h-0 overflow-auto p-4">
           {activeTab === "Model" ? (
             <section className="grid min-h-full grid-rows-[auto_minmax(560px,1fr)] gap-4">
               <div className="rounded border border-line bg-panel/90 p-3">
@@ -300,9 +302,9 @@ export default function Home() {
               />
             </section>
           )}
-        </section>
+          </section>
 
-        <aside className="min-h-0 overflow-auto border-l border-line bg-[#0d141d] p-4">
+          <aside className="min-h-0 overflow-auto border-l border-line bg-[#0d141d] p-4">
           <CopilotPanel
             activeVersion={activeVersion}
             activeTab={activeTab}
@@ -343,7 +345,15 @@ export default function Home() {
               />
             </dl>
           </section>
-        </aside>
+          </aside>
+        </div>
+        <BottomPanel
+          project={project}
+          activeVersion={activeVersion}
+          quantities={quantities}
+          complianceItems={complianceItems}
+          onSelectVersion={handleSelectVersion}
+        />
       </section>
     </main>
   );
