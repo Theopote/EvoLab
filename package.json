@@ -10,7 +10,6 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.104.1",
-    "@next/swc-win32-x64-msvc": "^14.2.16",
     "@react-three/drei": "^9.120.5",
     "@react-three/fiber": "^8.17.10",
     "clipper-lib": "^6.4.2",
