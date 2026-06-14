@@ -35,6 +35,8 @@ export interface PlanVersion {
   createdAt: string;
   parentVersionId?: string;
   rooms: Room[];
+  levels: Level[];
+  building: Building;
   outline: Point[];
   overallBounds: {
     width: number;
@@ -46,10 +48,13 @@ export interface PlanVersion {
 
 export interface Room {
   id: string;
+  levelId?: string;
   name: string;
   type: RoomType;
   zone: FunctionZone;
   polygon: Point[];
+  wallIds?: string[];
+  openingIds?: string[];
   areaSqm: number;
   ceilingHeight: number;
   orientation?: string;
@@ -82,6 +87,92 @@ export type FunctionZone =
   | "private"
   | "service"
   | "circulation";
+
+export interface Building {
+  id: string;
+  name: string;
+  boundary: Boundary;
+  levels: Level[];
+  floors: Floor[];
+  cores: Core[];
+  grids: Grid[];
+}
+
+export interface Level {
+  id: string;
+  name: string;
+  elevation: number;
+  height: number;
+  rooms: Room[];
+  walls: Wall[];
+  openings: OpeningElement[];
+  floor?: Floor;
+  boundary?: Boundary;
+}
+
+export interface Wall {
+  id: string;
+  start: Point;
+  end: Point;
+  thickness: number;
+  height: number;
+  type: "external" | "internal" | "core" | "partition";
+  roomIds: string[];
+}
+
+export interface OpeningElement {
+  id: string;
+  wallId: string;
+  type: "door" | "window" | "opening";
+  center: Point;
+  width: number;
+  height: number;
+  sillHeight?: number;
+  roomIds?: string[];
+}
+
+export interface Boundary {
+  id: string;
+  polygon: Point[];
+  type: "site" | "building" | "level";
+}
+
+export interface Core {
+  id: string;
+  levelIds: string[];
+  roomIds: string[];
+  wallIds: string[];
+  type: "stair" | "elevator" | "shaft" | "mixed";
+}
+
+export interface Grid {
+  id: string;
+  name: string;
+  lines: GridLine[];
+}
+
+export interface GridLine {
+  id: string;
+  label: string;
+  start: Point;
+  end: Point;
+  axis: "x" | "y" | "custom";
+}
+
+export interface Floor {
+  id: string;
+  levelId: string;
+  outline: Point[];
+  thickness: number;
+  elevation: number;
+}
+
+export interface Element {
+  id: string;
+  levelId: string;
+  category: "wall" | "opening" | "floor" | "core" | "grid" | "boundary" | "room";
+  name?: string;
+}
 
 export interface Opening {
   wall: "north" | "south" | "east" | "west";

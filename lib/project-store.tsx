@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { normalizePlanVersion, normalizeProjectVersions } from "@/lib/architecture-model";
 import { initialProjectData } from "@/lib/evolab-data";
 import { calculateQuantities, checkCompliance, type ComplianceItem, type QuantityResult } from "@/lib/quantity-engine";
 import type {
@@ -102,36 +103,42 @@ export function EvoProjectProvider({ children }: { children: ReactNode }) {
   }
 
   function replaceVersions(versions: PlanVersion[], projectType = brief.projectType) {
+    const normalizedVersions = normalizeProjectVersions(versions);
+
     setProject((current) => ({
       ...current,
       projectType,
-      versions,
-      activeVersionId: versions[0]?.id ?? current.activeVersionId
+      versions: normalizedVersions,
+      activeVersionId: normalizedVersions[0]?.id ?? current.activeVersionId
     }));
   }
 
   function setActiveVersion(version: PlanVersion) {
+    const normalizedVersion = normalizePlanVersion(version);
+
     setProject((current) => {
-      const exists = current.versions.some((item) => item.id === version.id);
+      const exists = current.versions.some((item) => item.id === normalizedVersion.id);
 
       return {
         ...current,
-        versions: exists ? current.versions : [...current.versions, version],
-        activeVersionId: version.id
+        versions: exists ? current.versions : [...current.versions, normalizedVersion],
+        activeVersionId: normalizedVersion.id
       };
     });
   }
 
   function updateActiveVersion(version: PlanVersion) {
+    const normalizedVersion = normalizePlanVersion(version);
+
     setProject((current) => {
-      const nextVersions = current.versions.some((item) => item.id === version.id)
-        ? current.versions.map((item) => (item.id === version.id ? version : item))
-        : [...current.versions, version];
+      const nextVersions = current.versions.some((item) => item.id === normalizedVersion.id)
+        ? current.versions.map((item) => (item.id === normalizedVersion.id ? normalizedVersion : item))
+        : [...current.versions, normalizedVersion];
 
       return {
         ...current,
         versions: nextVersions,
-        activeVersionId: version.id
+        activeVersionId: normalizedVersion.id
       };
     });
   }

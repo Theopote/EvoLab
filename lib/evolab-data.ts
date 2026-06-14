@@ -1,3 +1,4 @@
+import { normalizeProjectVersions } from "@/lib/architecture-model";
 import type { ProjectData } from "@/lib/project-types";
 
 export const initialProjectData: ProjectData = {
@@ -5,7 +6,7 @@ export const initialProjectData: ProjectData = {
   projectName: "EvoLab Healthcare Concept Study",
   projectType: "healthcare",
   activeVersionId: "scheme-a",
-  versions: [
+  versions: normalizeProjectVersions([
     {
       id: "scheme-a",
       label: "Scheme A / Central Core",
@@ -157,5 +158,5 @@ export const initialProjectData: ProjectData = {
         }
       ]
     }
-  ]
+  ])
 };

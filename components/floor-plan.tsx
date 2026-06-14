@@ -50,6 +50,7 @@ export function FloorPlan({ version, className }: FloorPlanProps) {
   const viewBox = `${-padding} ${-padding} ${version.overallBounds.width + padding * 2} ${
     version.overallBounds.height + padding * 2
   }`;
+  const level = version.levels[0];
 
   return (
     <div className={className}>
@@ -88,6 +89,39 @@ export function FloorPlan({ version, className }: FloorPlanProps) {
               </g>
             );
           })}
+          {level?.walls.map((wall) => (
+            <line
+              key={wall.id}
+              x1={wall.start[0]}
+              y1={wall.start[1]}
+              x2={wall.end[0]}
+              y2={wall.end[1]}
+              stroke={wall.type === "external" ? "#e5f6ff" : wall.type === "core" ? "#f0b35b" : "#7d8fa3"}
+              strokeLinecap="round"
+              strokeWidth={wall.thickness}
+            />
+          ))}
+          {level?.openings.map((opening) => (
+            <g key={opening.id}>
+              <circle
+                cx={opening.center[0]}
+                cy={opening.center[1]}
+                r={opening.type === "door" ? 0.45 : 0.35}
+                fill={opening.type === "door" ? "#4fb5c8" : "#84cc16"}
+                stroke="#081018"
+                strokeWidth="0.16"
+              />
+              <text
+                x={opening.center[0]}
+                y={opening.center[1] - 0.75}
+                fill="#c9d7e3"
+                fontSize="1"
+                textAnchor="middle"
+              >
+                {opening.type === "door" ? "D" : opening.type === "window" ? "W" : "O"}
+              </text>
+            </g>
+          ))}
         </svg>
         <div className="absolute bottom-3 left-3 rounded border border-line bg-[#081018]/90 px-2 py-1 text-xs text-muted">
           1 grid = 1 m / {version.label}

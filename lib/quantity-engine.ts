@@ -1,4 +1,4 @@
-import type { FunctionZone, PlanVersion, Point, Room, RoomType } from "@/lib/project-types";
+import type { FunctionZone, OpeningElement, PlanVersion, Point, Room, RoomType, Wall } from "@/lib/project-types";
 
 export interface QuantityRow {
   id: string;
@@ -47,6 +47,10 @@ function polygonPerimeter(points: Point[]) {
   return points.reduce((total, point, index) => total + distance(point, points[(index + 1) % points.length]), 0);
 }
 
+function wallLength(wall: Wall) {
+  return distance(wall.start, wall.end);
+}
+
 function polygonArea(points: Point[]) {
   const area = points.reduce((total, [x, y], index) => {
     const [nextX, nextY] = points[(index + 1) % points.length];
@@ -77,26 +81,55 @@ function maxDistanceToCore(version: PlanVersion) {
   return Math.max(...version.rooms.map((room) => distance(centroid(room), corePoint)));
 }
 
+function activeLevel(version: PlanVersion) {
+  return version.levels[0];
+}
+
+function roomOpenings(room: Room, openings: OpeningElement[], type: OpeningElement["type"]) {
+  return openings.filter((opening) => opening.type === type && opening.roomIds?.includes(room.id));
+}
+
 export function calculateQuantities(version: PlanVersion): QuantityResult {
+  const level = activeLevel(version);
+  const walls = level?.walls ?? [];
+  const openings = level?.openings ?? [];
   const grossArea = version.rooms.reduce((total, room) => total + room.areaSqm, 0);
   const netUsableArea = version.rooms
     .filter((room) => room.zone !== "circulation" && room.type !== "shaft")
     .reduce((total, room) => total + room.areaSqm, 0);
   const outlineArea = polygonArea(version.outline);
-  const externalWallLength = polygonPerimeter(version.outline);
+  const externalWallLength = walls.length
+    ? walls
+        .filter((wall) => wall.type === "external")
+        .reduce((total, wall) => total + wallLength(wall), 0)
+    : polygonPerimeter(version.outline);
   const roomPerimeterTotal = version.rooms.reduce((total, room) => total + polygonPerimeter(room.polygon), 0);
-  const internalWallLength = Math.max(0, (roomPerimeterTotal - externalWallLength) / 2);
+  const internalWallLength = walls.length
+    ? walls
+        .filter((wall) => wall.type === "internal" || wall.type === "partition" || wall.type === "core")
+        .reduce((total, wall) => total + wallLength(wall), 0)
+    : Math.max(0, (roomPerimeterTotal - externalWallLength) / 2);
   const averageWallHeight =
     version.rooms.reduce((total, room) => total + room.ceilingHeight, 0) / Math.max(1, version.rooms.length);
-  const wallArea = (externalWallLength + internalWallLength) * averageWallHeight;
-  const doorCount = version.rooms.reduce((total, room) => total + room.doors.length, 0);
-  const windowCount = version.rooms.reduce((total, room) => total + room.windows.length, 0);
+  const wallArea = walls.length
+    ? walls.reduce((total, wall) => total + wallLength(wall) * wall.height, 0)
+    : (externalWallLength + internalWallLength) * averageWallHeight;
+  const doorCount = openings.length
+    ? openings.filter((opening) => opening.type === "door").length
+    : version.rooms.reduce((total, room) => total + room.doors.length, 0);
+  const windowCount = openings.length
+    ? openings.filter((opening) => opening.type === "window").length
+    : version.rooms.reduce((total, room) => total + room.windows.length, 0);
   const slabArea = outlineArea || grossArea;
   const roofArea = slabArea;
-  const curtainWallOrWindowArea = version.rooms.reduce(
-    (total, room) => total + room.windows.reduce((windowTotal, opening) => windowTotal + opening.width * 1.8, 0),
-    0
-  );
+  const curtainWallOrWindowArea = openings.length
+    ? openings
+        .filter((opening) => opening.type === "window")
+        .reduce((total, opening) => total + opening.width * opening.height, 0)
+    : version.rooms.reduce(
+        (total, room) => total + room.windows.reduce((windowTotal, opening) => windowTotal + opening.width * 1.8, 0),
+        0
+      );
 
   const areaByZone = version.rooms.reduce(
     (acc, room) => {
@@ -131,24 +164,24 @@ export function calculateQuantities(version: PlanVersion): QuantityResult {
       label: "External wall length",
       value: externalWallLength,
       unit: "m",
-      basis: "Perimeter of PlanVersion.outline"
+      basis: walls.length ? "Sum of Level.walls where type = external" : "Perimeter of PlanVersion.outline"
     },
     {
       id: "internal-wall-length",
-      label: "Internal wall length estimate",
+      label: walls.length ? "Internal wall length" : "Internal wall length estimate",
       value: internalWallLength,
       unit: "m",
-      basis: "(Sum room perimeters - outline perimeter) / 2"
+      basis: walls.length ? "Sum of Level.walls where type = internal, partition or core" : "(Sum room perimeters - outline perimeter) / 2"
     },
     {
       id: "wall-area",
-      label: "Wall area estimate",
+      label: walls.length ? "Wall area" : "Wall area estimate",
       value: wallArea,
       unit: "sqm",
-      basis: "(External + internal wall length) * average ceiling height"
+      basis: walls.length ? "Sum of wall length * wall height" : "(External + internal wall length) * average ceiling height"
     },
-    { id: "doors", label: "Door count", value: doorCount, unit: "pcs", basis: "Sum of room.doors" },
-    { id: "windows", label: "Window count", value: windowCount, unit: "pcs", basis: "Sum of room.windows" },
+    { id: "doors", label: "Door count", value: doorCount, unit: "pcs", basis: openings.length ? "Level.openings where type = door" : "Sum of room.doors" },
+    { id: "windows", label: "Window count", value: windowCount, unit: "pcs", basis: openings.length ? "Level.openings where type = window" : "Sum of room.windows" },
     { id: "slab-area", label: "Floor slab area", value: slabArea, unit: "sqm", basis: "Outline polygon area" },
     { id: "roof-area", label: "Roof area", value: roofArea, unit: "sqm", basis: "Assume roof equals outline area" },
     {
@@ -156,7 +189,7 @@ export function calculateQuantities(version: PlanVersion): QuantityResult {
       label: "Curtain wall / window area estimate",
       value: curtainWallOrWindowArea,
       unit: "sqm",
-      basis: "Window width * 1.8m typical height"
+      basis: openings.length ? "Window OpeningElement width * height" : "Window width * 1.8m typical height"
     }
   ].map((row) => ({ ...row, value: round(row.value) }));
 
@@ -180,6 +213,7 @@ export function calculateQuantities(version: PlanVersion): QuantityResult {
 }
 
 export function checkCompliance(version: PlanVersion): ComplianceItem[] {
+  const openings = activeLevel(version)?.openings ?? [];
   const corridorRooms = version.rooms.filter((room) => room.type === "corridor");
   const stairRooms = version.rooms.filter((room) => room.type === "stair" || room.type === "elevator");
   const shaftOrEquipmentRooms = version.rooms.filter((room) => room.type === "shaft" || room.type === "equipment_room");
@@ -192,7 +226,10 @@ export function checkCompliance(version: PlanVersion): ComplianceItem[] {
     const width = Math.min(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
     return width < 1.2;
   });
-  const roomsWithoutDaylight = roomsNeedingDaylight.filter((room) => room.windows.length === 0);
+  const roomsWithoutDaylight = roomsNeedingDaylight.filter((room) => {
+    const windowOpenings = openings.length ? roomOpenings(room, openings, "window") : [];
+    return openings.length ? windowOpenings.length === 0 : room.windows.length === 0;
+  });
   const plumbingFarRooms = roomsNeedingPlumbing.filter((room) => nearestDistanceToRooms(room, shaftOrEquipmentRooms) > 12);
   const equipmentRooms = version.rooms.filter((room) => room.type === "equipment_room");
   const misalignedEquipmentRooms = equipmentRooms.filter((room) => nearestDistanceToRooms(room, shaftOrEquipmentRooms.filter((target) => target.id !== room.id)) > 10);

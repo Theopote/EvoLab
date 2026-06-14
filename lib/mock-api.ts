@@ -1,3 +1,4 @@
+import { normalizePlanVersion } from "@/lib/architecture-model";
 import { initialProjectData } from "@/lib/evolab-data";
 import type {
   AnalysisLayerId,
@@ -41,8 +42,9 @@ export function createMockPlanVersions(outline?: Point[], projectType = "healthc
 
   return ["Central Core", "Dual Corridor", "Service Spine"].map((strategy, index) => {
     const offset = index * 1.8;
-    return withScores(
-      {
+    return normalizePlanVersion(
+      withScores(
+        {
         ...baseVersion,
         id: `mock-${projectType}-${index + 1}`,
         label: `Scheme ${String.fromCharCode(65 + index)} / ${strategy}`,
@@ -60,18 +62,19 @@ export function createMockPlanVersions(outline?: Point[], projectType = "healthc
         }))
       },
       index
+      )
     );
   });
 }
 
 export function createMockAnalyzedVersion(): { version: PlanVersion; confidence: number; warnings: string[] } {
   return {
-    version: {
+    version: normalizePlanVersion({
       ...baseVersion,
       id: "analyzed-plan-001",
       label: "Analyzed Plan / Drawing Import",
       createdAt: new Date().toISOString()
-    },
+    }),
     confidence: 0.78,
     warnings: ["No real drawing recognition was run. EvoLab returned mock structured plan data.", "Door, window and text annotation confidence values are examples."]
   };
@@ -79,7 +82,7 @@ export function createMockAnalyzedVersion(): { version: PlanVersion; confidence:
 
 export function createMockModifiedVersion(currentVersion: PlanVersion, userRequest: string) {
   const shouldMoveCore = /\u6838\u5fc3|core|\u5317/i.test(userRequest);
-  const version: PlanVersion = {
+  const version: PlanVersion = normalizePlanVersion({
     ...currentVersion,
     id: `${currentVersion.id}-mod-${Date.now()}`,
     label: `${currentVersion.label} / Copilot Revision`,
@@ -102,7 +105,7 @@ export function createMockModifiedVersion(currentVersion: PlanVersion, userReque
       mepAlignmentScore: Math.min(100, (currentVersion.scores?.mepAlignmentScore ?? 72) + 3),
       riskCount: Math.max(0, (currentVersion.scores?.riskCount ?? 2) - 1)
     }
-  };
+  });
 
   const findings: CopilotFinding[] = [
     {

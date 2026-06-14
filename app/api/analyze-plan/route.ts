@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { normalizePlanVersion } from "@/lib/architecture-model";
 import { requestAnthropicJson } from "@/lib/anthropic-json";
 import { createMockAnalyzedVersion } from "@/lib/mock-api";
 import { analyzePlanPrompt } from "@/lib/prompts/analyzePlanPrompt";
@@ -33,7 +34,10 @@ export async function POST(request: Request) {
       return NextResponse.json(fallback);
     }
 
-    return NextResponse.json(data);
+    return NextResponse.json({
+      ...data,
+      version: normalizePlanVersion(data.version)
+    });
   } catch (error) {
     return NextResponse.json({
       ...fallback,
