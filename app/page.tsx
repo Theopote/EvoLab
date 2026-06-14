@@ -6,7 +6,8 @@ import { FloorPlan } from "@/components/floor-plan";
 import { BriefForm, type PlanBrief } from "@/components/plan-editor/BriefForm";
 import { OutlineCanvas } from "@/components/plan-editor/OutlineCanvas";
 import { PlanResultGrid } from "@/components/plan-editor/PlanResultGrid";
-import { TopNav } from "@/components/top-nav";
+import { TopNav, type WorkspaceTab } from "@/components/top-nav";
+import { Scene } from "@/components/viewer-3d/Scene";
 import { initialProjectData } from "@/lib/evolab-data";
 import type { PlanVersion, Point, ProjectData } from "@/lib/project-types";
 
@@ -39,6 +40,7 @@ export default function Home() {
   const [outline, setOutline] = useState<Point[]>(defaultOutline);
   const [outlineClosed, setOutlineClosed] = useState(true);
   const [brief, setBrief] = useState<PlanBrief>(defaultBrief);
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>("Plan");
 
   const activeVersion = useMemo(
     () => project.versions.find((version) => version.id === project.activeVersionId),
@@ -68,7 +70,7 @@ export default function Home() {
 
   return (
     <main className="flex min-h-screen flex-col bg-canvas text-slate-100">
-      <TopNav project={project} />
+      <TopNav project={project} activeTab={activeTab} onTabChange={setActiveTab} />
       <section className="grid flex-1 grid-cols-[72px_minmax(0,1fr)_380px] overflow-hidden">
         <aside className="border-r border-line bg-[#0a0f15] p-3">
           <div className="flex h-full flex-col items-center gap-2">
@@ -92,37 +94,60 @@ export default function Home() {
           </div>
         </aside>
 
-        <section className="cad-grid grid min-h-0 grid-rows-[minmax(360px,0.9fr)_minmax(320px,1fr)] gap-4 overflow-auto p-4">
-          <div className="grid min-h-0 grid-cols-[360px_minmax(0,1fr)] gap-4">
-            <OutlineCanvas
-              points={outline}
-              closed={outlineClosed}
-              onChange={setOutline}
-              onClosedChange={setOutlineClosed}
-            />
-            <section className="rounded border border-line bg-panel/90 p-3">
-              <div className="mb-3 flex items-center justify-between">
-                <div>
-                  <h1 className="text-base font-semibold text-white">Plan Workspace</h1>
-                  <p className="mt-1 text-xs text-muted">Active version is the shared data source for plan, model, analysis, MEP and quantity.</p>
+        <section className="cad-grid min-h-0 overflow-auto p-4">
+          {activeTab === "Model" ? (
+            <section className="grid min-h-full grid-rows-[auto_minmax(560px,1fr)] gap-4">
+              <div className="rounded border border-line bg-panel/90 p-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h1 className="text-base font-semibold text-white">3D Building Model</h1>
+                    <p className="mt-1 text-xs text-muted">
+                      Generated from activeVersion.rooms. Orbit, pan and zoom are enabled.
+                    </p>
+                  </div>
+                  <span className="rounded border border-accent/40 px-2 py-1 text-xs text-accent">
+                    {activeVersion?.label ?? "No active version"}
+                  </span>
                 </div>
-                <span className="rounded border border-success/30 px-2 py-1 text-xs text-success">
-                  {outlineClosed ? "Outline closed" : "Outline open"}
-                </span>
               </div>
-              <FloorPlan version={activeVersion} />
+              <Scene version={activeVersion} />
             </section>
-          </div>
+          ) : (
+            <section className="grid min-h-full grid-rows-[minmax(360px,0.9fr)_minmax(320px,1fr)] gap-4">
+              <div className="grid min-h-0 grid-cols-[360px_minmax(0,1fr)] gap-4">
+                <OutlineCanvas
+                  points={outline}
+                  closed={outlineClosed}
+                  onChange={setOutline}
+                  onClosedChange={setOutlineClosed}
+                />
+                <section className="rounded border border-line bg-panel/90 p-3">
+                  <div className="mb-3 flex items-center justify-between">
+                    <div>
+                      <h1 className="text-base font-semibold text-white">Plan Workspace</h1>
+                      <p className="mt-1 text-xs text-muted">
+                        Active version is the shared data source for plan, model, analysis, MEP and quantity.
+                      </p>
+                    </div>
+                    <span className="rounded border border-success/30 px-2 py-1 text-xs text-success">
+                      {outlineClosed ? "Outline closed" : "Outline open"}
+                    </span>
+                  </div>
+                  <FloorPlan version={activeVersion} />
+                </section>
+              </div>
 
-          <PlanResultGrid
-            outline={outline}
-            closed={outlineClosed}
-            brief={brief}
-            versions={project.versions}
-            activeVersionId={project.activeVersionId}
-            onGenerated={handleGenerated}
-            onSelectVersion={handleSelectVersion}
-          />
+              <PlanResultGrid
+                outline={outline}
+                closed={outlineClosed}
+                brief={brief}
+                versions={project.versions}
+                activeVersionId={project.activeVersionId}
+                onGenerated={handleGenerated}
+                onSelectVersion={handleSelectVersion}
+              />
+            </section>
+          )}
         </section>
 
         <aside className="min-h-0 overflow-auto border-l border-line bg-[#0d141d] p-4">

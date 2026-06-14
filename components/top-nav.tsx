@@ -1,13 +1,27 @@
 import { Cloud, Share2, Sparkles } from "lucide-react";
 import type { ProjectData } from "@/lib/project-types";
 
-const tabs = ["平面", "体量", "模型", "分析", "系统", "算量", "渲染", "图纸", "导出"];
+export const workspaceTabs = [
+  "Plan",
+  "Massing",
+  "Model",
+  "Analysis",
+  "Systems",
+  "Quantity",
+  "Render",
+  "Sheets",
+  "Export"
+] as const;
+
+export type WorkspaceTab = (typeof workspaceTabs)[number];
 
 interface TopNavProps {
   project: ProjectData;
+  activeTab?: WorkspaceTab;
+  onTabChange?: (tab: WorkspaceTab) => void;
 }
 
-export function TopNav({ project }: TopNavProps) {
+export function TopNav({ project, activeTab = "Plan", onTabChange }: TopNavProps) {
   return (
     <header className="flex h-14 items-center border-b border-line bg-[#0b1118] px-4">
       <div className="mr-6 flex items-center gap-2">
@@ -22,15 +36,16 @@ export function TopNav({ project }: TopNavProps) {
         </div>
       </div>
       <nav className="flex h-full items-center gap-1">
-        {tabs.map((tab, index) => (
+        {workspaceTabs.map((tab) => (
           <button
             className={`h-9 rounded px-3 text-sm transition ${
-              index === 0
+              activeTab === tab
                 ? "bg-accent/15 text-accent"
                 : "text-slate-300 hover:bg-white/[0.04] hover:text-white"
             }`}
             key={tab}
             type="button"
+            onClick={() => onTabChange?.(tab)}
           >
             {tab}
           </button>
@@ -43,12 +58,12 @@ export function TopNav({ project }: TopNavProps) {
         </span>
         <span className="flex items-center gap-1 rounded border border-success/30 px-2 py-1 text-xs text-success">
           <Cloud className="h-3.5 w-3.5" />
-          已同步
+          Synced
         </span>
         <button
           className="grid h-8 w-8 place-items-center rounded border border-line text-slate-300 hover:border-accent/60 hover:text-accent"
           type="button"
-          aria-label="分享"
+          aria-label="Share"
         >
           <Share2 className="h-4 w-4" />
         </button>
