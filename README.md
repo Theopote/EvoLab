@@ -11,14 +11,6 @@ EvoLab is not a one-shot image generator. It keeps plan options, analysis overla
 
 ## Screenshots
 
-> **Add your own screenshots here.** Suggested captures:
-> 1. Outline drawing + brief form (Plan tab, before generation)
-> 2. Plan option grid with 3 generated schemes side-by-side (Plan tab, after generation)
-> 3. 3D white model view (Model tab)
-> 4. MEP diagram overlay (Systems tab)
-> 5. Version compare grid (Sheets tab)
->
-> Place images in `docs/screenshots/` and replace the placeholders below.
 
 | Draw outline & brief | Generated plan options | 3D model |
 |---|---|---|
@@ -40,7 +32,7 @@ Input conditions → ProjectData → editable PlanVersion → plan / massing / m
 
 Deploy your own instance with one click — no API key required (runs in mock mode):
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/YOUR_USERNAME/EvoLab&env=ANTHROPIC_API_KEY&envDescription=Optional%20-%20leave%20blank%20to%20run%20in%20mock%20mode)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/Theopote/EvoLab&env=ANTHROPIC_API_KEY&envDescription=Optional%20-%20leave%20blank%20to%20run%20in%20mock%20mode)
 
 To force mock mode on any deployment, set `NEXT_PUBLIC_MOCK_MODE=true` in your environment variables. The full UI — 3D model, floor plan, MEP diagrams, quantity takeoff — works without an API key.
 
