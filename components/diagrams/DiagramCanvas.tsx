@@ -1,7 +1,10 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
+import { computeAnalysis, type AnalysisResult } from "@/lib/analysis-engine";
 import type { AnalysisLayerId, PlanVersion, Point, Room } from "@/lib/project-types";
 import { ANALYSIS_LAYERS } from "@/components/diagrams/DiagramLayerList";
+import type { AnalysisWorkerResponse } from "@/lib/analysis-worker";
 
 interface DiagramCanvasProps {
   activeLayers: AnalysisLayerId[];
@@ -41,35 +44,59 @@ function polygonPoints(points: Point[]) {
   return points.map(([x, y]) => `${x},${y}`).join(" ");
 }
 
-function centroid(room: Room): Point {
-  const total = room.polygon.reduce((acc, [x, y]) => [acc[0] + x, acc[1] + y] as Point, [0, 0]);
-  return [total[0] / room.polygon.length, total[1] / room.polygon.length];
+function pathPoints(points: Point[]) {
+  return points.map(([x, y]) => `${x},${y}`).join(" ");
 }
 
-function roomByType(version: PlanVersion, types: Room["type"][]) {
-  return version.rooms.find((room) => types.includes(room.type));
-}
+function useWorkerAnalysis(version: PlanVersion | undefined, activeLayers: AnalysisLayerId[]) {
+  const [analysis, setAnalysis] = useState<AnalysisResult | undefined>(undefined);
+  const requestIdRef = useRef(0);
+  const workerRef = useRef<Worker | undefined>(undefined);
 
-function routePath(rooms: Room[]) {
-  return rooms.map((room) => centroid(room)).map(([x, y]) => `${x},${y}`).join(" ");
-}
+  useEffect(() => {
+    if (!version) {
+      setAnalysis(undefined);
+      return;
+    }
 
-function nearestCorePoint(version: PlanVersion): Point {
-  const core = roomByType(version, ["stair", "elevator", "shaft"]);
-  return core ? centroid(core) : [version.overallBounds.width / 2, version.overallBounds.height / 2];
-}
+    requestIdRef.current += 1;
+    const requestId = requestIdRef.current;
 
-function hasWindowOpening(version: PlanVersion, room: Room) {
-  const openings = version.levels[0]?.openings ?? [];
+    try {
+      workerRef.current ??= new Worker(new URL("../../lib/analysis-worker.ts", import.meta.url), {
+        type: "module"
+      });
+      workerRef.current.onmessage = (event: MessageEvent<AnalysisWorkerResponse>) => {
+        if (event.data.requestId !== requestIdRef.current) {
+          return;
+        }
 
-  if (openings.length === 0) {
-    return room.windows.length > 0;
-  }
+        if (event.data.result) {
+          setAnalysis(event.data.result);
+        } else {
+          setAnalysis(computeAnalysis(version, activeLayers));
+        }
+      };
+      workerRef.current.postMessage({ requestId, version, activeLayers });
+    } catch {
+      setAnalysis(computeAnalysis(version, activeLayers));
+    }
+  }, [activeLayers, version]);
 
-  return openings.some((opening) => opening.type === "window" && opening.roomIds?.includes(room.id));
+  useEffect(
+    () => () => {
+      workerRef.current?.terminate();
+      workerRef.current = undefined;
+    },
+    []
+  );
+
+  return analysis;
 }
 
 export function DiagramCanvas({ activeLayers, version }: DiagramCanvasProps) {
+  const analysis = useWorkerAnalysis(version, activeLayers);
+
   if (!version) {
     return (
       <div className="grid min-h-[560px] place-items-center rounded border border-dashed border-line bg-panel/60 text-sm text-muted">
@@ -82,12 +109,6 @@ export function DiagramCanvas({ activeLayers, version }: DiagramCanvasProps) {
   const viewBox = `${-padding} ${-padding} ${version.overallBounds.width + padding * 2} ${
     version.overallBounds.height + padding * 2
   }`;
-  const publicRoom = roomByType(version, ["lobby"]) ?? version.rooms[0];
-  const corridor = roomByType(version, ["corridor"]);
-  const consultation = roomByType(version, ["consultation"]);
-  const office = roomByType(version, ["office"]);
-  const service = roomByType(version, ["equipment_room", "shaft"]);
-  const corePoint = nearestCorePoint(version);
 
   return (
     <section className="rounded border border-line bg-panel/90 p-3">
@@ -129,13 +150,11 @@ export function DiagramCanvas({ activeLayers, version }: DiagramCanvasProps) {
           ))}
 
           {activeLayers.includes("daylight")
-            ? version.rooms
-                .filter((room) => room.needsDaylight || hasWindowOpening(version, room))
-                .map((room) => {
-                  const [x, y] = centroid(room);
+            ? analysis?.daylightRooms.map((room) => {
+                  const [x, y] = room.center;
                   return (
-                    <g key={`daylight-${room.id}`}>
-                      <circle cx={x} cy={y} fill="rgba(250,204,21,0.18)" r={Math.max(3, Math.sqrt(room.areaSqm) / 2.8)} />
+                    <g key={`daylight-${room.roomId}`}>
+                      <circle cx={x} cy={y} fill="rgba(250,204,21,0.18)" r={room.radius} />
                       <text fill="#facc15" fontSize="1.3" textAnchor="middle" x={x} y={y + 0.45}>
                         DL
                       </text>
@@ -144,49 +163,48 @@ export function DiagramCanvas({ activeLayers, version }: DiagramCanvasProps) {
                 })
             : null}
 
-          {activeLayers.includes("patient_flow") && publicRoom && consultation ? (
+          {activeLayers.includes("patient_flow") && analysis?.patientFlow ? (
             <polyline
               fill="none"
               markerEnd="url(#arrow-patient)"
-              points={routePath([publicRoom, ...(corridor ? [corridor] : []), consultation])}
+              points={pathPoints(analysis.patientFlow.points)}
               stroke="#38bdf8"
               strokeDasharray="2 1.4"
               strokeWidth="0.7"
             />
           ) : null}
 
-          {activeLayers.includes("staff_flow") && office ? (
+          {activeLayers.includes("staff_flow") && analysis?.staffFlow ? (
             <polyline
               fill="none"
               markerEnd="url(#arrow-staff)"
-              points={routePath([office, ...(corridor ? [corridor] : []), consultation ?? office])}
+              points={pathPoints(analysis.staffFlow.points)}
               stroke="#a78bfa"
               strokeWidth="0.65"
             />
           ) : null}
 
-          {activeLayers.includes("clean_dirty_flow") && service && corridor ? (
+          {activeLayers.includes("clean_dirty_flow") && analysis?.cleanDirtyFlow ? (
             <g>
-              <polyline fill="none" points={routePath([service, corridor])} stroke="#f59e0b" strokeDasharray="1 1" strokeWidth="0.65" />
-              <polyline fill="none" points={routePath([publicRoom, corridor])} stroke="#5eead4" strokeDasharray="2 1" strokeWidth="0.5" />
+              {analysis.cleanDirtyFlow.dirty ? (
+                <polyline fill="none" points={pathPoints(analysis.cleanDirtyFlow.dirty.points)} stroke="#f59e0b" strokeDasharray="1 1" strokeWidth="0.65" />
+              ) : null}
+              {analysis.cleanDirtyFlow.clean ? (
+                <polyline fill="none" points={pathPoints(analysis.cleanDirtyFlow.clean.points)} stroke="#5eead4" strokeDasharray="2 1" strokeWidth="0.5" />
+              ) : null}
             </g>
           ) : null}
 
           {activeLayers.includes("ventilation")
-            ? version.rooms
-                .filter((room) => hasWindowOpening(version, room))
-                .map((room) => {
-                  const [x, y] = centroid(room);
-                  return (
-                    <line key={`vent-${room.id}`} stroke="#5eead4" strokeWidth="0.45" x1={x - 3} x2={x + 3} y1={y} y2={y - 2} />
-                  );
-                })
+            ? analysis?.ventilationVectors.map((vector) => (
+                <line key={vector.id} stroke="#5eead4" strokeWidth="0.45" x1={vector.from[0]} x2={vector.to[0]} y1={vector.from[1]} y2={vector.to[1]} />
+              ))
             : null}
 
-          {activeLayers.includes("sightline") && publicRoom && corridor ? (
+          {activeLayers.includes("sightline") && analysis?.sightlineCone ? (
             <polygon
               fill="rgba(251,113,133,0.12)"
-              points={`${centroid(publicRoom)[0]},${centroid(publicRoom)[1]} ${centroid(corridor)[0] - 6},${centroid(corridor)[1] - 10} ${centroid(corridor)[0] + 6},${centroid(corridor)[1] + 10}`}
+              points={pathPoints(analysis.sightlineCone)}
               stroke="#fb7185"
               strokeDasharray="1.5 1"
               strokeWidth="0.35"
@@ -194,35 +212,29 @@ export function DiagramCanvas({ activeLayers, version }: DiagramCanvasProps) {
           ) : null}
 
           {activeLayers.includes("egress_path")
-            ? version.rooms
-                .filter((room) => room.type !== "stair" && room.type !== "elevator" && room.type !== "shaft")
-                .map((room) => {
-                  const [x, y] = centroid(room);
-                  return (
-                    <line
-                      key={`egress-${room.id}`}
-                      markerEnd="url(#arrow-egress)"
-                      stroke="#22c55e"
-                      strokeOpacity="0.75"
-                      strokeWidth="0.35"
-                      x1={x}
-                      x2={corePoint[0]}
-                      y1={y}
-                      y2={corePoint[1]}
-                    />
-                  );
-                })
+            ? analysis?.egressPaths.map((path) => (
+                <line
+                  key={path.id}
+                  markerEnd="url(#arrow-egress)"
+                  stroke="#22c55e"
+                  strokeOpacity="0.75"
+                  strokeWidth="0.35"
+                  x1={path.points[0][0]}
+                  x2={path.points[1][0]}
+                  y1={path.points[0][1]}
+                  y2={path.points[1][1]}
+                />
+              ))
             : null}
 
           {activeLayers.includes("egress_distance")
-            ? version.rooms.map((room) => {
-                const [x, y] = centroid(room);
-                const distance = Math.hypot(x - corePoint[0], y - corePoint[1]);
+            ? analysis?.egressDistances.map(({ roomId, center, distance }) => {
+                const [x, y] = center;
                 return (
                   <text
                     fill={distance > 30 ? "#f97316" : "#9fb3c8"}
                     fontSize="1.3"
-                    key={`distance-${room.id}`}
+                    key={`distance-${roomId}`}
                     textAnchor="middle"
                     x={x}
                     y={y + 2.2}
@@ -233,20 +245,19 @@ export function DiagramCanvas({ activeLayers, version }: DiagramCanvasProps) {
               })
             : null}
 
-          {activeLayers.includes("core_efficiency") ? (
+          {activeLayers.includes("core_efficiency") && analysis ? (
             <g>
-              <circle cx={corePoint[0]} cy={corePoint[1]} fill="rgba(192,132,252,0.2)" r="5" stroke="#c084fc" strokeWidth="0.45" />
-              {version.rooms.map((room) => {
-                const [x, y] = centroid(room);
-                return <line key={`core-${room.id}`} stroke="#c084fc" strokeOpacity="0.28" strokeWidth="0.25" x1={corePoint[0]} x2={x} y1={corePoint[1]} y2={y} />;
-              })}
+              <circle cx={analysis.corePoint[0]} cy={analysis.corePoint[1]} fill="rgba(192,132,252,0.2)" r="5" stroke="#c084fc" strokeWidth="0.45" />
+              {analysis.coreLines.map((line) => (
+                <line key={line.id} stroke="#c084fc" strokeOpacity="0.28" strokeWidth="0.25" x1={line.from[0]} x2={line.to[0]} y1={line.from[1]} y2={line.to[1]} />
+              ))}
             </g>
           ) : null}
 
-          {version.rooms.map((room) => {
-            const [x, y] = centroid(room);
+          {analysis?.rooms.map((room) => {
+            const [x, y] = room.center;
             return (
-              <text fill="#e5edf5" fontSize="1.45" key={`label-${room.id}`} textAnchor="middle" x={x} y={y - 0.6} style={{ paintOrder: "stroke", stroke: "#081018", strokeWidth: 0.25 }}>
+              <text fill="#e5edf5" fontSize="1.45" key={`label-${room.roomId}`} textAnchor="middle" x={x} y={y - 0.6} style={{ paintOrder: "stroke", stroke: "#081018", strokeWidth: 0.25 }}>
                 {room.name}
               </text>
             );
