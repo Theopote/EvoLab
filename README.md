@@ -26,7 +26,7 @@ This repository contains a working Next.js prototype with:
 - Copilot panel that calls `/api/modify-plan`
 - Version comparison
 - Render brief workspace
-- Export center for JSON, SVG, and CSV outputs
+- Export center for JSON, SVG, CSV, and IFC handoff payload outputs
 - Bottom task/status panel
 
 ## Tech Stack
@@ -141,6 +141,12 @@ Supported layers include:
 
 The systems workspace renders conceptual MEP diagrams. It can call `/api/generate-mep` and write the returned `MepLayout` back to `activeVersion.mep`.
 
+MEP uses a hybrid architecture:
+
+- Anthropic Tool Use acts as the decision layer for system concept, shaft logic, served rooms, and assumptions.
+- `lib/mep-router.ts` deterministically recalculates routes with corridor/service-room-first A* routing.
+- Fallback and preview MEP use the same router, so demos do not depend on freehand AI geometry.
+
 Supported MEP layers include:
 
 - HVAC
@@ -204,12 +210,13 @@ The export workspace currently supports:
 - Active plan SVG
 - Quantity CSV
 - Compliance CSV
+- IFC handoff JSON for a future IfcOpenShell exporter
 
 Planned export targets:
 
 - Drawing PDF
 - glTF
-- IFC
+- IFC STEP file
 
 ## API Routes
 
@@ -317,6 +324,31 @@ Output:
 }
 ```
 
+The route treats AI output as a strategy/seed. Final `routes.path` geometry is normalized by `lib/mep-router.ts`.
+
+### `POST /api/export-ifc`
+
+Input:
+
+```ts
+{
+  version: PlanVersion
+}
+```
+
+Output:
+
+```ts
+{
+  status: "handoff_ready"
+  nextEngine: "IfcOpenShell"
+  contentType: "application/json"
+  payload: IfcExportPayload
+}
+```
+
+This is an IFC handoff contract, not a final `.ifc` STEP file. The intended production route is to send this payload to a Python service using IfcOpenShell, then return `application/x-step` bytes for download.
+
 ## Core Data Model
 
 The central model is `ProjectData`:
@@ -353,6 +385,8 @@ lib/
   anthropic-json.ts
   evolab-data.ts
   export-utils.ts
+  ifc-export-contract.ts
+  mep-router.ts
   mock-api.ts
   project-types.ts
   quantity-engine.ts
@@ -368,9 +402,9 @@ lib/
 
 ## Known Limitations
 
-- PDF, glTF, and IFC exports are placeholders.
+- PDF, glTF, and IFC STEP exports are placeholders. IFC handoff JSON is available for backend exporter integration.
 - The 3D model is a schematic white model, not a BIM-grade wall/opening model.
-- MEP routing is conceptual and rule-based unless generated through the API.
+- MEP routing is conceptual. Route geometry is deterministic and corridor-first, while AI is used for strategy and system assumptions.
 - Analysis diagrams are rule-based overlays, not formal code compliance reports.
 - Render tab creates a brief and preview model only; it does not call an image generation API.
 
