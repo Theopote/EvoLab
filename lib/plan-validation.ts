@@ -53,40 +53,6 @@ function bboxDistance(a: Point[], b: Point[]) {
   return Math.hypot(dx, dy);
 }
 
-function pointOnSegment(point: Point, start: Point, end: Point) {
-  const cross = (point[1] - start[1]) * (end[0] - start[0]) - (point[0] - start[0]) * (end[1] - start[1]);
-  if (Math.abs(cross) > 0.001) {
-    return false;
-  }
-
-  const dot = (point[0] - start[0]) * (end[0] - start[0]) + (point[1] - start[1]) * (end[1] - start[1]);
-  if (dot < -0.001) {
-    return false;
-  }
-
-  const squaredLength = distance(start, end) ** 2;
-  return dot <= squaredLength + 0.001;
-}
-
-function pointInPolygon(point: Point, polygon: Point[]) {
-  if (polygon.some((start, index) => pointOnSegment(point, start, polygon[(index + 1) % polygon.length]))) {
-    return true;
-  }
-
-  let inside = false;
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const [xi, yi] = polygon[i];
-    const [xj, yj] = polygon[j];
-    const intersects = yi > point[1] !== yj > point[1] && point[0] < ((xj - xi) * (point[1] - yi)) / (yj - yi) + xi;
-
-    if (intersects) {
-      inside = !inside;
-    }
-  }
-
-  return inside;
-}
-
 function hasWindow(version: PlanVersion, room: Room) {
   const openings: OpeningElement[] = version.levels?.[0]?.openings ?? [];
   return openings.length
