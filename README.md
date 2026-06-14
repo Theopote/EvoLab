@@ -1,7 +1,7 @@
 # EvoLab
 
-[![CI](https://github.com/YOUR_USERNAME/EvoLab/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_USERNAME/EvoLab/actions/workflows/ci.yml)
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/YOUR_USERNAME/EvoLab&env=ANTHROPIC_API_KEY&envDescription=Optional%20-%20leave%20blank%20to%20run%20in%20mock%20mode)
+[![CI](https://github.com/Theopote/EvoLab/actions/workflows/ci.yml/badge.svg)](https://github.com/Theopote/EvoLab/actions/workflows/ci.yml)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/Theopote/EvoLab&env=ANTHROPIC_API_KEY&envDescription=Optional%20-%20leave%20blank%20to%20run%20in%20mock%20mode)
 
 **AI-assisted architectural design workspace for early-stage building planning.**
 
