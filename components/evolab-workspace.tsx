@@ -27,6 +27,7 @@ export function EvoLabWorkspace() {
   const {
     project,
     activeVersion,
+    activeLevelId,
     outline,
     outlineClosed,
     brief,
@@ -38,6 +39,7 @@ export function EvoLabWorkspace() {
     quantities,
     complianceItems,
     setActiveTab,
+    setActiveLevel,
     setOutline,
     setOutlineClosed,
     updateBrief,
@@ -54,6 +56,7 @@ export function EvoLabWorkspace() {
     useShallow((state) => ({
       project: state.project,
       activeVersion: state.activeVersion,
+      activeLevelId: state.activeLevelId,
       outline: state.outline,
       outlineClosed: state.outlineClosed,
       brief: state.brief,
@@ -65,6 +68,7 @@ export function EvoLabWorkspace() {
       quantities: state.quantities,
       complianceItems: state.complianceItems,
       setActiveTab: state.setActiveTab,
+      setActiveLevel: state.setActiveLevel,
       setOutline: state.setOutline,
       setOutlineClosed: state.setOutlineClosed,
       updateBrief: state.updateBrief,
@@ -220,11 +224,26 @@ export function EvoLabWorkspace() {
                   Active version is the shared data source for plan, model, analysis, MEP and quantity.
                 </p>
               </div>
-              <span className="rounded border border-success/30 px-2 py-1 text-xs text-success">
-                {outlineClosed ? "Outline closed" : "Outline open"}
-              </span>
+              <div className="flex items-center gap-2">
+                {activeVersion?.levels.length ? (
+                  <select
+                    className="h-8 rounded border border-line bg-[#0b1118] px-2 text-xs text-slate-100"
+                    value={activeLevelId ?? activeVersion.levels[0]?.id}
+                    onChange={(event) => setActiveLevel(event.target.value)}
+                  >
+                    {activeVersion.levels.map((level) => (
+                      <option key={level.id} value={level.id}>
+                        {level.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
+                <span className="rounded border border-success/30 px-2 py-1 text-xs text-success">
+                  {outlineClosed ? "Outline closed" : "Outline open"}
+                </span>
+              </div>
             </div>
-            <FloorPlan version={activeVersion} />
+            <FloorPlan levelId={activeLevelId} version={activeVersion} />
           </section>
         </div>
 

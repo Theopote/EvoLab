@@ -170,48 +170,72 @@ function createCores(levelId: string, rooms: Room[], walls: Wall[]): Core[] {
 }
 
 export function normalizePlanVersion(version: PlanVersionDraft): PlanVersion {
-  const levelId = version.levels?.[0]?.id ?? "level-01";
-  const levelName = version.levels?.[0]?.name ?? "Level 01";
-  const levelHeight =
-    version.levels?.[0]?.height ??
-    Math.max(3, ...version.rooms.map((room) => room.ceilingHeight));
-  const walls = extractWallsFromRooms(version.rooms, version.outline);
-  const openings = createOpenings(version.rooms, walls);
-  const rooms = attachElementRefs(version.rooms, walls, openings, levelId);
-  const boundary: Boundary = {
-    id: `boundary-${levelId}`,
+  const sourceLevels =
+    version.levels?.length
+      ? version.levels
+      : [
+          {
+            id: "level-01",
+            name: "Level 01",
+            elevation: 0,
+            height: Math.max(3, ...version.rooms.map((room) => room.ceilingHeight)),
+            rooms: version.rooms,
+            walls: [],
+            openings: []
+          } satisfies Level
+        ];
+  const normalizedLevels = sourceLevels.map((sourceLevel, index) => {
+    const levelId = sourceLevel.id || `level-${String(index + 1).padStart(2, "0")}`;
+    const levelRooms = sourceLevel.rooms.length
+      ? sourceLevel.rooms
+      : version.rooms.filter((room) => room.levelId === levelId);
+    const roomsForLevel = levelRooms.length ? levelRooms : index === 0 ? version.rooms : [];
+    const walls = extractWallsFromRooms(roomsForLevel, version.outline);
+    const openings = createOpenings(roomsForLevel, walls);
+    const rooms = attachElementRefs(roomsForLevel, walls, openings, levelId);
+    const boundary: Boundary = {
+      id: `boundary-${levelId}`,
+      polygon: version.outline,
+      type: "level"
+    };
+    const floor: Floor = {
+      id: `floor-${levelId}`,
+      levelId,
+      outline: version.outline,
+      thickness: sourceLevel.floor?.thickness ?? 0.18,
+      elevation: sourceLevel.elevation
+    };
+
+    return {
+      id: levelId,
+      name: sourceLevel.name || `Level ${String(index + 1).padStart(2, "0")}`,
+      elevation: sourceLevel.elevation,
+      height: sourceLevel.height || Math.max(3, ...rooms.map((room) => room.ceilingHeight)),
+      rooms,
+      walls,
+      openings,
+      floor,
+      boundary
+    } satisfies Level;
+  });
+  const rooms = normalizedLevels.flatMap((level) => level.rooms);
+  const floors = normalizedLevels.map((level) => level.floor).filter((floor): floor is Floor => Boolean(floor));
+  const cores = normalizedLevels.flatMap((level) => createCores(level.id, level.rooms, level.walls));
+  const firstBoundary = normalizedLevels[0]?.boundary ?? {
+    id: "boundary-level-01",
     polygon: version.outline,
-    type: "level"
+    type: "level" as const
   };
-  const floor: Floor = {
-    id: `floor-${levelId}`,
-    levelId,
-    outline: version.outline,
-    thickness: 0.18,
-    elevation: 0
-  };
-  const level: Level = {
-    id: levelId,
-    name: levelName,
-    elevation: version.levels?.[0]?.elevation ?? 0,
-    height: levelHeight,
-    rooms,
-    walls,
-    openings,
-    floor,
-    boundary
-  };
-  const cores = createCores(levelId, rooms, walls);
   const building: Building = {
     id: version.building?.id ?? `building-${version.id}`,
     name: version.building?.name ?? version.label,
     boundary: {
-      ...boundary,
+      ...firstBoundary,
       id: "boundary-building",
       type: "building"
     },
-    levels: [level],
-    floors: [floor],
+    levels: normalizedLevels,
+    floors,
     cores,
     grids: version.building?.grids?.length ? version.building.grids : [createGrid(version)]
   };
@@ -219,7 +243,7 @@ export function normalizePlanVersion(version: PlanVersionDraft): PlanVersion {
   return {
     ...version,
     rooms,
-    levels: [level],
+    levels: normalizedLevels,
     building
   };
 }

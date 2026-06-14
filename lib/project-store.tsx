@@ -9,6 +9,7 @@ import { calculateQuantities, checkCompliance, type ComplianceItem, type Quantit
 import type {
   AnalysisLayerId,
   DesignBrief,
+  Level,
   MepLayerId,
   MepLayout,
   OpeningElement,
@@ -42,6 +43,8 @@ type SelectionType = "none" | "room" | "wall" | "opening";
 interface EvoProjectStore {
   project: ProjectData;
   activeVersion?: PlanVersion;
+  activeLevelId?: string;
+  activeLevel?: Level;
   selectedRoomId?: string;
   selectedWallId?: string;
   selectedOpeningId?: string;
@@ -65,6 +68,7 @@ interface EvoProjectStore {
   updateBrief: (brief: DesignBrief) => void;
   setActiveAnalysisLayers: (layers: AnalysisLayerId[]) => void;
   setActiveMepLayers: (layers: MepLayerId[]) => void;
+  setActiveLevel: (levelId: string) => void;
   selectRoom: (roomId: string) => void;
   selectWall: (wallId: string) => void;
   selectOpening: (openingId: string) => void;
@@ -85,6 +89,14 @@ function getActiveVersion(project: ProjectData) {
   return project.versions.find((version) => version.id === project.activeVersionId);
 }
 
+function getLevel(version: PlanVersion | undefined, levelId: string | undefined) {
+  if (!version) {
+    return undefined;
+  }
+
+  return version.levels.find((level) => level.id === levelId) ?? version.levels[0];
+}
+
 function clearSelectionDraft(state: EvoProjectStore) {
   state.selectionType = "none";
   state.selectedRoomId = undefined;
@@ -97,6 +109,7 @@ function clearSelectionDraft(state: EvoProjectStore) {
 
 function validateSelectionDraft(state: EvoProjectStore) {
   const version = state.activeVersion;
+  const level = state.activeLevel;
 
   if (!version || state.selectionType === "none") {
     if (!version) {
@@ -106,33 +119,39 @@ function validateSelectionDraft(state: EvoProjectStore) {
   }
 
   if (state.selectionType === "room") {
-    if (!state.selectedRoomId || !version.rooms.some((room) => room.id === state.selectedRoomId)) {
+    const rooms = level?.rooms.length ? level.rooms : version.rooms;
+    if (!state.selectedRoomId || !rooms.some((room) => room.id === state.selectedRoomId)) {
       clearSelectionDraft(state);
     }
     return;
   }
 
   if (state.selectionType === "wall") {
-    if (!state.selectedWallId || !version.levels[0]?.walls.some((wall) => wall.id === state.selectedWallId)) {
+    if (!state.selectedWallId || !level?.walls.some((wall) => wall.id === state.selectedWallId)) {
       clearSelectionDraft(state);
     }
     return;
   }
 
-  if (!state.selectedOpeningId || !version.levels[0]?.openings.some((opening) => opening.id === state.selectedOpeningId)) {
+  if (!state.selectedOpeningId || !level?.openings.some((opening) => opening.id === state.selectedOpeningId)) {
     clearSelectionDraft(state);
   }
 }
 
 function refreshDerivedDraft(state: EvoProjectStore) {
   const activeVersion = getActiveVersion(state.project);
+  const activeLevel = getLevel(activeVersion, state.activeLevelId);
 
   state.activeVersion = activeVersion;
+  state.activeLevelId = activeLevel?.id;
+  state.activeLevel = activeLevel;
   state.quantities = activeVersion ? calculateQuantities(activeVersion) : undefined;
   state.complianceItems = activeVersion ? checkCompliance(activeVersion) : [];
-  state.selectedRoom = activeVersion?.rooms.find((room) => room.id === state.selectedRoomId);
-  state.selectedWall = activeVersion?.levels[0]?.walls.find((wall) => wall.id === state.selectedWallId);
-  state.selectedOpening = activeVersion?.levels[0]?.openings.find((opening) => opening.id === state.selectedOpeningId);
+  state.selectedRoom = (activeLevel?.rooms.length ? activeLevel.rooms : activeVersion?.rooms)?.find(
+    (room) => room.id === state.selectedRoomId
+  );
+  state.selectedWall = activeLevel?.walls.find((wall) => wall.id === state.selectedWallId);
+  state.selectedOpening = activeLevel?.openings.find((opening) => opening.id === state.selectedOpeningId);
 
   validateSelectionDraft(state);
 }
@@ -158,6 +177,7 @@ function createInitialState(): Omit<
   | "updateBrief"
   | "setActiveAnalysisLayers"
   | "setActiveMepLayers"
+  | "setActiveLevel"
   | "selectRoom"
   | "selectWall"
   | "selectOpening"
@@ -174,10 +194,13 @@ function createInitialState(): Omit<
   | "returnToPlanGeneration"
 > {
   const activeVersion = getActiveVersion(initialProjectData);
+  const activeLevel = getLevel(activeVersion, undefined);
 
   return {
     project: initialProjectData,
     activeVersion,
+    activeLevelId: activeLevel?.id,
+    activeLevel,
     selectedRoomId: undefined,
     selectedWallId: undefined,
     selectedOpeningId: undefined,
@@ -236,6 +259,17 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
         state.activeMepLayers = layers;
       })
     ),
+  setActiveLevel: (levelId) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        if (!state.activeVersion?.levels.some((level) => level.id === levelId)) {
+          return;
+        }
+
+        state.activeLevelId = levelId;
+        refreshDerivedDraft(state);
+      })
+    ),
   selectRoom: (roomId) =>
     set(
       produce<EvoProjectStore>((state) => {
@@ -275,17 +309,35 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
   updateRoom: (roomId, patch) =>
     set(
       produce<EvoProjectStore>((state) => {
-        if (!state.activeVersion?.rooms.some((room) => room.id === roomId)) {
+        if (!state.activeVersion) {
           return;
         }
 
-        commitNormalizedVersionDraft(
-          state,
-          normalizePlanVersion({
-            ...state.activeVersion,
-            rooms: state.activeVersion.rooms.map((room) => (room.id === roomId ? { ...room, ...patch, id: room.id } : room))
-          })
+        const normalized = normalizePlanVersion(state.activeVersion);
+        const level = getLevel(normalized, state.activeLevelId);
+
+        if (!level?.rooms.some((room) => room.id === roomId)) {
+          return;
+        }
+
+        const nextLevels = normalized.levels.map((item) =>
+          item.id === level.id
+            ? {
+                ...item,
+                rooms: item.rooms.map((room) => (room.id === roomId ? { ...room, ...patch, id: room.id } : room))
+              }
+            : item
         );
+
+        commitNormalizedVersionDraft(state, {
+          ...normalized,
+          rooms: nextLevels.flatMap((item) => item.rooms),
+          levels: nextLevels,
+          building: {
+            ...normalized.building,
+            levels: nextLevels
+          }
+        });
       })
     ),
   updateWall: (wallId, patch) =>
@@ -296,7 +348,7 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
         }
 
         const normalized = normalizePlanVersion(state.activeVersion);
-        const level = normalized.levels[0];
+        const level = getLevel(normalized, state.activeLevelId);
 
         if (!level?.walls.some((wall) => wall.id === wallId)) {
           return;
@@ -329,7 +381,7 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
         }
 
         const normalized = normalizePlanVersion(state.activeVersion);
-        const level = normalized.levels[0];
+        const level = getLevel(normalized, state.activeLevelId);
 
         if (!level?.openings.some((opening) => opening.id === openingId)) {
           return;

@@ -17,6 +17,7 @@ import { createSetbackBoundary } from "@/lib/polygon-offset";
 export interface FloorPlanCanvasProps {
   version?: PlanVersion;
   className?: string;
+  levelId?: string;
   selectedRoomId?: string;
   interactive?: boolean;
 }
@@ -24,6 +25,7 @@ export interface FloorPlanCanvasProps {
 export function FloorPlanCanvas({
   version,
   className,
+  levelId: levelIdProp,
   selectedRoomId: selectedRoomIdProp,
   interactive = true
 }: FloorPlanCanvasProps) {
@@ -31,6 +33,7 @@ export function FloorPlanCanvas({
     selectedRoomId: roomSelectionFromStore,
     selectedWallId: wallSelectionFromStore,
     selectedOpeningId: openingSelectionFromStore,
+    activeLevelId,
     selectRoom,
     selectWall,
     selectOpening,
@@ -40,6 +43,7 @@ export function FloorPlanCanvas({
       selectedRoomId: state.selectedRoomId,
       selectedWallId: state.selectedWallId,
       selectedOpeningId: state.selectedOpeningId,
+      activeLevelId: state.activeLevelId,
       selectRoom: state.selectRoom,
       selectWall: state.selectWall,
       selectOpening: state.selectOpening,
@@ -60,9 +64,12 @@ export function FloorPlanCanvas({
     );
   }
 
-  const level = version.levels[0];
+  const levelId = levelIdProp ?? (interactive ? activeLevelId : undefined);
+  const level = version.levels.find((item) => item.id === levelId) ?? version.levels[0];
+  const rooms = level?.rooms.length ? level.rooms : version.rooms;
+  const visibleVersion = { ...version, rooms };
   const setback = createSetbackBoundary(version.outline, 3);
-  const selectedRoom = selectedRoomId ? version.rooms.find((room) => room.id === selectedRoomId) : undefined;
+  const selectedRoom = selectedRoomId ? rooms.find((room) => room.id === selectedRoomId) : undefined;
   const selectedWall = selectedWallId ? level?.walls.find((wall) => wall.id === selectedWallId) : undefined;
   const selectedOpening = selectedOpeningId
     ? level?.openings.find((opening) => opening.id === selectedOpeningId)
@@ -101,10 +108,10 @@ export function FloorPlanCanvas({
             }
           }}
         >
-          <GridLayer version={version} />
+          <GridLayer version={visibleVersion} />
           <OutlineLayer version={version} setback={setback} />
           <RoomFillLayer
-            rooms={version.rooms}
+            rooms={rooms}
             selectedRoomId={selectedRoomId}
             onSelectRoom={interactive ? selectRoom : undefined}
           />
@@ -119,10 +126,10 @@ export function FloorPlanCanvas({
             selectedOpeningId={selectedOpeningId}
             onSelectOpening={interactive ? selectOpening : undefined}
           />
-          <CoreSymbolLayer rooms={version.rooms} />
-          <LabelLayer version={version} />
+          <CoreSymbolLayer rooms={rooms} />
+          <LabelLayer version={visibleVersion} />
           <SelectionLayer
-            rooms={version.rooms}
+            rooms={rooms}
             walls={level?.walls ?? []}
             openings={level?.openings ?? []}
             selectedRoomId={selectedRoomId}
