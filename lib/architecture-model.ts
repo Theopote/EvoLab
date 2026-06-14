@@ -13,24 +13,10 @@ import type {
   Room,
   Wall
 } from "@/lib/project-types";
+import { edgeKey, extractWallsFromRooms, polygonEdges } from "@/lib/wall-extractor";
 
 export type PlanVersionDraft = Omit<PlanVersion, "levels" | "building"> &
   Partial<Pick<PlanVersion, "levels" | "building">>;
-
-function round(value: number, digits = 3) {
-  const factor = 10 ** digits;
-  return Math.round(value * factor) / factor;
-}
-
-function pointKey(point: Point) {
-  return `${round(point[0])},${round(point[1])}`;
-}
-
-function edgeKey(start: Point, end: Point) {
-  const a = pointKey(start);
-  const b = pointKey(end);
-  return a < b ? `${a}|${b}` : `${b}|${a}`;
-}
 
 function distance(a: Point, b: Point) {
   return Math.hypot(a[0] - b[0], a[1] - b[1]);
@@ -47,13 +33,6 @@ function lerpPoint(a: Point, b: Point, t: number): Point {
 function roomCenter(room: Room): Point {
   const total = room.polygon.reduce((acc, [x, y]) => [acc[0] + x, acc[1] + y] as Point, [0, 0]);
   return [total[0] / room.polygon.length, total[1] / room.polygon.length];
-}
-
-function polygonEdges(points: Point[]) {
-  return points.map((start, index) => ({
-    start,
-    end: points[(index + 1) % points.length]
-  }));
 }
 
 function edgeOrientation(start: Point, end: Point) {
@@ -130,40 +109,6 @@ function createGrid(version: PlanVersionDraft): Grid {
   };
 }
 
-function createWalls(rooms: Room[], outline: Point[]): Wall[] {
-  const wallMap = new Map<string, Wall>();
-  const outlineKeys = new Set(polygonEdges(outline).map((edge) => edgeKey(edge.start, edge.end)));
-
-  rooms.forEach((room) => {
-    polygonEdges(room.polygon).forEach((edge) => {
-      const key = edgeKey(edge.start, edge.end);
-      const existing = wallMap.get(key);
-
-      if (existing) {
-        existing.roomIds = Array.from(new Set([...existing.roomIds, room.id]));
-        existing.type = existing.type === "core" || room.type === "shaft" ? "core" : "internal";
-        return;
-      }
-
-      const isCore = ["stair", "elevator", "shaft"].includes(room.type);
-      wallMap.set(key, {
-        id: `wall-${wallMap.size + 1}`,
-        start: edge.start,
-        end: edge.end,
-        thickness: isCore ? 0.32 : outlineKeys.has(key) ? 0.3 : 0.18,
-        height: Math.max(2.7, room.ceilingHeight),
-        type: isCore ? "core" : outlineKeys.has(key) ? "external" : "partition",
-        roomIds: [room.id]
-      });
-    });
-  });
-
-  return [...wallMap.values()].map((wall) => ({
-    ...wall,
-    type: wall.roomIds.length > 1 && wall.type !== "core" ? "internal" : wall.type
-  }));
-}
-
 function createOpenings(rooms: Room[], walls: Wall[]) {
   const wallsByKey = new Map(walls.map((wall) => [edgeKey(wall.start, wall.end), wall]));
   const openings: OpeningElement[] = [];
@@ -230,7 +175,7 @@ export function normalizePlanVersion(version: PlanVersionDraft): PlanVersion {
   const levelHeight =
     version.levels?.[0]?.height ??
     Math.max(3, ...version.rooms.map((room) => room.ceilingHeight));
-  const walls = createWalls(version.rooms, version.outline);
+  const walls = extractWallsFromRooms(version.rooms, version.outline);
   const openings = createOpenings(version.rooms, walls);
   const rooms = attachElementRefs(version.rooms, walls, openings, levelId);
   const boundary: Boundary = {
