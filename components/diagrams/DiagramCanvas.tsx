@@ -59,6 +59,16 @@ function nearestCorePoint(version: PlanVersion): Point {
   return core ? centroid(core) : [version.overallBounds.width / 2, version.overallBounds.height / 2];
 }
 
+function hasWindowOpening(version: PlanVersion, room: Room) {
+  const openings = version.levels[0]?.openings ?? [];
+
+  if (openings.length === 0) {
+    return room.windows.length > 0;
+  }
+
+  return openings.some((opening) => opening.type === "window" && opening.roomIds?.includes(room.id));
+}
+
 export function DiagramCanvas({ activeLayers, version }: DiagramCanvasProps) {
   if (!version) {
     return (
@@ -120,7 +130,7 @@ export function DiagramCanvas({ activeLayers, version }: DiagramCanvasProps) {
 
           {activeLayers.includes("daylight")
             ? version.rooms
-                .filter((room) => room.needsDaylight || room.windows.length > 0)
+                .filter((room) => room.needsDaylight || hasWindowOpening(version, room))
                 .map((room) => {
                   const [x, y] = centroid(room);
                   return (
@@ -164,7 +174,7 @@ export function DiagramCanvas({ activeLayers, version }: DiagramCanvasProps) {
 
           {activeLayers.includes("ventilation")
             ? version.rooms
-                .filter((room) => room.windows.length > 0)
+                .filter((room) => hasWindowOpening(version, room))
                 .map((room) => {
                   const [x, y] = centroid(room);
                   return (
