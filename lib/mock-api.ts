@@ -119,7 +119,7 @@ function createCentralCoreLayout(bounds: Bounds): Room[] {
       orientation: "south",
       adjacents: ["corridor-01", "shaft-01"]
     }),
-    rect("office-01", "Clinical Offices", "office", "private", rightX, midY, rightW * 0.62, serviceY - midY, {
+    rect("office-01", "Clinical Offices", "office", "private", rightX, serviceY, rightW * 0.62, h - serviceY, {
       needsDaylight: true,
       orientation: "north",
       adjacents: ["corridor-01", "equipment-01"]
@@ -143,7 +143,8 @@ function createDualCorridorLayout(bounds: Bounds): Room[] {
   const corridorH = Math.max(4.5, h * 0.13);
   const southH = Math.max(8, h * 0.34);
   const northY = southH + corridorH;
-  const northH = Math.max(8, h - northY);
+  const roomNorthY = northY + corridorH;
+  const northH = Math.max(8, h - roomNorthY);
   const coreW = Math.max(7, w * 0.12);
 
   return [
@@ -164,19 +165,19 @@ function createDualCorridorLayout(bounds: Bounds): Room[] {
     rect("corridor-south", "South Corridor", "corridor", "circulation", 0, southH, w, corridorH, {
       adjacents: ["lobby-01", "consult-01", "core-01", "corridor-north"]
     }),
-    rect("corridor-north", "North Corridor", "corridor", "circulation", 0, northY - corridorH * 0.15, w, corridorH, {
+    rect("corridor-north", "North Corridor", "corridor", "circulation", 0, northY, w, corridorH, {
       adjacents: ["office-01", "equipment-01", "core-01", "corridor-south"]
     }),
-    rect("office-01", "Clinical Offices", "office", "private", 0, northY, w * 0.56, northH, {
+    rect("office-01", "Clinical Offices", "office", "private", 0, roomNorthY, w * 0.56, northH, {
       needsDaylight: true,
       orientation: "north",
       adjacents: ["corridor-north"]
     }),
-    rect("equipment-01", "Equipment Room", "equipment_room", "service", w * 0.56, northY, w * 0.26, northH, {
+    rect("equipment-01", "Equipment Room", "equipment_room", "service", w * 0.56, roomNorthY, w * 0.26, northH, {
       needsPlumbing: true,
       adjacents: ["corridor-north", "shaft-01"]
     }),
-    rect("shaft-01", "Service Shaft", "shaft", "service", w * 0.82, northY, w * 0.08, northH, {
+    rect("shaft-01", "Service Shaft", "shaft", "service", w * 0.82, roomNorthY, w * 0.08, northH, {
       adjacents: ["equipment-01", "consult-01", "core-01"]
     })
   ];
@@ -190,6 +191,7 @@ function createServiceSpineLayout(bounds: Bounds): Room[] {
   const clinicalW = Math.max(12, w - publicW - spineW);
   const midY = h * 0.5;
   const coreH = Math.max(8, h * 0.24);
+  const officeH = Math.max(5, h - midY - coreH);
 
   return [
     rect("lobby-01", "Public Arrival", "lobby", "public", 0, 0, publicW, h, {
@@ -206,12 +208,11 @@ function createServiceSpineLayout(bounds: Bounds): Room[] {
       orientation: "south",
       adjacents: ["corridor-01", "shaft-01"]
     }),
-    rect("office-01", "Back Office", "office", "private", publicW + spineW, midY, clinicalW * 0.62, h - midY, {
-      needsDaylight: true,
+    rect("office-01", "Back Office", "office", "private", publicW + spineW, midY, clinicalW * 0.62, officeH, {
       orientation: "north",
       adjacents: ["corridor-01", "equipment-01"]
     }),
-    rect("core-01", "Core", "elevator", "circulation", publicW, h - coreH, spineW, coreH, {
+    rect("core-01", "Core", "elevator", "circulation", publicW + spineW, h - coreH, clinicalW * 0.22, coreH, {
       adjacents: ["corridor-01", "shaft-01"]
     }),
     rect("shaft-01", "Wet Shaft", "shaft", "service", publicW + spineW + clinicalW * 0.62, midY, clinicalW * 0.14, h - midY, {

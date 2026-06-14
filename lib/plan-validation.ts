@@ -53,6 +53,14 @@ function bboxOverlapArea(a: Point[], b: Point[]) {
   return width > 0 && height > 0 ? width * height : 0;
 }
 
+function bboxDistance(a: Point[], b: Point[]) {
+  const ab = bounds(a);
+  const bb = bounds(b);
+  const dx = Math.max(0, Math.max(ab.minX - bb.maxX, bb.minX - ab.maxX));
+  const dy = Math.max(0, Math.max(ab.minY - bb.maxY, bb.minY - ab.maxY));
+  return Math.hypot(dx, dy);
+}
+
 function pointOnSegment(point: Point, start: Point, end: Point) {
   const cross = (point[1] - start[1]) * (end[0] - start[0]) - (point[0] - start[0]) * (end[1] - start[1]);
   if (Math.abs(cross) > 0.001) {
@@ -192,11 +200,11 @@ export function validatePlanVersion(version: PlanVersion): PlanValidationResult 
       }
     });
 
-  const shafts = version.rooms.filter((room) => room.type === "shaft");
+      const shafts = version.rooms.filter((room) => room.type === "shaft");
   version.rooms
     .filter((room) => room.needsPlumbing)
     .forEach((room) => {
-      const nearestShaft = shafts.length ? Math.min(...shafts.map((shaft) => distance(centroid(room), centroid(shaft)))) : Infinity;
+      const nearestShaft = shafts.length ? Math.min(...shafts.map((shaft) => bboxDistance(room.polygon, shaft.polygon))) : Infinity;
       if (nearestShaft > 12) {
         issues.push({
           id: "plumbing-too-far",

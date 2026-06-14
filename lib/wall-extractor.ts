@@ -9,6 +9,12 @@ interface EdgeRecord {
   maxHeight: number;
 }
 
+interface OutlineEdge {
+  start: Point;
+  end: Point;
+  key: string;
+}
+
 function round(value: number, digits = 3) {
   const factor = 10 ** digits;
   return Math.round(value * factor) / factor;
@@ -32,16 +38,40 @@ export function polygonEdges(points: Point[]) {
   }));
 }
 
+function pointOnSegment(point: Point, start: Point, end: Point) {
+  const cross = (point[1] - start[1]) * (end[0] - start[0]) - (point[0] - start[0]) * (end[1] - start[1]);
+  if (Math.abs(cross) > 0.001) {
+    return false;
+  }
+
+  const dot = (point[0] - start[0]) * (end[0] - start[0]) + (point[1] - start[1]) * (end[1] - start[1]);
+  if (dot < -0.001) {
+    return false;
+  }
+
+  const squaredLength = (end[0] - start[0]) ** 2 + (end[1] - start[1]) ** 2;
+  return dot <= squaredLength + 0.001;
+}
+
 function isCoreRoomType(type: Room["type"]) {
   return type === "stair" || type === "elevator" || type === "shaft";
 }
 
-function classifyWall(edge: EdgeRecord, outlineKeys: Set<string>): Wall["type"] {
+function isOnOutline(edge: EdgeRecord, outlineEdges: OutlineEdge[]) {
+  return outlineEdges.some(
+    (outlineEdge) =>
+      outlineEdge.key === edge.key ||
+      (pointOnSegment(edge.start, outlineEdge.start, outlineEdge.end) &&
+        pointOnSegment(edge.end, outlineEdge.start, outlineEdge.end))
+  );
+}
+
+function classifyWall(edge: EdgeRecord, outlineEdges: OutlineEdge[]): Wall["type"] {
   if (edge.roomTypes.some(isCoreRoomType)) {
     return "core";
   }
 
-  if (outlineKeys.has(edge.key)) {
+  if (isOnOutline(edge, outlineEdges)) {
     return "external";
   }
 
@@ -61,7 +91,7 @@ function wallThickness(type: Wall["type"]) {
 }
 
 export function extractWallsFromRooms(rooms: Room[], outline: Point[]): Wall[] {
-  const outlineKeys = new Set(polygonEdges(outline).map((edge) => edge.key));
+  const outlineEdges = polygonEdges(outline);
   const edges = new Map<string, EdgeRecord>();
 
   rooms.forEach((room) => {
@@ -87,7 +117,7 @@ export function extractWallsFromRooms(rooms: Room[], outline: Point[]): Wall[] {
   });
 
   return [...edges.values()].map((edge, index) => {
-    const type = classifyWall(edge, outlineKeys);
+    const type = classifyWall(edge, outlineEdges);
 
     return {
       id: `wall-${index + 1}`,
