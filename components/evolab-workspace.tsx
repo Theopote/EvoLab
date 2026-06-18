@@ -32,6 +32,7 @@ export function EvoLabWorkspace() {
     outline,
     outlineClosed,
     brief,
+    zoning,
     activeTab,
     activeAnalysisLayers,
     activeMepLayers,
@@ -61,6 +62,7 @@ export function EvoLabWorkspace() {
       outline: state.outline,
       outlineClosed: state.outlineClosed,
       brief: state.brief,
+      zoning: state.zoning,
       activeTab: state.activeTab,
       activeAnalysisLayers: state.activeAnalysisLayers,
       activeMepLayers: state.activeMepLayers,
@@ -253,6 +255,7 @@ export function EvoLabWorkspace() {
           outline={outline}
           closed={outlineClosed}
           brief={brief}
+          zoning={zoning}
           versions={project.versions}
           activeVersionId={project.activeVersionId}
           onGenerated={replaceVersions}

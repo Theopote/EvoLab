@@ -10,12 +10,15 @@ Input shape:
   "version": PlanVersionDraft,
   "topology": { strategy, rooms (id/name/type only), edges },
   "validationIssues": [{ id, severity, message, roomIds? }],
+  "envelopeIssues": [string],
+  "buildableEnvelope": { footprint, maxHeightMeters, maxFloorAreaSqm } | optional,
   "correction": optional retry hint
 }
 
 Rules:
 - Keep every room id, name, type, and zone unchanged.
-- Adjust polygons, doors, windows, and adjacents to fix listed validation issues.
+- Adjust polygons, doors, windows, and adjacents to fix listed validation issues and envelopeIssues.
+- When buildableEnvelope is provided, keep every room polygon fully inside footprint.
 - Prefer small rectangular moves (typically under 3m) over large reshuffles.
 - All coordinates must be finite numbers inside overallBounds and within outline.
 - Preserve corridor connectivity and at least one stair/elevator core.

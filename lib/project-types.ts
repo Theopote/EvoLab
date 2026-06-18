@@ -57,6 +57,8 @@ export interface PlanVersionMetadata {
   };
   validationWarnings?: string[];
   repairs?: string[];
+  zoningApplied?: boolean;
+  envelopeCompliant?: boolean;
 }
 
 export interface Room {

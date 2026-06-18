@@ -1,5 +1,10 @@
 import { requestAnthropicTool } from "@/lib/anthropic-tool";
 import type { PlanVersionDraft } from "@/lib/architecture-model";
+import {
+  envelopeErrorSummary,
+  resolveGeneratePlanConstraints,
+  type GeneratePlanConstraints
+} from "@/lib/generate-plan-constraints";
 import { postProcessPlanVersion } from "@/lib/plan-postprocess";
 import { validatePlanVersion, type PlanValidationIssue } from "@/lib/plan-validation";
 import { generatePlanTopologyPrompt } from "@/lib/prompts/generatePlanTopologyPrompt";
@@ -11,7 +16,7 @@ import {
   RefinePlanGeometryToolInputSchema,
   type PlanTopologyVersion
 } from "@/lib/schemas/plan-version-schema";
-import { topologiesToPlanVersions } from "@/lib/topology-geometry";
+import { topologiesToPlanVersions, type TopologyLayoutOptions } from "@/lib/topology-geometry";
 import type { PlanVersion } from "@/lib/project-types";
 
 export interface GeneratePlanPipelineMeta {
@@ -22,6 +27,7 @@ export interface GeneratePlanPipelineMeta {
   };
   refinedCount: number;
   warnings: string[];
+  envelopeApplied: boolean;
 }
 
 export interface GeneratePlanPipelineResult {
@@ -61,15 +67,33 @@ function summarizeValidationIssues(issues: PlanValidationIssue[]) {
   }));
 }
 
-async function requestTopologyPlan(body: GeneratePlanRequest, correction?: unknown) {
+function topologyLayoutOptions(constraints: GeneratePlanConstraints): TopologyLayoutOptions {
+  return {
+    siteOutline: constraints.siteOutline,
+    layoutOutline: constraints.layoutOutline
+  };
+}
+
+function topologyInput(body: GeneratePlanRequest, constraints: GeneratePlanConstraints, correction?: unknown) {
+  return {
+    outline: constraints.siteOutline,
+    layoutOutline: constraints.layoutOutline,
+    brief: body.brief,
+    projectType: body.projectType,
+    floors: constraints.floors,
+    buildableEnvelope: constraints.envelope,
+    correction
+  };
+}
+
+async function requestTopologyPlan(
+  body: GeneratePlanRequest,
+  constraints: GeneratePlanConstraints,
+  correction?: unknown
+) {
   return requestAnthropicTool({
     system: generatePlanTopologyPrompt,
-    input: {
-      outline: body.outline,
-      brief: body.brief,
-      projectType: body.projectType,
-      correction
-    },
+    input: topologyInput(body, constraints, correction),
     toolName: "generate_plan_topology",
     toolDescription:
       "Return EvoLab architectural room topology, target areas, and adjacency graph without final geometry.",
@@ -82,7 +106,9 @@ async function requestTopologyPlan(body: GeneratePlanRequest, correction?: unkno
 async function requestGeometryRefinement(
   version: PlanVersion,
   topology: PlanTopologyVersion,
+  constraints: GeneratePlanConstraints,
   validationIssues: PlanValidationIssue[],
+  envelopeIssues: string[],
   correction?: unknown
 ) {
   return requestAnthropicTool({
@@ -98,7 +124,9 @@ async function requestGeometryRefinement(
         })),
         edges: topology.edges
       },
+      buildableEnvelope: constraints.envelope,
       validationIssues: summarizeValidationIssues(validationIssues),
+      envelopeIssues,
       correction
     },
     toolName: "refine_plan_geometry",
@@ -114,10 +142,12 @@ function pairTopologiesWithVersions(
   topologies: PlanTopologyVersion[],
   versions: PlanVersion[]
 ): TopologyGeometryPair[] {
-  return topologies.map((topology, index) => ({
-    topology,
-    version: versions[index]
-  })).filter((pair): pair is TopologyGeometryPair => Boolean(pair.version));
+  return topologies
+    .map((topology, index) => ({
+      topology,
+      version: versions[index]
+    }))
+    .filter((pair): pair is TopologyGeometryPair => Boolean(pair.version));
 }
 
 function validateFinalVersions(versions: PlanVersion[]) {
@@ -142,29 +172,39 @@ function validateFinalVersions(versions: PlanVersion[]) {
 
 async function refineVersionPair(
   pair: TopologyGeometryPair,
+  constraints: GeneratePlanConstraints,
   warnings: string[]
 ): Promise<PlanVersion | null> {
   let current = pair.version;
   let issues = validatePlanVersion(current).issues;
+  let envelopeIssues = constraints.envelope
+    ? envelopeErrorSummary([current], constraints.envelope, constraints.floors).map((item) => item.message)
+    : [];
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
       const refined = await requestGeometryRefinement(
         current,
         pair.topology,
+        constraints,
         issues,
+        envelopeIssues,
         attempt > 0
           ? {
-              reason: "Previous refinement still failed spatial or schema validation.",
+              reason: "Previous refinement still failed spatial, schema, or zoning envelope validation.",
               errors: summarizeValidationIssues(issues.filter((issue) => issue.severity === "error")),
+              envelopeIssues,
               instruction:
-                "Apply smaller rectangular moves only. Ensure all polygon coordinates are finite and inside outline."
+                "Keep every room inside buildableEnvelope.footprint. Apply smaller rectangular moves only."
             }
           : undefined
       );
 
       current = postProcessPlanVersion(refined.version);
       issues = validatePlanVersion(current).issues;
+      envelopeIssues = constraints.envelope
+        ? envelopeErrorSummary([current], constraints.envelope, constraints.floors).map((item) => item.message)
+        : [];
 
       if (refined.refinementSummary) {
         warnings.push(`${current.label}: ${refined.refinementSummary}`);
@@ -176,7 +216,7 @@ async function refineVersionPair(
         continue;
       }
 
-      if (issues.every((issue) => issue.severity !== "error")) {
+      if (issues.every((issue) => issue.severity !== "error") && envelopeIssues.length === 0) {
         return current;
       }
     } catch (error) {
@@ -188,52 +228,72 @@ async function refineVersionPair(
   }
 
   const hasOnlyWarnings = issues.every((issue) => issue.severity !== "error");
-  return hasOnlyWarnings ? current : null;
+  return hasOnlyWarnings && envelopeIssues.length === 0 ? current : null;
 }
 
 export async function runGeneratePlanPipeline(body: GeneratePlanRequest): Promise<GeneratePlanPipelineResult> {
   const warnings: string[] = [];
+  const constraints = resolveGeneratePlanConstraints(body);
+  const layoutOptions = topologyLayoutOptions(constraints);
   const meta: GeneratePlanPipelineMeta = {
     phases: { topology: false, geometry: false, refinement: false },
     refinedCount: 0,
-    warnings
+    warnings,
+    envelopeApplied: Boolean(constraints.envelope)
   };
 
-  let topologyData = await requestTopologyPlan(body);
+  if (constraints.envelope) {
+    warnings.push(
+      `Zoning envelope active: setback footprint ${constraints.envelope.maxFloorAreaSqm} sqm, max height ${constraints.envelope.maxHeightMeters}m.`
+    );
+  }
+
+  let topologyData = await requestTopologyPlan(body, constraints);
   meta.phases.topology = true;
 
-  let versions = topologiesToPlanVersions(topologyData.versions, body.outline);
+  let versions = topologiesToPlanVersions(topologyData.versions, layoutOptions);
   meta.phases.geometry = true;
 
   let geometryErrors = versionErrorSummary(versions);
+  let envelopeErrors = envelopeErrorSummary(versions, constraints.envelope, constraints.floors);
 
-  if (geometryErrors.length > 0) {
-    topologyData = await requestTopologyPlan(body, {
-      reason: "The deterministic geometry generated from the previous topology failed spatial validation.",
-      errors: geometryErrors,
-      instruction:
-        "Return corrected topology only. Prefer fewer rooms, connected corridors, and compact core/service adjacency."
+  if (geometryErrors.length > 0 || envelopeErrors.length > 0) {
+    topologyData = await requestTopologyPlan(body, constraints, {
+      reason: "Previous topology produced geometry outside spatial or zoning constraints.",
+      errors: [...geometryErrors, ...envelopeErrors],
+      instruction: constraints.envelope
+        ? "Reduce target areas and room count to fit inside buildableEnvelope footprint and floor-area cap."
+        : "Return corrected topology only. Prefer fewer rooms, connected corridors, and compact core/service adjacency."
     });
-    versions = topologiesToPlanVersions(topologyData.versions, body.outline);
+    versions = topologiesToPlanVersions(topologyData.versions, layoutOptions);
     geometryErrors = versionErrorSummary(versions);
+    envelopeErrors = envelopeErrorSummary(versions, constraints.envelope, constraints.floors);
   }
 
   if (versions.length === 0) {
     return { versions: [], meta };
   }
 
+  if (envelopeErrors.length > 0) {
+    warnings.push(...envelopeErrors.map((error) => `${error.versionId}: ${error.message}`));
+  }
+
   const pairs = pairTopologiesWithVersions(topologyData.versions, versions);
   const refinedVersions: PlanVersion[] = [];
 
   for (const pair of pairs) {
-    const refined = await refineVersionPair(pair, warnings);
+    const refined = await refineVersionPair(pair, constraints, warnings);
     if (refined) {
       refinedVersions.push(refined);
       meta.refinedCount += 1;
     } else {
       warnings.push(`${pair.version.label}: kept algorithmic geometry after refinement attempts failed.`);
       const fallbackIssues = validatePlanVersion(pair.version).issues;
-      if (fallbackIssues.every((issue) => issue.severity !== "error")) {
+      const fallbackEnvelopeIssues = envelopeErrorSummary([pair.version], constraints.envelope, constraints.floors);
+      if (
+        fallbackIssues.every((issue) => issue.severity !== "error") &&
+        fallbackEnvelopeIssues.length === 0
+      ) {
         refinedVersions.push(pair.version);
       }
     }
@@ -241,7 +301,15 @@ export async function runGeneratePlanPipeline(body: GeneratePlanRequest): Promis
 
   meta.phases.refinement = meta.refinedCount > 0;
 
-  const candidates = refinedVersions.length > 0 ? refinedVersions : versions.filter((version) => versionErrorSummary([version]).length === 0);
+  const candidates =
+    refinedVersions.length > 0
+      ? refinedVersions
+      : versions.filter((version) => {
+          const spatialErrors = versionErrorSummary([version]);
+          const zoningErrors = envelopeErrorSummary([version], constraints.envelope, constraints.floors);
+          return spatialErrors.length === 0 && zoningErrors.length === 0;
+        });
+
   const finalValidation = validateFinalVersions(candidates);
 
   if (!finalValidation.valid) {
@@ -250,7 +318,14 @@ export async function runGeneratePlanPipeline(body: GeneratePlanRequest): Promis
   }
 
   return {
-    versions: finalValidation.versions,
+    versions: finalValidation.versions.map((version) => ({
+      ...version,
+      metadata: {
+        ...version.metadata,
+        zoningApplied: Boolean(constraints.envelope),
+        envelopeCompliant: true
+      }
+    })),
     meta
   };
 }

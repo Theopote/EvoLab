@@ -4,11 +4,13 @@ import { Check, Loader2, RefreshCcw } from "lucide-react";
 import { useState } from "react";
 import { FloorPlan } from "@/components/floor-plan";
 import type { DesignBrief, PlanVersion, Point } from "@/lib/project-types";
+import type { ZoningConstraints } from "@/lib/site-types";
 
 interface PlanResultGridProps {
   outline: Point[];
   closed: boolean;
   brief: DesignBrief;
+  zoning?: ZoningConstraints;
   versions: PlanVersion[];
   activeVersionId: string;
   onGenerated: (versions: PlanVersion[]) => void;
@@ -19,6 +21,7 @@ export function PlanResultGrid({
   outline,
   closed,
   brief,
+  zoning,
   versions,
   activeVersionId,
   onGenerated,
@@ -26,10 +29,12 @@ export function PlanResultGrid({
 }: PlanResultGridProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   async function generatePlans() {
     setIsGenerating(true);
     setError(null);
+    setNotice(null);
 
     try {
       const response = await fetch("/api/generate-plan", {
@@ -38,6 +43,8 @@ export function PlanResultGrid({
         body: JSON.stringify({
           outline,
           projectType: brief.projectType,
+          floors: brief.floors,
+          zoning,
           brief: [
             brief.description,
             `${brief.floors} floors`,
@@ -52,10 +59,23 @@ export function PlanResultGrid({
         throw new Error(`Generate plan failed with ${response.status}`);
       }
 
-      const data = (await response.json()) as { versions?: PlanVersion[] };
+      const data = (await response.json()) as {
+        versions?: PlanVersion[];
+        pipeline?: { warnings?: string[]; envelopeApplied?: boolean };
+        warning?: string;
+        fallback?: boolean;
+      };
 
       if (!data.versions?.length) {
         throw new Error("No plan versions returned.");
+      }
+
+      const pipelineWarnings = data.pipeline?.warnings?.filter(Boolean) ?? [];
+      const responseWarning = data.warning ? [data.warning] : [];
+      const combinedNotice = [...pipelineWarnings, ...responseWarning].join(" ");
+
+      if (combinedNotice) {
+        setNotice(combinedNotice);
       }
 
       onGenerated(data.versions);
@@ -85,6 +105,7 @@ export function PlanResultGrid({
       </div>
 
       {error ? <div className="mb-3 rounded border border-danger/40 bg-danger/10 p-2 text-xs text-danger">{error}</div> : null}
+      {notice ? <div className="mb-3 rounded border border-warning/40 bg-warning/10 p-2 text-xs text-warning">{notice}</div> : null}
 
       <div className="grid gap-3 xl:grid-cols-3">
         {versions.map((version) => (

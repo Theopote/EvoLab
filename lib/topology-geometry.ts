@@ -297,16 +297,47 @@ function buildAdjacencyIds(room: TopologyRoom, topology: PlanTopologyVersion, co
   return Array.from(new Set([...(room.adjacencyIds ?? []), ...edgeAdjacencies, ...corridorIds.filter((id) => id !== room.id)]));
 }
 
-export function topologyToPlanVersion(topology: PlanTopologyVersion, outline?: Point[], index = 0): PlanVersion {
+export interface TopologyLayoutOptions {
+  layoutOutline?: Point[];
+  siteOutline?: Point[];
+}
+
+function resolveTopologyLayout(outlineOrOptions?: Point[] | TopologyLayoutOptions) {
+  const options: TopologyLayoutOptions = Array.isArray(outlineOrOptions)
+    ? { layoutOutline: outlineOrOptions, siteOutline: outlineOrOptions }
+    : outlineOrOptions ?? {};
+
   const defaultOutline: Point[] = [
     [0, 0],
     [72, 0],
     [72, 42],
     [0, 42]
   ];
-  const sourceOutline = outline && outline.length >= 3 ? outline : defaultOutline;
-  const bounds = getBounds(sourceOutline);
-  const localizedOutline = localizeOutline(sourceOutline, bounds);
+  const sourceSite =
+    options.siteOutline && options.siteOutline.length >= 3
+      ? options.siteOutline
+      : options.layoutOutline && options.layoutOutline.length >= 3
+        ? options.layoutOutline
+        : defaultOutline;
+  const sourceLayout =
+    options.layoutOutline && options.layoutOutline.length >= 3 ? options.layoutOutline : sourceSite;
+  const originBounds = getBounds(sourceSite);
+  const localizedSite = localizeOutline(sourceSite, originBounds);
+  const localizedLayout = localizeOutline(sourceLayout, originBounds);
+  const bounds = getBounds(localizedLayout);
+
+  return {
+    localizedSite,
+    bounds
+  };
+}
+
+export function topologyToPlanVersion(
+  topology: PlanTopologyVersion,
+  outlineOrOptions?: Point[] | TopologyLayoutOptions,
+  index = 0
+): PlanVersion {
+  const { localizedSite, bounds } = resolveTopologyLayout(outlineOrOptions);
   const rooms = completeTopologyRooms(topology, bounds);
   const rects = bounds.width >= bounds.height ? layoutHorizontal(rooms, bounds) : layoutVertical(rooms, bounds);
   applySpringNudge(rects, topology, bounds);
@@ -341,7 +372,7 @@ export function topologyToPlanVersion(topology: PlanTopologyVersion, outline?: P
       strategy: topology.strategy,
       topology: topology.topology
     },
-    outline: localizedOutline,
+    outline: localizedSite,
     overallBounds: {
       width: bounds.width,
       height: bounds.height
@@ -350,6 +381,9 @@ export function topologyToPlanVersion(topology: PlanTopologyVersion, outline?: P
   });
 }
 
-export function topologiesToPlanVersions(topologies: PlanTopologyVersion[], outline?: Point[]) {
-  return topologies.map((topology, index) => topologyToPlanVersion(topology, outline, index));
+export function topologiesToPlanVersions(
+  topologies: PlanTopologyVersion[],
+  outlineOrOptions?: Point[] | TopologyLayoutOptions
+) {
+  return topologies.map((topology, index) => topologyToPlanVersion(topology, outlineOrOptions, index));
 }

@@ -14,6 +14,7 @@ interface GeneratePlanResponse {
     };
     refinedCount: number;
     warnings: string[];
+    envelopeApplied?: boolean;
   };
   fallback?: boolean;
   warning?: string;
