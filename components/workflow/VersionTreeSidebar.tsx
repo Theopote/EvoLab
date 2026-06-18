@@ -6,40 +6,77 @@ import { calculateQuantities } from "@/lib/quantity-engine";
 import type { PlanVersion } from "@/lib/project-types";
 import { scoreVersion } from "@/lib/version-compare-engine";
 
-interface VersionTreeNode {
+interface VersionTreeEntry {
   version: PlanVersion;
   depth: number;
-  children: VersionTreeNode[];
 }
 
-function buildVersionTree(versions: PlanVersion[]) {
+function buildVersionTree(versions: PlanVersion[]): VersionTreeEntry[] {
   const byId = new Map(versions.map((version) => [version.id, version]));
   const childrenByParent = new Map<string, PlanVersion[]>();
 
   versions.forEach((version) => {
-    const parentId = version.parentVersionId && byId.has(version.parentVersionId) ? version.parentVersionId : "__root__";
+    const parentId =
+      version.parentVersionId &&
+      version.parentVersionId !== version.id &&
+      byId.has(version.parentVersionId)
+        ? version.parentVersionId
+        : "__root__";
     const bucket = childrenByParent.get(parentId) ?? [];
     bucket.push(version);
     childrenByParent.set(parentId, bucket);
   });
 
-  function walk(parentKey: string, depth: number): VersionTreeNode[] {
-    const children = (childrenByParent.get(parentKey) ?? []).sort(
-      (left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()
-    );
+  const sortByCreatedAt = (left: PlanVersion, right: PlanVersion) =>
+    new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime();
 
-    return children.flatMap((version) => {
-      const node: VersionTreeNode = {
-        version,
-        depth,
-        children: walk(version.id, depth + 1)
-      };
+  const flat: VersionTreeEntry[] = [];
+  const frames: Array<{
+    children: PlanVersion[];
+    depth: number;
+    ancestors: Set<string>;
+    index: number;
+  }> = [
+    {
+      children: (childrenByParent.get("__root__") ?? []).sort(sortByCreatedAt),
+      depth: 0,
+      ancestors: new Set(),
+      index: 0
+    }
+  ];
 
-      return [node, ...node.children];
+  while (frames.length > 0) {
+    const frame = frames[frames.length - 1];
+
+    if (frame.index >= frame.children.length) {
+      frames.pop();
+      continue;
+    }
+
+    const version = frame.children[frame.index];
+    frame.index += 1;
+    flat.push({ version, depth: frame.depth });
+
+    if (frame.ancestors.has(version.id)) {
+      continue;
+    }
+
+    const descendants = (childrenByParent.get(version.id) ?? []).sort(sortByCreatedAt);
+    if (descendants.length === 0) {
+      continue;
+    }
+
+    const nextAncestors = new Set(frame.ancestors);
+    nextAncestors.add(version.id);
+    frames.push({
+      children: descendants,
+      depth: frame.depth + 1,
+      ancestors: nextAncestors,
+      index: 0
     });
   }
 
-  return walk("__root__", 0);
+  return flat;
 }
 
 interface VersionTreeSidebarProps {
