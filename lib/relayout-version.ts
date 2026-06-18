@@ -1,4 +1,5 @@
 import type { PlanTopologyVersion } from "@/lib/schemas/plan-version-schema";
+import { expandPlanVersionToFloors } from "@/lib/multi-floor";
 import { topologyToPlanVersion, type TopologyLayoutOptions } from "@/lib/topology-geometry";
 import { topologyGraphFromTopology } from "@/lib/topology-graph";
 import type { PlanVersion, TopologyGraphEdge } from "@/lib/project-types";
@@ -96,8 +97,9 @@ export function relayoutPlanVersion(version: PlanVersion, options: RelayoutPlanV
 
   const relaid = topologyToPlanVersion(topology, options, 0);
   const topologyGraph = topologyGraphFromTopology(topology);
+  const floorCount = version.metadata?.floorCount ?? version.levels.length;
 
-  return {
+  const relaidVersion = {
     ...relaid,
     id: version.id,
     label: version.label,
@@ -112,9 +114,12 @@ export function relayoutPlanVersion(version: PlanVersion, options: RelayoutPlanV
       relayoutedAt: new Date().toISOString(),
       pipelinePhases: version.metadata?.pipelinePhases,
       zoningApplied: version.metadata?.zoningApplied,
-      envelopeCompliant: version.metadata?.envelopeCompliant
+      envelopeCompliant: version.metadata?.envelopeCompliant,
+      floorCount: floorCount > 1 ? floorCount : version.metadata?.floorCount
     },
     scores: relaid.scores,
     mep: undefined
   };
+
+  return floorCount > 1 ? expandPlanVersionToFloors(relaidVersion, floorCount) : relaidVersion;
 }

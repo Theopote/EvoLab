@@ -16,6 +16,7 @@ import {
   RefinePlanGeometryToolInputSchema,
   type PlanTopologyVersion
 } from "@/lib/schemas/plan-version-schema";
+import { expandPlanVersionToFloors } from "@/lib/multi-floor";
 import { topologiesToPlanVersions, type TopologyLayoutOptions } from "@/lib/topology-geometry";
 import { topologyGraphFromTopology } from "@/lib/topology-graph";
 import type { PlanVersion } from "@/lib/project-types";
@@ -325,7 +326,7 @@ export async function runGeneratePlanPipeline(body: GeneratePlanRequest): Promis
         ? topologyGraphFromTopology(pair.topology)
         : version.metadata?.topologyGraph;
 
-      return {
+      const stamped = {
         ...version,
         metadata: {
           ...version.metadata,
@@ -335,6 +336,8 @@ export async function runGeneratePlanPipeline(body: GeneratePlanRequest): Promis
           pipelinePhases: meta.phases
         }
       };
+
+      return expandPlanVersionToFloors(stamped, constraints.floors);
     }),
     meta
   };

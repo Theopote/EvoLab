@@ -85,6 +85,7 @@ interface EvoProjectStore {
   outlineStale: boolean;
   isRelayouting: boolean;
   relayoutError: string | null;
+  compareLevelId?: string;
   setActiveTab: (tab: WorkspaceTab) => void;
   setOutline: (outline: Point[]) => void;
   setOutlineClosed: (closed: boolean) => void;
@@ -114,6 +115,7 @@ interface EvoProjectStore {
   setActiveVersion: (version: PlanVersion) => void;
   updateActiveVersion: (version: PlanVersion) => void;
   relayoutActiveVersion: () => Promise<void>;
+  setCompareLevel: (levelId: string) => void;
   generateMep: () => Promise<void>;
   openModelForVersion: (version: PlanVersion) => void;
   refineVersion: (version: PlanVersion) => void;
@@ -185,6 +187,21 @@ function refreshOutlineSyncDraft(state: EvoProjectStore) {
   state.outlineStale = state.activeVersion ? isOutlineStale(state.outline, state.activeVersion.outline) : false;
 }
 
+function refreshCompareLevelDraft(state: EvoProjectStore) {
+  const levelIds = state.activeVersion?.levels.map((level) => level.id) ?? [];
+
+  if (!levelIds.length) {
+    state.compareLevelId = undefined;
+    return;
+  }
+
+  if (!state.compareLevelId || !levelIds.includes(state.compareLevelId)) {
+    state.compareLevelId = state.activeLevelId && levelIds.includes(state.activeLevelId)
+      ? state.activeLevelId
+      : levelIds[0];
+  }
+}
+
 function syncOutlineFromVersionDraft(state: EvoProjectStore, version: PlanVersion) {
   if (version.outline.length < 3) {
     return;
@@ -213,6 +230,7 @@ function refreshDerivedDraft(state: EvoProjectStore) {
 
   validateSelectionDraft(state);
   refreshOutlineSyncDraft(state);
+  refreshCompareLevelDraft(state);
 }
 
 function bumpGeometryRevision(state: EvoProjectStore) {
@@ -335,6 +353,7 @@ function createInitialState(): Omit<
   | "setActiveVersion"
   | "updateActiveVersion"
   | "relayoutActiveVersion"
+  | "setCompareLevel"
   | "generateMep"
   | "openModelForVersion"
   | "refineVersion"
@@ -379,7 +398,8 @@ function createInitialState(): Omit<
     complianceItems: activeVersion ? checkCompliance(activeVersion) : [],
     outlineStale: false,
     isRelayouting: false,
-    relayoutError: null
+    relayoutError: null,
+    compareLevelId: activeLevel?.id
   };
 }
 
@@ -559,7 +579,18 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
         }
 
         state.activeLevelId = levelId;
+        state.compareLevelId = levelId;
         refreshDerivedDraft(state);
+      })
+    ),
+  setCompareLevel: (levelId) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        if (!state.activeVersion?.levels.some((level) => level.id === levelId)) {
+          return;
+        }
+
+        state.compareLevelId = levelId;
       })
     ),
   selectRoom: (roomId) =>

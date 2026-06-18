@@ -1,14 +1,22 @@
 "use client";
 
-import { Boxes, Check, GitCompare, Sparkles, Wand2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Boxes, Check, GitCompare, Loader2, Sparkles, Wand2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { FloorPlan } from "@/components/floor-plan";
+import { listComparableLevels } from "@/lib/multi-floor";
 import { calculateQuantities } from "@/lib/quantity-engine";
 import type { PlanVersion } from "@/lib/project-types";
+import {
+  compareVersionsAtLevel,
+  type VersionLevelCompareRow
+} from "@/lib/version-compare-engine";
+import type { VersionCompareWorkerResponse } from "@/lib/version-compare-worker";
 
 interface VersionCompareGridProps {
   versions: PlanVersion[];
   activeVersionId: string;
+  compareLevelId?: string;
+  onCompareLevelChange?: (levelId: string) => void;
   onSelectVersion: (version: PlanVersion) => void;
   onGenerateModel: (version: PlanVersion) => void;
   onRefineVersion: (version: PlanVersion) => void;
@@ -26,19 +34,84 @@ function scoreVersion(version: PlanVersion) {
   return Math.round(Math.max(0, total));
 }
 
+function useVersionCompareWorker(
+  versions: PlanVersion[],
+  levelId: string | undefined,
+  enabled: boolean
+) {
+  const [rows, setRows] = useState<VersionLevelCompareRow[]>([]);
+  const [isComputing, setIsComputing] = useState(false);
+  const requestIdRef = useRef(0);
+  const workerRef = useRef<Worker | undefined>(undefined);
+
+  useEffect(() => {
+    if (!enabled || !levelId || versions.length < 2) {
+      setRows([]);
+      setIsComputing(false);
+      return;
+    }
+
+    requestIdRef.current += 1;
+    const requestId = requestIdRef.current;
+    setIsComputing(true);
+
+    try {
+      workerRef.current ??= new Worker(new URL("../../lib/version-compare-worker.ts", import.meta.url), {
+        type: "module"
+      });
+      workerRef.current.onmessage = (event: MessageEvent<VersionCompareWorkerResponse>) => {
+        if (event.data.requestId !== requestIdRef.current) {
+          return;
+        }
+
+        setIsComputing(false);
+
+        if (event.data.results?.[0]?.rows) {
+          setRows(event.data.results[0].rows);
+        } else {
+          setRows(compareVersionsAtLevel(versions, levelId).rows);
+        }
+      };
+      workerRef.current.postMessage({ requestId, versions, levelIds: [levelId] });
+    } catch {
+      setRows(compareVersionsAtLevel(versions, levelId).rows);
+      setIsComputing(false);
+    }
+  }, [enabled, levelId, versions]);
+
+  useEffect(
+    () => () => {
+      workerRef.current?.terminate();
+      workerRef.current = undefined;
+    },
+    []
+  );
+
+  return { rows, isComputing };
+}
+
 export function VersionCompareGrid({
   versions,
   activeVersionId,
+  compareLevelId,
+  onCompareLevelChange,
   onSelectVersion,
   onGenerateModel,
   onRefineVersion
 }: VersionCompareGridProps) {
   const [compareIds, setCompareIds] = useState<string[]>([]);
+  const levelOptions = useMemo(() => listComparableLevels(versions), [versions]);
+  const resolvedLevelId = compareLevelId ?? levelOptions[0]?.id;
+  const comparedVersions = versions.filter((version) => compareIds.includes(version.id));
+  const { rows: compareRows, isComputing } = useVersionCompareWorker(
+    comparedVersions,
+    resolvedLevelId,
+    comparedVersions.length >= 2
+  );
   const recommendedId = useMemo(
     () => [...versions].sort((a, b) => scoreVersion(b) - scoreVersion(a))[0]?.id,
     [versions]
   );
-  const comparedVersions = versions.filter((version) => compareIds.includes(version.id));
 
   function toggleCompare(versionId: string) {
     setCompareIds((current) =>
@@ -59,25 +132,43 @@ export function VersionCompareGrid({
   return (
     <section className="grid min-h-full grid-rows-[auto_minmax(0,1fr)] gap-4">
       <div className="rounded border border-line bg-panel/90 p-3">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-base font-semibold text-white">Version Compare</h1>
-            <p className="mt-1 text-xs text-muted">Compare editable PlanVersion options and promote one as active.</p>
+            <p className="mt-1 text-xs text-muted">
+              Compare editable PlanVersion options per floor. Metrics run in a Web Worker.
+            </p>
           </div>
-          <span className="rounded border border-line px-2 py-1 text-xs text-muted">
-            {versions.length} versions
-          </span>
+          <div className="flex items-center gap-2">
+            {levelOptions.length > 1 ? (
+              <select
+                className="h-8 rounded border border-line bg-[#0b1118] px-2 text-xs text-slate-100"
+                value={resolvedLevelId}
+                onChange={(event) => onCompareLevelChange?.(event.target.value)}
+              >
+                {levelOptions.map((level) => (
+                  <option key={level.id} value={level.id}>
+                    {level.name}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+            <span className="rounded border border-line px-2 py-1 text-xs text-muted">
+              {versions.length} versions
+            </span>
+          </div>
         </div>
       </div>
 
       <div className="min-h-0 overflow-auto">
         <div className="grid gap-3 xl:grid-cols-3">
           {versions.map((version) => {
-            const quantities = calculateQuantities(version);
+            const quantities = calculateQuantities(version, resolvedLevelId);
             const totalScore = scoreVersion(version);
             const isActive = version.id === activeVersionId;
             const isRecommended = version.id === recommendedId;
             const isCompared = compareIds.includes(version.id);
+            const floorCount = version.metadata?.floorCount ?? version.levels.length;
 
             return (
               <article
@@ -89,7 +180,10 @@ export function VersionCompareGrid({
                 <div className="mb-3 flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <h2 className="truncate text-sm font-semibold text-white">{version.label}</h2>
-                    <p className="mt-1 text-xs text-muted">{version.rooms.length} rooms / {quantities.summary.grossArea} sqm</p>
+                    <p className="mt-1 text-xs text-muted">
+                      {version.rooms.length} rooms total · {floorCount} floors · {quantities.summary.grossArea} sqm on
+                      selected level
+                    </p>
                   </div>
                   <div className="flex shrink-0 flex-col gap-1">
                     {isRecommended ? (
@@ -106,6 +200,7 @@ export function VersionCompareGrid({
 
                 <FloorPlan
                   version={version}
+                  levelId={resolvedLevelId}
                   className="mb-3 [&>div]:min-h-[210px] [&_svg]:min-h-[210px]"
                   interactive={false}
                 />
@@ -171,31 +266,52 @@ export function VersionCompareGrid({
           <section className="mt-4 rounded border border-line bg-panel/90 p-3">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-white">Pinned comparison</h2>
-              <span className="text-xs text-muted">{comparedVersions.length} selected</span>
+              <div className="flex items-center gap-2 text-xs text-muted">
+                {isComputing ? <Loader2 className="h-3.5 w-3.5 animate-spin text-accent" /> : null}
+                <span>
+                  {comparedVersions.length} selected · {levelOptions.find((level) => level.id === resolvedLevelId)?.name}
+                </span>
+              </div>
             </div>
             <div className="overflow-hidden rounded border border-line">
               <table className="w-full text-left text-sm">
                 <thead className="bg-white/[0.04] text-xs uppercase tracking-[0.14em] text-muted">
                   <tr>
                     <th className="px-3 py-2">Version</th>
-                    <th className="px-3 py-2 text-right">Total</th>
-                    <th className="px-3 py-2 text-right">Area</th>
-                    <th className="px-3 py-2 text-right">Flow</th>
-                    <th className="px-3 py-2 text-right">Daylight</th>
-                    <th className="px-3 py-2 text-right">MEP</th>
+                    <th className="px-3 py-2 text-right">Rooms</th>
+                    <th className="px-3 py-2 text-right">Gross sqm</th>
+                    <th className="px-3 py-2 text-right">Net sqm</th>
+                    <th className="px-3 py-2 text-right">Circ %</th>
+                    <th className="px-3 py-2 text-right">Core X/Y</th>
                     <th className="px-3 py-2 text-right">Risks</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {comparedVersions.map((version) => (
-                    <tr className="border-t border-line" key={`compare-${version.id}`}>
-                      <td className="px-3 py-2 text-slate-100">{version.label}</td>
-                      <td className="px-3 py-2 text-right text-slate-100">{scoreVersion(version)}</td>
-                      <td className="px-3 py-2 text-right text-muted">{version.scores?.areaEfficiency ?? 0}</td>
-                      <td className="px-3 py-2 text-right text-muted">{version.scores?.circulationScore ?? 0}</td>
-                      <td className="px-3 py-2 text-right text-muted">{version.scores?.daylightScore ?? 0}</td>
-                      <td className="px-3 py-2 text-right text-muted">{version.scores?.mepAlignmentScore ?? 0}</td>
-                      <td className="px-3 py-2 text-right text-warning">{version.scores?.riskCount ?? 0}</td>
+                  {(compareRows.length ? compareRows : comparedVersions.map((version) => {
+                    const quantities = calculateQuantities(version, resolvedLevelId);
+                    return {
+                      versionId: version.id,
+                      label: version.label,
+                      roomCount: version.levels.find((level) => level.id === resolvedLevelId)?.rooms.length ?? 0,
+                      grossArea: quantities.summary.grossArea,
+                      netArea: quantities.summary.netUsableArea,
+                      circulationRatio: 0,
+                      corePosition: [0, 0] as [number, number],
+                      riskCount: version.scores?.riskCount ?? 0
+                    };
+                  })).map((row) => (
+                    <tr className="border-t border-line" key={`compare-${row.versionId}`}>
+                      <td className="px-3 py-2 text-slate-100">{row.label}</td>
+                      <td className="px-3 py-2 text-right text-muted">{row.roomCount}</td>
+                      <td className="px-3 py-2 text-right text-muted">{row.grossArea}</td>
+                      <td className="px-3 py-2 text-right text-muted">{row.netArea}</td>
+                      <td className="px-3 py-2 text-right text-muted">
+                        {Math.round((row.circulationRatio ?? 0) * 100)}%
+                      </td>
+                      <td className="px-3 py-2 text-right text-muted">
+                        {row.corePosition[0].toFixed(1)} / {row.corePosition[1].toFixed(1)}
+                      </td>
+                      <td className="px-3 py-2 text-right text-warning">{row.riskCount}</td>
                     </tr>
                   ))}
                 </tbody>

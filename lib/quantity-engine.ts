@@ -81,20 +81,34 @@ function maxDistanceToCore(version: PlanVersion) {
   return Math.max(...version.rooms.map((room) => distance(centroid(room), corePoint)));
 }
 
-function activeLevel(version: PlanVersion) {
-  return version.levels[0];
+function activeLevel(version: PlanVersion, levelId?: string) {
+  if (!levelId) {
+    return version.levels[0];
+  }
+
+  return version.levels.find((level) => level.id === levelId) ?? version.levels[0];
+}
+
+function roomsForQuantities(version: PlanVersion, levelId?: string) {
+  if (!levelId && version.levels.length > 1) {
+    return version.rooms;
+  }
+
+  const level = activeLevel(version, levelId);
+  return level?.rooms ?? version.rooms;
 }
 
 function roomOpenings(room: Room, openings: OpeningElement[], type: OpeningElement["type"]) {
   return openings.filter((opening) => opening.type === type && opening.roomIds?.includes(room.id));
 }
 
-export function calculateQuantities(version: PlanVersion): QuantityResult {
-  const level = activeLevel(version);
+export function calculateQuantities(version: PlanVersion, levelId?: string): QuantityResult {
+  const level = activeLevel(version, levelId);
+  const rooms = roomsForQuantities(version, levelId);
   const walls = level?.walls ?? [];
   const openings = level?.openings ?? [];
-  const grossArea = version.rooms.reduce((total, room) => total + room.areaSqm, 0);
-  const netUsableArea = version.rooms
+  const grossArea = rooms.reduce((total, room) => total + room.areaSqm, 0);
+  const netUsableArea = rooms
     .filter((room) => room.zone !== "circulation" && room.type !== "shaft")
     .reduce((total, room) => total + room.areaSqm, 0);
   const outlineArea = polygonArea(version.outline);
@@ -103,35 +117,35 @@ export function calculateQuantities(version: PlanVersion): QuantityResult {
         .filter((wall) => wall.type === "external")
         .reduce((total, wall) => total + wallLength(wall), 0)
     : polygonPerimeter(version.outline);
-  const roomPerimeterTotal = version.rooms.reduce((total, room) => total + polygonPerimeter(room.polygon), 0);
+  const roomPerimeterTotal = rooms.reduce((total, room) => total + polygonPerimeter(room.polygon), 0);
   const internalWallLength = walls.length
     ? walls
         .filter((wall) => wall.type === "internal" || wall.type === "partition" || wall.type === "core")
         .reduce((total, wall) => total + wallLength(wall), 0)
     : Math.max(0, (roomPerimeterTotal - externalWallLength) / 2);
   const averageWallHeight =
-    version.rooms.reduce((total, room) => total + room.ceilingHeight, 0) / Math.max(1, version.rooms.length);
+    rooms.reduce((total, room) => total + room.ceilingHeight, 0) / Math.max(1, rooms.length);
   const wallArea = walls.length
     ? walls.reduce((total, wall) => total + wallLength(wall) * wall.height, 0)
     : (externalWallLength + internalWallLength) * averageWallHeight;
   const doorCount = openings.length
     ? openings.filter((opening) => opening.type === "door").length
-    : version.rooms.reduce((total, room) => total + room.doors.length, 0);
+    : rooms.reduce((total, room) => total + room.doors.length, 0);
   const windowCount = openings.length
     ? openings.filter((opening) => opening.type === "window").length
-    : version.rooms.reduce((total, room) => total + room.windows.length, 0);
+    : rooms.reduce((total, room) => total + room.windows.length, 0);
   const slabArea = outlineArea || grossArea;
   const roofArea = slabArea;
   const curtainWallOrWindowArea = openings.length
     ? openings
         .filter((opening) => opening.type === "window")
         .reduce((total, opening) => total + opening.width * opening.height, 0)
-    : version.rooms.reduce(
+    : rooms.reduce(
         (total, room) => total + room.windows.reduce((windowTotal, opening) => windowTotal + opening.width * 1.8, 0),
         0
       );
 
-  const areaByZone = version.rooms.reduce(
+  const areaByZone = rooms.reduce(
     (acc, room) => {
       acc[room.zone] += room.areaSqm;
       return acc;
@@ -145,7 +159,7 @@ export function calculateQuantities(version: PlanVersion): QuantityResult {
     } satisfies Record<FunctionZone, number>
   );
 
-  const areaByRoomType = version.rooms.reduce<Partial<Record<RoomType, number>>>((acc, room) => {
+  const areaByRoomType = rooms.reduce<Partial<Record<RoomType, number>>>((acc, room) => {
     acc[room.type] = (acc[room.type] ?? 0) + room.areaSqm;
     return acc;
   }, {});

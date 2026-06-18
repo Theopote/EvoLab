@@ -55,6 +55,8 @@ export interface PlanVersionMetadata {
     daylight?: string;
     plumbing?: string;
   };
+  floorCount?: number;
+  expandedFromSingleFloor?: boolean;
   topologyGraph?: TopologyGraph;
   relayoutedAt?: string;
   validationWarnings?: string[];

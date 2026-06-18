@@ -49,30 +49,55 @@ export function BuildingModel() {
 
 function BuildingModelContent({ version }: { version: PlanVersion }) {
   const explodeFactor = useInteractionStore((state) => state.explodeFactor);
-  const outlineShape = useMemo(() => createRoomShape({ polygon: version.outline } as Room), [version.outline]);
   const outlineBounds = useMemo(() => getPolygonBounds(version.outline), [version.outline]);
-  const level = version.levels[0];
   const offsetX = -(outlineBounds.minX + outlineBounds.maxX) / 2;
   const offsetZ = -(outlineBounds.minY + outlineBounds.maxY) / 2;
-  const showLabels = shouldRenderRoomLabels(version.rooms.length);
   const columnPositions = useMemo(() => getGridColumnPositions(version), [version]);
 
   return (
-    <group position={[offsetX, 0, offsetZ]} rotation={[-Math.PI / 2, 0, 0]}>
+    <group position={[offsetX, 0, offsetZ]}>
+      {version.levels.map((level) => (
+        <LevelStack
+          key={level.id}
+          version={version}
+          level={level}
+          explodeFactor={explodeFactor}
+          columnPositions={columnPositions}
+        />
+      ))}
+    </group>
+  );
+}
+
+function LevelStack({
+  version,
+  level,
+  explodeFactor,
+  columnPositions
+}: {
+  version: PlanVersion;
+  level: PlanVersion["levels"][number];
+  explodeFactor: number;
+  columnPositions: Array<[number, number]>;
+}) {
+  const outlineShape = useMemo(() => createRoomShape({ polygon: version.outline } as Room), [version.outline]);
+  const showLabels = shouldRenderRoomLabels(level.rooms.length);
+
+  return (
+    <group position={[0, level.elevation, 0]} rotation={[-Math.PI / 2, 0, 0]}>
       <mesh receiveShadow position={[0, 0, -0.08]}>
         <shapeGeometry args={[outlineShape]} />
         <meshStandardMaterial color={modelPalette.slab} opacity={0.22} transparent />
       </mesh>
 
-      <RoomMassMeshes rooms={version.rooms} buildingOutline={version.outline} explodeFactor={explodeFactor} />
+      <RoomMassMeshes rooms={level.rooms} buildingOutline={version.outline} explodeFactor={explodeFactor} />
       {showLabels ? (
-        <RoomLabels rooms={version.rooms} buildingOutline={version.outline} explodeFactor={explodeFactor} />
+        <RoomLabels rooms={level.rooms} buildingOutline={version.outline} explodeFactor={explodeFactor} />
       ) : null}
-      {!showLabels ? <RoomCountLabel count={version.rooms.length} bounds={outlineBounds} /> : null}
 
-      <InstancedWalls walls={level?.walls ?? []} />
-      <InstancedOpenings openings={level?.openings ?? []} />
-      <InstancedGridColumns positions={columnPositions} levelHeight={level?.height ?? 3.2} />
+      <InstancedWalls walls={level.walls} />
+      <InstancedOpenings openings={level.openings} />
+      <InstancedGridColumns positions={columnPositions} levelHeight={level.height} />
     </group>
   );
 }

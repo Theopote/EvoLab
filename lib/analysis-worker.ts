@@ -5,6 +5,7 @@ interface AnalysisWorkerRequest {
   requestId: number;
   version: PlanVersion;
   activeLayers: AnalysisLayerId[];
+  levelId?: string;
 }
 
 export interface AnalysisWorkerResponse {
@@ -14,10 +15,10 @@ export interface AnalysisWorkerResponse {
 }
 
 self.onmessage = (event: MessageEvent<AnalysisWorkerRequest>) => {
-  const { requestId, version, activeLayers } = event.data;
+  const { requestId, version, activeLayers, levelId } = event.data;
 
   try {
-    const result = computeAnalysis(version, activeLayers);
+    const result = computeAnalysis(version, activeLayers, levelId);
     self.postMessage({ requestId, result } satisfies AnalysisWorkerResponse);
   } catch (error) {
     self.postMessage({

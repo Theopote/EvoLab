@@ -54,6 +54,7 @@ export function EvoLabWorkspace() {
     outlineStale,
     isRelayouting,
     relayoutError,
+    compareLevelId,
     setActiveTab,
     setWorkflowPhase,
     toggleCompareVersion,
@@ -67,6 +68,7 @@ export function EvoLabWorkspace() {
     setActiveVersion,
     updateActiveVersion,
     relayoutActiveVersion,
+    setCompareLevel,
     generateMep,
     openModelForVersion,
     refineVersion,
@@ -92,6 +94,7 @@ export function EvoLabWorkspace() {
       outlineStale: state.outlineStale,
       isRelayouting: state.isRelayouting,
       relayoutError: state.relayoutError,
+      compareLevelId: state.compareLevelId,
       setActiveTab: state.setActiveTab,
       setWorkflowPhase: state.setWorkflowPhase,
       toggleCompareVersion: state.toggleCompareVersion,
@@ -105,6 +108,7 @@ export function EvoLabWorkspace() {
       setActiveVersion: state.setActiveVersion,
       updateActiveVersion: state.updateActiveVersion,
       relayoutActiveVersion: state.relayoutActiveVersion,
+      setCompareLevel: state.setCompareLevel,
       generateMep: state.generateMep,
       openModelForVersion: state.openModelForVersion,
       refineVersion: state.refineVersion,
@@ -134,7 +138,12 @@ export function EvoLabWorkspace() {
           <section className="relative min-h-0 overflow-hidden">
             <ViewportKpiHud />
             <div className="cad-grid h-full overflow-auto p-4">
-              <VersionSplitCompare versions={project.versions} compareVersionIds={compareVersionIds} />
+              <VersionSplitCompare
+                versions={project.versions}
+                compareVersionIds={compareVersionIds}
+                compareLevelId={compareLevelId}
+                onCompareLevelChange={setCompareLevel}
+              />
               {renderMainViewport()}
             </div>
           </section>
@@ -188,7 +197,7 @@ export function EvoLabWorkspace() {
       return (
         <section className="grid min-h-full grid-cols-[320px_minmax(0,1fr)] gap-4">
           <DiagramLayerList activeLayers={activeAnalysisLayers} onChange={setActiveAnalysisLayers} />
-          <DiagramCanvas activeLayers={activeAnalysisLayers} version={activeVersion} />
+          <DiagramCanvas activeLayers={activeAnalysisLayers} version={activeVersion} levelId={activeLevelId} />
         </section>
       );
     }
@@ -241,6 +250,8 @@ export function EvoLabWorkspace() {
           <VersionCompareGrid
             versions={project.versions}
             activeVersionId={project.activeVersionId}
+            compareLevelId={compareLevelId}
+            onCompareLevelChange={setCompareLevel}
             onSelectVersion={setActiveVersion}
             onGenerateModel={openModelForVersion}
             onRefineVersion={refineVersion}

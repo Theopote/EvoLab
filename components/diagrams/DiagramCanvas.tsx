@@ -9,6 +9,7 @@ import type { AnalysisWorkerResponse } from "@/lib/analysis-worker";
 interface DiagramCanvasProps {
   activeLayers: AnalysisLayerId[];
   version?: PlanVersion;
+  levelId?: string;
 }
 
 const zoneColors: Record<Room["zone"], string> = {
@@ -48,7 +49,7 @@ function pathPoints(points: Point[]) {
   return points.map(([x, y]) => `${x},${y}`).join(" ");
 }
 
-function useWorkerAnalysis(version: PlanVersion | undefined, activeLayers: AnalysisLayerId[]) {
+function useWorkerAnalysis(version: PlanVersion | undefined, activeLayers: AnalysisLayerId[], levelId?: string) {
   const [analysis, setAnalysis] = useState<AnalysisResult | undefined>(undefined);
   const [isComputing, setIsComputing] = useState(false);
   const requestIdRef = useRef(0);
@@ -82,12 +83,12 @@ function useWorkerAnalysis(version: PlanVersion | undefined, activeLayers: Analy
           setAnalysis(computeAnalysis(version, activeLayers));
         }
       };
-      workerRef.current.postMessage({ requestId, version, activeLayers });
+      workerRef.current.postMessage({ requestId, version, activeLayers, levelId });
     } catch {
-      setAnalysis(computeAnalysis(version, activeLayers));
+      setAnalysis(computeAnalysis(version, activeLayers, levelId));
       setIsComputing(false);
     }
-  }, [activeLayers, version]);
+  }, [activeLayers, levelId, version]);
 
   useEffect(
     () => () => {
@@ -100,8 +101,8 @@ function useWorkerAnalysis(version: PlanVersion | undefined, activeLayers: Analy
   return { analysis, isComputing };
 }
 
-export function DiagramCanvas({ activeLayers, version }: DiagramCanvasProps) {
-  const { analysis, isComputing } = useWorkerAnalysis(version, activeLayers);
+export function DiagramCanvas({ activeLayers, version, levelId }: DiagramCanvasProps) {
+  const { analysis, isComputing } = useWorkerAnalysis(version, activeLayers, levelId);
 
   if (!version) {
     return (

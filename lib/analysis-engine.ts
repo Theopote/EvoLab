@@ -180,9 +180,21 @@ function computeEgress(version: PlanVersion, graph: ReturnType<typeof buildRoomG
   return { egressPaths, egressDistances };
 }
 
-export function computeAnalysis(version: PlanVersion, requestedLayers: AnalysisLayerId[]): AnalysisResult {
-  const roomOverlays = version.rooms.map(roomOverlay);
-  const corePoint = nearestCorePoint(version);
+export function computeAnalysis(
+  version: PlanVersion,
+  requestedLayers: AnalysisLayerId[],
+  levelId?: string
+): AnalysisResult {
+  const level = levelId
+    ? version.levels.find((item) => item.id === levelId) ?? version.levels[0]
+    : version.levels[0];
+  const scopedVersion: PlanVersion = {
+    ...version,
+    rooms: level?.rooms ?? version.rooms,
+    levels: level ? [level] : version.levels
+  };
+  const roomOverlays = scopedVersion.rooms.map(roomOverlay);
+  const corePoint = nearestCorePoint(scopedVersion);
   const needsGraph = wantsAnyLayer(requestedLayers, [
     "patient_flow",
     "staff_flow",
@@ -190,26 +202,28 @@ export function computeAnalysis(version: PlanVersion, requestedLayers: AnalysisL
     "egress_path",
     "egress_distance"
   ]);
-  const graph = needsGraph ? buildRoomGraph(version) : undefined;
+  const graph = needsGraph ? buildRoomGraph(scopedVersion) : undefined;
 
-  const daylightCandidates = version.rooms.filter((room) => room.needsDaylight || hasWindowOpening(version, room));
+  const daylightCandidates = scopedVersion.rooms.filter(
+    (room) => room.needsDaylight || hasWindowOpening(scopedVersion, room)
+  );
   const daylightSamples =
     requestedLayers.includes("daylight") && daylightCandidates.length > 0
-      ? computeDaylightSamples(version, daylightCandidates)
+      ? computeDaylightSamples(scopedVersion, daylightCandidates)
       : [];
 
   const flowPaths = graph && wantsAnyLayer(requestedLayers, ["patient_flow", "staff_flow", "clean_dirty_flow"])
-    ? computeFlowPaths(version, graph)
+    ? computeFlowPaths(scopedVersion, graph)
     : undefined;
 
   const egress =
     graph && wantsAnyLayer(requestedLayers, ["egress_path", "egress_distance"])
-      ? computeEgress(version, graph)
+      ? computeEgress(scopedVersion, graph)
       : { egressPaths: [], egressDistances: [] };
 
-  const publicRoom = roomByType(version, ["lobby"]) ?? version.rooms[0];
-  const corridor = roomByType(version, ["corridor"]);
-  const consultation = roomByType(version, ["consultation"]);
+  const publicRoom = roomByType(scopedVersion, ["lobby"]) ?? scopedVersion.rooms[0];
+  const corridor = roomByType(scopedVersion, ["corridor"]);
+  const consultation = roomByType(scopedVersion, ["consultation"]);
 
   return {
     versionId: version.id,
@@ -225,8 +239,8 @@ export function computeAnalysis(version: PlanVersion, requestedLayers: AnalysisL
       };
     }),
     ventilationVectors: requestedLayers.includes("ventilation")
-      ? version.rooms
-          .filter((room) => hasWindowOpening(version, room))
+      ? scopedVersion.rooms
+          .filter((room) => hasWindowOpening(scopedVersion, room))
           .map((room) => {
             const [x, y] = centroid(room);
             return {
@@ -238,7 +252,7 @@ export function computeAnalysis(version: PlanVersion, requestedLayers: AnalysisL
       : [],
     sightlineCone:
       requestedLayers.includes("sightline") && publicRoom
-        ? computeSightlineCone(version, publicRoom, corridor ?? consultation)
+        ? computeSightlineCone(scopedVersion, publicRoom, corridor ?? consultation)
         : undefined,
     patientFlow: requestedLayers.includes("patient_flow") ? flowPaths?.patientFlow : undefined,
     staffFlow: requestedLayers.includes("staff_flow") ? flowPaths?.staffFlow : undefined,
@@ -247,7 +261,7 @@ export function computeAnalysis(version: PlanVersion, requestedLayers: AnalysisL
     egressDistances: requestedLayers.includes("egress_distance") ? egress.egressDistances : [],
     corePoint,
     coreLines: requestedLayers.includes("core_efficiency")
-      ? version.rooms.map((room) => ({
+      ? scopedVersion.rooms.map((room) => ({
           id: `core-${room.id}`,
           from: corePoint,
           to: centroid(room)
