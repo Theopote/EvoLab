@@ -50,17 +50,20 @@ function pathPoints(points: Point[]) {
 
 function useWorkerAnalysis(version: PlanVersion | undefined, activeLayers: AnalysisLayerId[]) {
   const [analysis, setAnalysis] = useState<AnalysisResult | undefined>(undefined);
+  const [isComputing, setIsComputing] = useState(false);
   const requestIdRef = useRef(0);
   const workerRef = useRef<Worker | undefined>(undefined);
 
   useEffect(() => {
     if (!version) {
       setAnalysis(undefined);
+      setIsComputing(false);
       return;
     }
 
     requestIdRef.current += 1;
     const requestId = requestIdRef.current;
+    setIsComputing(true);
 
     try {
       workerRef.current ??= new Worker(new URL("../../lib/analysis-worker.ts", import.meta.url), {
@@ -71,6 +74,8 @@ function useWorkerAnalysis(version: PlanVersion | undefined, activeLayers: Analy
           return;
         }
 
+        setIsComputing(false);
+
         if (event.data.result) {
           setAnalysis(event.data.result);
         } else {
@@ -80,6 +85,7 @@ function useWorkerAnalysis(version: PlanVersion | undefined, activeLayers: Analy
       workerRef.current.postMessage({ requestId, version, activeLayers });
     } catch {
       setAnalysis(computeAnalysis(version, activeLayers));
+      setIsComputing(false);
     }
   }, [activeLayers, version]);
 
@@ -91,11 +97,11 @@ function useWorkerAnalysis(version: PlanVersion | undefined, activeLayers: Analy
     []
   );
 
-  return analysis;
+  return { analysis, isComputing };
 }
 
 export function DiagramCanvas({ activeLayers, version }: DiagramCanvasProps) {
-  const analysis = useWorkerAnalysis(version, activeLayers);
+  const { analysis, isComputing } = useWorkerAnalysis(version, activeLayers);
 
   if (!version) {
     return (
@@ -115,11 +121,18 @@ export function DiagramCanvas({ activeLayers, version }: DiagramCanvasProps) {
       <div className="mb-3 flex items-center justify-between">
         <div>
           <h1 className="text-base font-semibold text-white">Analysis Canvas</h1>
-          <p className="mt-1 text-xs text-muted">Rule-based overlays generated from semantic room data.</p>
+          <p className="mt-1 text-xs text-muted">
+            Pathfinding, raycasting, and daylight probes run in a Web Worker off the main thread.
+          </p>
         </div>
-        <span className="rounded border border-accent/40 px-2 py-1 text-xs text-accent">
-          {version.label}
-        </span>
+        <div className="flex items-center gap-2">
+          {isComputing ? (
+            <span className="rounded border border-line px-2 py-1 text-xs text-muted">Computing overlays…</span>
+          ) : null}
+          <span className="rounded border border-accent/40 px-2 py-1 text-xs text-accent">
+            {version.label}
+          </span>
+        </div>
       </div>
 
       <div className="relative overflow-hidden rounded border border-line bg-[#081018] shadow-insetGrid">
@@ -213,16 +226,14 @@ export function DiagramCanvas({ activeLayers, version }: DiagramCanvasProps) {
 
           {activeLayers.includes("egress_path")
             ? analysis?.egressPaths.map((path) => (
-                <line
+                <polyline
                   key={path.id}
+                  fill="none"
                   markerEnd="url(#arrow-egress)"
+                  points={pathPoints(path.points)}
                   stroke="#22c55e"
-                  strokeOpacity="0.75"
-                  strokeWidth="0.35"
-                  x1={path.points[0][0]}
-                  x2={path.points[1][0]}
-                  y1={path.points[0][1]}
-                  y2={path.points[1][1]}
+                  strokeOpacity="0.85"
+                  strokeWidth="0.45"
                 />
               ))
             : null}
