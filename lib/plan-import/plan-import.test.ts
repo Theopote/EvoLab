@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseDxfToGraph } from "@/lib/plan-import/dxf-import";
 import { buildPlanVersionFromGraph } from "@/lib/plan-import/graph-to-version";
+import { shouldFallbackPdfToVision } from "@/lib/plan-import/pdf-import";
 import type { RecognizedPlanGraph } from "@/lib/schemas/recognized-plan-graph-schema";
 
 const sampleGraph: RecognizedPlanGraph = {
@@ -93,5 +94,43 @@ EOF`;
 
     expect(graph.levels[0]?.walls.length).toBeGreaterThan(0);
     expect(graph.levels[0]?.roomLabels.some((label) => label.name === "Office")).toBe(true);
+  });
+});
+
+describe("shouldFallbackPdfToVision", () => {
+  it("falls back when the PDF graph is too sparse", () => {
+    expect(
+      shouldFallbackPdfToVision({
+        levels: [
+          {
+            name: "PDF Level 01",
+            walls: [],
+            openings: [],
+            roomPolygons: [],
+            roomLabels: [],
+            dimensionAnnotations: []
+          }
+        ],
+        warnings: []
+      })
+    ).toBe(true);
+  });
+
+  it("keeps structured mode when room labels exist", () => {
+    expect(
+      shouldFallbackPdfToVision({
+        levels: [
+          {
+            name: "PDF Level 01",
+            walls: [],
+            openings: [],
+            roomPolygons: [],
+            roomLabels: [{ name: "Office", center: [60, 60] }],
+            dimensionAnnotations: [{ text: "10 m", start: [0, 0], end: [400, 0] }]
+          }
+        ],
+        warnings: []
+      })
+    ).toBe(false);
   });
 });

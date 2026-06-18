@@ -1,7 +1,7 @@
 import { decodeBase64File } from "@/lib/plan-import/file-input";
 import { parseDxfToGraph } from "@/lib/plan-import/dxf-import";
 import { importPlanFromImage } from "@/lib/plan-import/image-recognition";
-import { parsePdfToGraph } from "@/lib/plan-import/pdf-import";
+import { parsePdfToGraph, renderPdfPageToImage, shouldFallbackPdfToVision } from "@/lib/plan-import/pdf-import";
 import { buildPlanVersionFromGraph, estimateGraphConfidence } from "@/lib/plan-import/graph-to-version";
 import type { PlanImportResult, PlanImportSource } from "@/lib/plan-import/types";
 import { detectImportSource } from "@/lib/plan-import/detect-source";
@@ -61,6 +61,21 @@ export async function importPlan(options: ImportPlanOptions): Promise<PlanImport
   }
 
   const graph = await parsePdfToGraph(buffer);
+
+  if (shouldFallbackPdfToVision(graph)) {
+    const renderedImage = await renderPdfPageToImage(buffer);
+    const result = await importPlanFromImage(renderedImage, options.fileName);
+
+    return {
+      ...result,
+      sourceType: "pdf",
+      warnings: [
+        ...result.warnings,
+        "PDF text layer was sparse, so EvoLab rendered page 1 and used visual recognition."
+      ]
+    };
+  }
+
   return buildStructuredResult(graph, "pdf", options.fileName);
 }
 

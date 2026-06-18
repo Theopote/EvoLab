@@ -1,5 +1,5 @@
 import { PDFParse } from "pdf-parse";
-import type { RecognizedPlanGraph } from "@/lib/schemas/recognized-plan-graph-schema";
+import type { RecognizedLevelGraph, RecognizedPlanGraph } from "@/lib/schemas/recognized-plan-graph-schema";
 import type { Point } from "@/lib/project-types";
 
 const dimensionPattern = /(\d+(?:\.\d+)?)\s*(?:m|mm|cm)?/i;
@@ -42,27 +42,17 @@ function buildSyntheticWallsFromText(lines: string[]): RecognizedPlanGraph["leve
   ];
 }
 
-export async function parsePdfToGraph(buffer: Buffer): Promise<RecognizedPlanGraph> {
-  const parser = new PDFParse({ data: buffer });
-  const parsed = await parser.getText();
-  await parser.destroy();
-
-  const lines = parsed.text
-    .split(/\r?\n/)
-    .map((line: string) => line.trim())
-    .filter(Boolean);
-  const warnings: string[] = [
-    "PDF import used text-layer parsing. Vector wall geometry was not available; room layout is approximate."
-  ];
-
-  const roomLabels = lines
+function buildRoomLabels(lines: string[], pageIndex: number) {
+  return lines
     .filter((line: string) => roomNamePattern.test(line))
     .map((line: string, index: number) => ({
       name: line,
-      center: [(index % 3) * 120 + 60, Math.floor(index / 3) * 120 + 60] as Point
+      center: [(index % 3) * 120 + 60, Math.floor(index / 3) * 120 + 60 + pageIndex * 24] as Point
     }));
+}
 
-  const dimensionAnnotations = lines
+function buildDimensionAnnotations(lines: string[]) {
+  return lines
     .map((line: string, index: number) => {
       const meters = parseDimensionMeters(line);
 
@@ -79,30 +69,109 @@ export async function parsePdfToGraph(buffer: Buffer): Promise<RecognizedPlanGra
       };
     })
     .filter((item): item is NonNullable<typeof item> => Boolean(item));
+}
 
-  const walls = buildSyntheticWallsFromText(lines);
-
-  if (!roomLabels.length) {
-    warnings.push("No recognizable room names found in PDF text layer.");
-  }
+function buildPdfLevel(pageText: string, pageIndex: number): RecognizedLevelGraph {
+  const lines = pageText
+    .split(/\r?\n/)
+    .map((line: string) => line.trim())
+    .filter(Boolean);
 
   return {
-    scale: dimensionAnnotations.length
-      ? {
-          pixelsPerMeter: 40,
-          referenceDimensionMeters: parseDimensionMeters(dimensionAnnotations[0].text)
-        }
-      : undefined,
-    levels: [
-      {
-        name: "PDF Level 01",
-        walls,
-        openings: [],
-        roomPolygons: [],
-        roomLabels,
-        dimensionAnnotations
-      }
-    ],
-    warnings
+    name: `PDF Level ${String(pageIndex + 1).padStart(2, "0")}`,
+    walls: buildSyntheticWallsFromText(lines),
+    openings: [],
+    roomPolygons: [],
+    roomLabels: buildRoomLabels(lines, pageIndex),
+    dimensionAnnotations: buildDimensionAnnotations(lines)
   };
+}
+
+export function shouldFallbackPdfToVision(graph: RecognizedPlanGraph) {
+  const totalWalls = graph.levels.reduce((sum, level) => sum + level.walls.length, 0);
+  const totalRoomLabels = graph.levels.reduce((sum, level) => sum + level.roomLabels.length, 0);
+  const totalDimensions = graph.levels.reduce((sum, level) => sum + level.dimensionAnnotations.length, 0);
+
+  return totalWalls < 4 && totalRoomLabels < 2 && totalDimensions === 0;
+}
+
+export async function renderPdfPageToImage(
+  buffer: Buffer,
+  pageNumber = 1
+): Promise<{ base64: string; mediaType: "image/png"; byteLength: number; fileName: string }> {
+  const parser = new PDFParse({ data: buffer });
+
+  try {
+    const screenshot = await parser.getScreenshot({
+      partial: [pageNumber],
+      desiredWidth: 1600,
+      imageDataUrl: true,
+      imageBuffer: true
+    });
+    const page = screenshot.pages[0];
+
+    if (!page?.dataUrl) {
+      throw new Error("Unable to render PDF page preview.");
+    }
+
+    const base64 = page.dataUrl.replace(/^data:image\/png;base64,/i, "");
+
+    return {
+      base64,
+      mediaType: "image/png",
+      byteLength: page.data.byteLength,
+      fileName: `pdf-page-${pageNumber}.png`
+    };
+  } finally {
+    await parser.destroy();
+  }
+}
+
+export async function parsePdfToGraph(buffer: Buffer): Promise<RecognizedPlanGraph> {
+  const parser = new PDFParse({ data: buffer });
+  try {
+    const parsed = await parser.getText();
+    const levels = parsed.pages
+      .map((page) => buildPdfLevel(page.text, page.num - 1))
+      .filter(
+        (level) =>
+          level.walls.length > 0 || level.roomLabels.length > 0 || level.dimensionAnnotations.length > 0
+      );
+    const warnings: string[] = [
+      "PDF import used text-layer parsing. Explicit vector wall geometry is not parsed yet; inferred walls remain approximate."
+    ];
+    const firstDimension = levels.flatMap((level) => level.dimensionAnnotations)[0];
+
+    if (!levels.length) {
+      warnings.push("No usable PDF text-layer content was found.");
+    }
+
+    if (!levels.some((level) => level.roomLabels.length > 0)) {
+      warnings.push("No recognizable room names found in PDF text layer.");
+    }
+
+    return {
+      scale: firstDimension
+        ? {
+            pixelsPerMeter: 40,
+            referenceDimensionMeters: parseDimensionMeters(firstDimension.text)
+          }
+        : undefined,
+      levels: levels.length
+        ? levels
+        : [
+            {
+              name: "PDF Level 01",
+              walls: [],
+              openings: [],
+              roomPolygons: [],
+              roomLabels: [],
+              dimensionAnnotations: []
+            }
+          ],
+      warnings
+    };
+  } finally {
+    await parser.destroy();
+  }
 }
