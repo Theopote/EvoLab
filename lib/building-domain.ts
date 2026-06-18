@@ -41,8 +41,8 @@ export interface CodeContext {
   rules: CodeRule[];
 }
 
-export type RulePackPresetId = "healthcare" | "office" | "residential";
-export type ProgramGoalsPresetId = "healthcare" | "office" | "residential" | "balanced";
+export type RulePackPresetId = "healthcare" | "office" | "residential" | "school";
+export type ProgramGoalsPresetId = "healthcare" | "office" | "residential" | "school" | "balanced";
 
 export interface ScoringConfigThresholds {
   circulationTargetRatio?: number;

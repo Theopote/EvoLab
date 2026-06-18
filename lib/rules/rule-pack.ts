@@ -29,6 +29,15 @@ const residentialScoringThresholds: ScoringThresholds = {
   areaEfficiencyFactor: 90
 };
 
+const schoolScoringThresholds: ScoringThresholds = {
+  circulationTargetRatio: 0.17,
+  circulationTolerance: 0.16,
+  plumbingMaxDistanceM: 10,
+  egressMaxDistanceM: 28,
+  daylightMaxDepthM: 7,
+  areaEfficiencyFactor: 91
+};
+
 export const defaultHealthcareRulePack: RulePack = {
   ...defaultHealthcareCodeContext,
   scoring: defaultScoringThresholds
@@ -104,6 +113,41 @@ export const residentialRulePack: RulePack = {
   scoring: residentialScoringThresholds
 };
 
+export const schoolRulePack: RulePack = {
+  id: "code-school-generic",
+  label: "School Early Design",
+  region: "generic",
+  rules: [
+    {
+      id: "corridor-width",
+      category: "circulation",
+      title: "Corridor clear width",
+      basis: "Corridor clear width should not be less than 1.8m.",
+      threshold: 1.8,
+      unit: "m",
+      comparator: "gte"
+    },
+    {
+      id: "egress-distance",
+      category: "egress",
+      title: "Egress travel distance",
+      basis: "Egress travel distance should not exceed 28m.",
+      threshold: 28,
+      unit: "m",
+      comparator: "lte"
+    },
+    {
+      id: "stair-count",
+      category: "core",
+      title: "Vertical core count",
+      basis: "At least one stair core should exist.",
+      threshold: 1,
+      comparator: "gte"
+    }
+  ],
+  scoring: schoolScoringThresholds
+};
+
 const rulePacksByProjectType: Record<string, RulePack> = {
   healthcare: defaultHealthcareRulePack,
   hospital: defaultHealthcareRulePack,
@@ -112,7 +156,9 @@ const rulePacksByProjectType: Record<string, RulePack> = {
   commercial: officeRulePack,
   residential: residentialRulePack,
   apartment: residentialRulePack,
-  housing: residentialRulePack
+  housing: residentialRulePack,
+  school: schoolRulePack,
+  education: schoolRulePack
 };
 
 export function ruleThreshold(rulePack: RulePack, ruleId: string, fallback: number) {

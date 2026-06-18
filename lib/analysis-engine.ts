@@ -1,6 +1,13 @@
 import { computeDaylightSamples } from "@/lib/analysis/daylight";
 import { buildRoomGraph, findNearestExitPath, findRoomPath, pathLength } from "@/lib/analysis/graph";
 import { computeSightlineCone } from "@/lib/analysis/sightline";
+import {
+  canonicalizeAnalysisLayers,
+  layerRequested,
+  wantsAnyFlowLayer
+} from "@/lib/typology/analysis-layers";
+import type { FlowDefinition, FlowSegmentDef, TypologyPack } from "@/lib/typology/types";
+import { resolveTypologyPack } from "@/lib/typology/resolve";
 import type { AnalysisLayerId, PlanVersion, Point, Room } from "@/lib/project-types";
 
 export interface AnalysisRoomOverlay {
@@ -29,6 +36,11 @@ export interface AnalysisDistanceOverlay {
   distance: number;
 }
 
+export interface AnalysisServiceFlowOverlay {
+  clean?: AnalysisPathOverlay;
+  dirty?: AnalysisPathOverlay;
+}
+
 export interface AnalysisResult {
   versionId: string;
   requestedLayers: AnalysisLayerId[];
@@ -36,16 +48,23 @@ export interface AnalysisResult {
   daylightRooms: Array<AnalysisRoomOverlay & { radius: number; penetration?: number }>;
   ventilationVectors: AnalysisVectorOverlay[];
   sightlineCone?: Point[];
-  patientFlow?: AnalysisPathOverlay;
+  primaryFlow?: AnalysisPathOverlay;
   staffFlow?: AnalysisPathOverlay;
-  cleanDirtyFlow?: {
-    clean?: AnalysisPathOverlay;
-    dirty?: AnalysisPathOverlay;
-  };
+  serviceFlow?: AnalysisServiceFlowOverlay;
+  /** @deprecated Use primaryFlow */
+  patientFlow?: AnalysisPathOverlay;
+  /** @deprecated Use serviceFlow */
+  cleanDirtyFlow?: AnalysisServiceFlowOverlay;
   egressPaths: AnalysisPathOverlay[];
   egressDistances: AnalysisDistanceOverlay[];
   corePoint: Point;
   coreLines: AnalysisVectorOverlay[];
+}
+
+export interface ComputeAnalysisOptions {
+  levelId?: string;
+  projectType?: string;
+  typologyPack?: TypologyPack;
 }
 
 function centroid(room: Room): Point {
@@ -53,12 +72,12 @@ function centroid(room: Room): Point {
   return [total[0] / room.polygon.length, total[1] / room.polygon.length];
 }
 
-function roomByType(version: PlanVersion, types: Room["type"][]) {
+function roomByTypes(version: PlanVersion, types: Room["type"][]) {
   return version.rooms.find((room) => types.includes(room.type));
 }
 
 function nearestCorePoint(version: PlanVersion): Point {
-  const core = roomByType(version, ["stair", "elevator", "shaft"]);
+  const core = roomByTypes(version, ["stair", "elevator", "shaft"]);
   return core ? centroid(core) : [version.overallBounds.width / 2, version.overallBounds.height / 2];
 }
 
@@ -97,50 +116,73 @@ function pathOverlay(id: string, points: Point[] | undefined): AnalysisPathOverl
   };
 }
 
-function wantsAnyLayer(requestedLayers: AnalysisLayerId[], layers: AnalysisLayerId[]) {
-  return layers.some((layer) => requestedLayers.includes(layer));
+function resolveSegmentPath(
+  version: PlanVersion,
+  graph: ReturnType<typeof buildRoomGraph>,
+  segment: FlowSegmentDef
+): AnalysisPathOverlay | undefined {
+  const fromRoom = roomByTypes(version, segment.fromRoomTypes);
+  if (!fromRoom) {
+    return undefined;
+  }
+
+  const targetRoom = roomByTypes(version, segment.toRoomTypes);
+  if (!targetRoom) {
+    return undefined;
+  }
+
+  return pathOverlay(segment.pathId, findRoomPath(graph, fromRoom.id, targetRoom.id));
 }
 
-function computeFlowPaths(version: PlanVersion, graph: ReturnType<typeof buildRoomGraph>) {
-  const publicRoom = roomByType(version, ["lobby"]) ?? version.rooms[0];
-  const corridor = roomByType(version, ["corridor"]);
-  const consultation = roomByType(version, ["consultation"]);
-  const office = roomByType(version, ["office"]);
-  const service = roomByType(version, ["equipment_room", "shaft"]);
+function computeFlowFromDefinition(
+  version: PlanVersion,
+  graph: ReturnType<typeof buildRoomGraph>,
+  flow: FlowDefinition
+) {
+  if (flow.id === "service" && flow.serviceSplit) {
+    return {
+      serviceFlow: {
+        clean: resolveSegmentPath(version, graph, flow.serviceSplit.clean),
+        dirty: resolveSegmentPath(version, graph, flow.serviceSplit.dirty)
+      }
+    };
+  }
 
-  const patientFlow =
-    publicRoom && corridor
-      ? pathOverlay(
-          "patient-flow",
-          consultation
-            ? findRoomPath(graph, publicRoom.id, consultation.id)
-            : findRoomPath(graph, publicRoom.id, corridor.id)
-        )
-      : undefined;
+  const segment = flow.segments[0];
+  if (!segment) {
+    return {};
+  }
 
-  const staffFlow =
-    office && corridor
-      ? pathOverlay(
-          "staff-flow",
-          consultation
-            ? findRoomPath(graph, office.id, consultation.id)
-            : findRoomPath(graph, office.id, corridor.id)
-        )
-      : undefined;
+  const path = resolveSegmentPath(version, graph, segment);
 
-  const dirtyFlow =
-    service && corridor ? pathOverlay("dirty-flow", findRoomPath(graph, service.id, corridor.id)) : undefined;
-  const cleanFlow =
-    publicRoom && corridor ? pathOverlay("clean-flow", findRoomPath(graph, publicRoom.id, corridor.id)) : undefined;
+  if (flow.id === "primary") {
+    return { primaryFlow: path };
+  }
 
-  return {
-    patientFlow,
-    staffFlow,
-    cleanDirtyFlow: {
-      dirty: dirtyFlow,
-      clean: cleanFlow
-    }
-  };
+  if (flow.id === "staff") {
+    return { staffFlow: path };
+  }
+
+  if (flow.id === "service") {
+    return { serviceFlow: { clean: path } };
+  }
+
+  return {};
+}
+
+function computeFlowPaths(version: PlanVersion, graph: ReturnType<typeof buildRoomGraph>, pack: TypologyPack) {
+  return pack.flowDefinitions.reduce<{
+    primaryFlow?: AnalysisPathOverlay;
+    staffFlow?: AnalysisPathOverlay;
+    serviceFlow?: AnalysisServiceFlowOverlay;
+  }>((acc, flow) => {
+    const computed = computeFlowFromDefinition(version, graph, flow);
+    return {
+      primaryFlow: computed.primaryFlow ?? acc.primaryFlow,
+      staffFlow: computed.staffFlow ?? acc.staffFlow,
+      serviceFlow: computed.serviceFlow ?? acc.serviceFlow
+    };
+  }, {});
 }
 
 function computeEgress(version: PlanVersion, graph: ReturnType<typeof buildRoomGraph>) {
@@ -186,8 +228,14 @@ function computeEgress(version: PlanVersion, graph: ReturnType<typeof buildRoomG
 export function computeAnalysis(
   version: PlanVersion,
   requestedLayers: AnalysisLayerId[],
-  levelId?: string
+  options: ComputeAnalysisOptions | string = {}
 ): AnalysisResult {
+  const resolvedOptions: ComputeAnalysisOptions =
+    typeof options === "string" ? { levelId: options } : options;
+  const levelId = resolvedOptions.levelId;
+  const pack = resolvedOptions.typologyPack ?? resolveTypologyPack(resolvedOptions.projectType);
+  const layers = canonicalizeAnalysisLayers(requestedLayers);
+
   const level = levelId
     ? version.levels.find((item) => item.id === levelId) ?? version.levels[0]
     : version.levels[0];
@@ -198,39 +246,40 @@ export function computeAnalysis(
   };
   const roomOverlays = scopedVersion.rooms.map(roomOverlay);
   const corePoint = nearestCorePoint(scopedVersion);
-  const needsGraph = wantsAnyLayer(requestedLayers, [
-    "patient_flow",
-    "staff_flow",
-    "clean_dirty_flow",
-    "egress_path",
-    "egress_distance"
-  ]);
+  const needsGraph =
+    wantsAnyFlowLayer(layers) ||
+    layerRequested(layers, "egress_path") ||
+    layerRequested(layers, "egress_distance");
   const graph = needsGraph ? buildRoomGraph(scopedVersion) : undefined;
 
   const daylightCandidates = scopedVersion.rooms.filter(
     (room) => room.needsDaylight || hasWindowOpening(scopedVersion, room)
   );
   const daylightSamples =
-    requestedLayers.includes("daylight") && daylightCandidates.length > 0
+    layerRequested(layers, "daylight") && daylightCandidates.length > 0
       ? computeDaylightSamples(scopedVersion, daylightCandidates)
       : [];
 
-  const flowPaths = graph && wantsAnyLayer(requestedLayers, ["patient_flow", "staff_flow", "clean_dirty_flow"])
-    ? computeFlowPaths(scopedVersion, graph)
-    : undefined;
+  const flowPaths =
+    graph && wantsAnyFlowLayer(layers) ? computeFlowPaths(scopedVersion, graph, pack) : undefined;
 
   const egress =
-    graph && wantsAnyLayer(requestedLayers, ["egress_path", "egress_distance"])
+    graph && (layerRequested(layers, "egress_path") || layerRequested(layers, "egress_distance"))
       ? computeEgress(scopedVersion, graph)
       : { egressPaths: [], egressDistances: [] };
 
-  const publicRoom = roomByType(scopedVersion, ["lobby"]) ?? scopedVersion.rooms[0];
-  const corridor = roomByType(scopedVersion, ["corridor"]);
-  const consultation = roomByType(scopedVersion, ["consultation"]);
+  const publicRoom = roomByTypes(scopedVersion, ["lobby"]) ?? scopedVersion.rooms[0];
+  const corridor = roomByTypes(scopedVersion, ["corridor"]);
+  const destinationRoom =
+    roomByTypes(scopedVersion, ["consultation", "office", "living_room", "other"]) ?? corridor;
+
+  const primaryFlow = layerRequested(layers, "primary_flow") ? flowPaths?.primaryFlow : undefined;
+  const staffFlow = layerRequested(layers, "staff_flow") ? flowPaths?.staffFlow : undefined;
+  const serviceFlow = layerRequested(layers, "service_flow") ? flowPaths?.serviceFlow : undefined;
 
   return {
     versionId: version.id,
-    requestedLayers,
+    requestedLayers: layers,
     rooms: roomOverlays,
     daylightRooms: daylightSamples.map((sample) => {
       const room = daylightCandidates.find((item) => item.id === sample.roomId);
@@ -241,7 +290,7 @@ export function computeAnalysis(
         penetration: sample.penetration
       };
     }),
-    ventilationVectors: requestedLayers.includes("ventilation")
+    ventilationVectors: layerRequested(layers, "ventilation")
       ? scopedVersion.rooms
           .filter((room) => hasWindowOpening(scopedVersion, room))
           .map((room) => {
@@ -254,16 +303,18 @@ export function computeAnalysis(
           })
       : [],
     sightlineCone:
-      requestedLayers.includes("sightline") && publicRoom
-        ? computeSightlineCone(scopedVersion, publicRoom, corridor ?? consultation)
+      layerRequested(layers, "sightline") && publicRoom
+        ? computeSightlineCone(scopedVersion, publicRoom, corridor ?? destinationRoom)
         : undefined,
-    patientFlow: requestedLayers.includes("patient_flow") ? flowPaths?.patientFlow : undefined,
-    staffFlow: requestedLayers.includes("staff_flow") ? flowPaths?.staffFlow : undefined,
-    cleanDirtyFlow: requestedLayers.includes("clean_dirty_flow") ? flowPaths?.cleanDirtyFlow : undefined,
-    egressPaths: requestedLayers.includes("egress_path") ? egress.egressPaths : [],
-    egressDistances: requestedLayers.includes("egress_distance") ? egress.egressDistances : [],
+    primaryFlow,
+    staffFlow,
+    serviceFlow,
+    patientFlow: primaryFlow,
+    cleanDirtyFlow: serviceFlow,
+    egressPaths: layerRequested(layers, "egress_path") ? egress.egressPaths : [],
+    egressDistances: layerRequested(layers, "egress_distance") ? egress.egressDistances : [],
     corePoint,
-    coreLines: requestedLayers.includes("core_efficiency")
+    coreLines: layerRequested(layers, "core_efficiency")
       ? scopedVersion.rooms.map((room) => ({
           id: `core-${room.id}`,
           from: corePoint,
@@ -289,10 +340,11 @@ export interface BuildingAnalysisSummary {
 
 export function computeBuildingAnalysis(
   version: PlanVersion,
-  requestedLayers: AnalysisLayerId[]
+  requestedLayers: AnalysisLayerId[],
+  projectType?: string
 ): BuildingAnalysisSummary {
   const levelSummaries = version.levels.map((level) => {
-    const analysis = computeAnalysis(version, requestedLayers, level.id);
+    const analysis = computeAnalysis(version, requestedLayers, { levelId: level.id, projectType });
     const maxEgressDistance = Math.max(0, ...analysis.egressDistances.map((item) => item.distance));
     const daylightFailureCount = version.rooms
       .filter((room) => room.levelId === level.id && room.needsDaylight)

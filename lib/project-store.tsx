@@ -530,7 +530,7 @@ function createInitialState(): Omit<
     workflowPhase: "brief_site",
     compareVersionIds: [],
     activeTab: "Plan",
-    activeAnalysisLayers: ["function_zones", "patient_flow", "egress_path", "daylight"],
+    activeAnalysisLayers: ["function_zones", "primary_flow", "egress_path", "daylight"],
     activeMepLayers: ["hvac", "plumbing_supply", "plumbing_drain", "electrical", "shafts", "equipment_rooms"],
     isGeneratingMep: false,
     mepError: null,

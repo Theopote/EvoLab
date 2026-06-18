@@ -41,6 +41,16 @@ const residentialWeights: ProgramGoalWeights = {
   riskPenalty: 3
 };
 
+const schoolWeights: ProgramGoalWeights = {
+  areaEfficiency: 0.2,
+  circulation: 0.24,
+  daylight: 0.22,
+  wetCore: 0.1,
+  egress: 0.16,
+  structureFit: 0.08,
+  riskPenalty: 4
+};
+
 const goalsByProjectType: Record<string, ProgramGoals> = {
   healthcare: {
     id: "goals-healthcare",
@@ -89,6 +99,18 @@ const goalsByProjectType: Record<string, ProgramGoals> = {
     label: "Residential priorities",
     projectType: "housing",
     weights: residentialWeights
+  },
+  school: {
+    id: "goals-school",
+    label: "School priorities",
+    projectType: "school",
+    weights: schoolWeights
+  },
+  education: {
+    id: "goals-school",
+    label: "School priorities",
+    projectType: "education",
+    weights: schoolWeights
   }
 };
 

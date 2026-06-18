@@ -2,6 +2,8 @@ import type { CodeContext } from "@/lib/building-domain";
 import { defaultHealthcareCodeContext } from "@/lib/building-domain";
 import type { FunctionZone, OpeningElement, PlanVersion, Point, Room, RoomType, Wall } from "@/lib/project-types";
 import { computeEgressPathMetrics, computeWetCorePathMetrics } from "@/lib/rules/path-metrics";
+import { measureCorridorsClearWidth } from "@/lib/rules/metrics/corridor-width";
+import { checkDaylightCompliance } from "@/lib/rules/metrics/daylight-compliance";
 import { resolveRulePack, ruleBasis, ruleThreshold } from "@/lib/rules/rule-pack";
 import type { RulePack } from "@/lib/rules/types";
 
@@ -351,17 +353,12 @@ function checkComplianceForLevel(version: PlanVersion, levelId: string, rulePack
   const corridorMinWidth = ruleThreshold(rulePack, "corridor-width", 1.2);
   const egressMaxDistance = rulePack.scoring.egressMaxDistanceM;
   const plumbingMaxDistance = rulePack.scoring.plumbingMaxDistanceM;
+  const daylightMaxDepth = rulePack.scoring.daylightMaxDepthM;
   const minCoreCount = ruleThreshold(rulePack, "stair-count", 1);
-  const narrowCorridors = corridorRooms.filter((room) => {
-    const xs = room.polygon.map(([x]) => x);
-    const ys = room.polygon.map(([, y]) => y);
-    const width = Math.min(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
-    return width < corridorMinWidth;
-  });
-  const roomsWithoutDaylight = roomsNeedingDaylight.filter((room) => {
-    const windowOpenings = openings.length ? roomOpenings(room, openings, "window") : [];
-    return openings.length ? windowOpenings.length === 0 : room.windows.length === 0;
-  });
+  const corridorWidths = measureCorridorsClearWidth(corridorRooms);
+  const narrowCorridors = corridorWidths.filter((item) => item.clearWidthM < corridorMinWidth);
+  const daylightResults = checkDaylightCompliance(version, roomsNeedingDaylight, daylightMaxDepth);
+  const roomsWithoutDaylight = daylightResults.filter((item) => !item.compliant);
   const plumbingFarRooms = roomsNeedingPlumbing.filter(
     (room) => nearestDistanceToRooms(room, shaftOrEquipmentRooms, version) > plumbingMaxDistance
   );
@@ -382,8 +379,10 @@ function checkComplianceForLevel(version: PlanVersion, levelId: string, rulePack
       status: narrowCorridors.length === 0 ? "success" : "warning",
       message:
         narrowCorridors.length === 0
-          ? `No corridor room is narrower than ${corridorMinWidth}m by bounding-box estimate.`
-          : `${narrowCorridors.length} corridor room may be narrower than ${corridorMinWidth}m.`,
+          ? `No corridor room is narrower than ${corridorMinWidth}m by clear-width geometry.`
+          : `${narrowCorridors.length} corridor room may be narrower than ${corridorMinWidth}m (min clear width ${Math.min(
+              ...narrowCorridors.map((item) => item.clearWidthM)
+            ).toFixed(1)}m).`,
       basis: ruleBasis(rulePack, "corridor-width", "Corridor clear width should not be less than 1.2m."),
       levelId,
       levelName
@@ -408,9 +407,9 @@ function checkComplianceForLevel(version: PlanVersion, levelId: string, rulePack
       status: roomsWithoutDaylight.length === 0 ? "success" : "warning",
       message:
         roomsWithoutDaylight.length === 0
-          ? "Rooms marked as needing daylight have at least one window."
-          : `${roomsWithoutDaylight.length} daylight-required room has no window data.`,
-      basis: "Rooms with needsDaylight should have exterior windows.",
+          ? `All ${daylightResults.length} daylight-required rooms meet exterior window and ${daylightMaxDepth}m depth limits.`
+          : `${roomsWithoutDaylight.length} daylight-required room fails exterior window, facade contact, or ${daylightMaxDepth}m depth.`,
+      basis: `Rooms with needsDaylight should touch an exterior wall, have windows, and stay within ${daylightMaxDepth}m depth.`,
       levelId,
       levelName
     },

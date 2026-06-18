@@ -326,8 +326,10 @@ export type MepLayerId = MepSystemType | "shafts" | "equipment_rooms";
 
 export type AnalysisLayerId =
   | "function_zones"
+  | "primary_flow"
   | "patient_flow"
   | "staff_flow"
+  | "service_flow"
   | "clean_dirty_flow"
   | "egress_path"
   | "egress_distance"

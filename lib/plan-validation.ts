@@ -7,6 +7,7 @@ import {
 } from "@/lib/polygon-ops";
 import { createSetbackBoundary } from "@/lib/polygon-offset";
 import { computeWetCorePathMetrics } from "@/lib/rules/path-metrics";
+import { checkRoomDaylightCompliance } from "@/lib/rules/metrics/daylight-compliance";
 import { resolveRulePack } from "@/lib/rules/rule-pack";
 import type { RulePack } from "@/lib/rules/types";
 import { extractWallsFromRooms } from "@/lib/wall-extractor";
@@ -45,22 +46,9 @@ export function centroid(room: Room): Point {
   return [total[0] / room.polygon.length, total[1] / room.polygon.length];
 }
 
-function hasWindow(version: PlanVersion, room: Room) {
-  const openings: OpeningElement[] = version.levels?.[0]?.openings ?? [];
-  return openings.length
-    ? openings.some((opening) => opening.type === "window" && opening.roomIds?.includes(room.id))
-    : room.windows.length > 0;
+function polygonArea(points: Point[]) {
+  return booleanPolygonArea(points);
 }
-
-function hasExternalWall(version: PlanVersion, room: Room) {
-  const walls = version.levels?.[0]?.walls?.length
-    ? version.levels[0].walls
-    : extractWallsFromRooms(version.rooms, version.outline);
-
-  return walls.some((wall) => wall.type === "external" && wall.roomIds.includes(room.id));
-}
-
-function validateCorridorConnectivity(rooms: Room[]) {
   const corridors = rooms.filter((room) => room.type === "corridor");
 
   if (corridors.length <= 1) {
@@ -160,21 +148,24 @@ export function validatePlanVersion(
     issues.push({ id: "core-missing", severity: "error", message: "At least one stair or elevator core is required." });
   }
 
+  const rulePack = options.rulePack ?? resolveRulePack({ codeContext: options.codeContext, projectType: options.projectType });
+  const plumbingMaxDistance = rulePack.scoring.plumbingMaxDistanceM;
+  const daylightMaxDepth = rulePack.scoring.daylightMaxDepthM;
+
   version.rooms
     .filter((room) => room.needsDaylight)
     .forEach((room) => {
-      if (!hasExternalWall(version, room) || !hasWindow(version, room)) {
+      const daylight = checkRoomDaylightCompliance(version, room, daylightMaxDepth);
+      if (!daylight.compliant) {
         issues.push({
           id: "daylight-room-invalid",
           severity: "warning",
-          message: `${room.name} needs daylight and should touch an external wall with a window.`,
+          message: `${room.name} needs daylight and should touch an external wall with a window within ${daylightMaxDepth}m depth.`,
           roomIds: [room.id]
         });
       }
     });
 
-  const rulePack = options.rulePack ?? resolveRulePack({ codeContext: options.codeContext, projectType: options.projectType });
-  const plumbingMaxDistance = rulePack.scoring.plumbingMaxDistanceM;
   const wetCoreMetrics = computeWetCorePathMetrics(version);
   const farWetRooms = wetCoreMetrics.perRoom.filter((item) => item.distance > plumbingMaxDistance);
 

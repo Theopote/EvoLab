@@ -3,13 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import { computeAnalysis, type AnalysisResult } from "@/lib/analysis-engine";
 import type { AnalysisLayerId, PlanVersion, Point, Room } from "@/lib/project-types";
-import { ANALYSIS_LAYERS } from "@/components/diagrams/DiagramLayerList";
+import { getAnalysisLayersForProject } from "@/components/diagrams/DiagramLayerList";
+import { layerRequested } from "@/lib/typology/analysis-layers";
 import type { AnalysisWorkerResponse } from "@/lib/analysis-worker";
 
 interface DiagramCanvasProps {
   activeLayers: AnalysisLayerId[];
   version?: PlanVersion;
   levelId?: string;
+  projectType?: string;
 }
 
 const zoneColors: Record<Room["zone"], string> = {
@@ -30,9 +32,11 @@ const zoneStrokes: Record<Room["zone"], string> = {
 
 const layerLegend: Partial<Record<AnalysisLayerId, { color: string; label: string }>> = {
   function_zones: { color: "#4fb5c8", label: "Zone fill by function" },
-  patient_flow: { color: "#38bdf8", label: "Patient route" },
+  primary_flow: { color: "#38bdf8", label: "Primary route" },
+  patient_flow: { color: "#38bdf8", label: "Primary route" },
   staff_flow: { color: "#a78bfa", label: "Staff route" },
-  clean_dirty_flow: { color: "#f59e0b", label: "Clean / dirty separation" },
+  service_flow: { color: "#f59e0b", label: "Service route" },
+  clean_dirty_flow: { color: "#f59e0b", label: "Service route" },
   daylight: { color: "#facc15", label: "Daylight exposure" },
   ventilation: { color: "#5eead4", label: "Ventilation vector" },
   sightline: { color: "#fb7185", label: "Sightline cone" },
@@ -49,7 +53,12 @@ function pathPoints(points: Point[]) {
   return points.map(([x, y]) => `${x},${y}`).join(" ");
 }
 
-function useWorkerAnalysis(version: PlanVersion | undefined, activeLayers: AnalysisLayerId[], levelId?: string) {
+function useWorkerAnalysis(
+  version: PlanVersion | undefined,
+  activeLayers: AnalysisLayerId[],
+  levelId?: string,
+  projectType?: string
+) {
   const [analysis, setAnalysis] = useState<AnalysisResult | undefined>(undefined);
   const [isComputing, setIsComputing] = useState(false);
   const requestIdRef = useRef(0);
@@ -80,15 +89,15 @@ function useWorkerAnalysis(version: PlanVersion | undefined, activeLayers: Analy
         if (event.data.result) {
           setAnalysis(event.data.result);
         } else {
-          setAnalysis(computeAnalysis(version, activeLayers));
+          setAnalysis(computeAnalysis(version, activeLayers, { levelId, projectType }));
         }
       };
-      workerRef.current.postMessage({ requestId, version, activeLayers, levelId });
+      workerRef.current.postMessage({ requestId, version, activeLayers, levelId, projectType });
     } catch {
-      setAnalysis(computeAnalysis(version, activeLayers, levelId));
+      setAnalysis(computeAnalysis(version, activeLayers, { levelId, projectType }));
       setIsComputing(false);
     }
-  }, [activeLayers, levelId, version]);
+  }, [activeLayers, levelId, projectType, version]);
 
   useEffect(
     () => () => {
@@ -101,8 +110,11 @@ function useWorkerAnalysis(version: PlanVersion | undefined, activeLayers: Analy
   return { analysis, isComputing };
 }
 
-export function DiagramCanvas({ activeLayers, version, levelId }: DiagramCanvasProps) {
-  const { analysis, isComputing } = useWorkerAnalysis(version, activeLayers, levelId);
+export function DiagramCanvas({ activeLayers, version, levelId, projectType }: DiagramCanvasProps) {
+  const { analysis, isComputing } = useWorkerAnalysis(version, activeLayers, levelId, projectType);
+  const analysisLayers = getAnalysisLayersForProject(projectType);
+  const primaryFlow = analysis?.primaryFlow ?? analysis?.patientFlow;
+  const serviceFlow = analysis?.serviceFlow ?? analysis?.cleanDirtyFlow;
 
   if (!version) {
     return (
@@ -177,11 +189,11 @@ export function DiagramCanvas({ activeLayers, version, levelId }: DiagramCanvasP
                 })
             : null}
 
-          {activeLayers.includes("patient_flow") && analysis?.patientFlow ? (
+          {(layerRequested(activeLayers, "primary_flow") || layerRequested(activeLayers, "patient_flow")) && primaryFlow ? (
             <polyline
               fill="none"
               markerEnd="url(#arrow-patient)"
-              points={pathPoints(analysis.patientFlow.points)}
+              points={pathPoints(primaryFlow.points)}
               stroke="#38bdf8"
               strokeDasharray="2 1.4"
               strokeWidth="0.7"
@@ -198,13 +210,13 @@ export function DiagramCanvas({ activeLayers, version, levelId }: DiagramCanvasP
             />
           ) : null}
 
-          {activeLayers.includes("clean_dirty_flow") && analysis?.cleanDirtyFlow ? (
+          {(layerRequested(activeLayers, "service_flow") || layerRequested(activeLayers, "clean_dirty_flow")) && serviceFlow ? (
             <g>
-              {analysis.cleanDirtyFlow.dirty ? (
-                <polyline fill="none" points={pathPoints(analysis.cleanDirtyFlow.dirty.points)} stroke="#f59e0b" strokeDasharray="1 1" strokeWidth="0.65" />
+              {serviceFlow.dirty ? (
+                <polyline fill="none" points={pathPoints(serviceFlow.dirty.points)} stroke="#f59e0b" strokeDasharray="1 1" strokeWidth="0.65" />
               ) : null}
-              {analysis.cleanDirtyFlow.clean ? (
-                <polyline fill="none" points={pathPoints(analysis.cleanDirtyFlow.clean.points)} stroke="#5eead4" strokeDasharray="2 1" strokeWidth="0.5" />
+              {serviceFlow.clean ? (
+                <polyline fill="none" points={pathPoints(serviceFlow.clean.points)} stroke="#5eead4" strokeDasharray="2 1" strokeWidth="0.5" />
               ) : null}
             </g>
           ) : null}
@@ -279,7 +291,7 @@ export function DiagramCanvas({ activeLayers, version, levelId }: DiagramCanvasP
 
       <div className="mt-3 flex flex-wrap gap-2">
         {activeLayers.map((layerId) => {
-          const layer = ANALYSIS_LAYERS.find((item) => item.id === layerId);
+          const layer = analysisLayers.find((item) => item.id === layerId);
           const legend = layerLegend[layerId];
           return (
             <div className="flex items-center gap-2 rounded border border-line bg-[#0b1118] px-2 py-1 text-xs text-muted" key={layerId}>

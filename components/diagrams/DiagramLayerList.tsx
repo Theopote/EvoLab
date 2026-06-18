@@ -1,19 +1,13 @@
 "use client";
 
 import type { AnalysisLayer, AnalysisLayerId } from "@/lib/project-types";
+import { resolveTypologyPack } from "@/lib/typology/resolve";
 
-export const ANALYSIS_LAYERS: AnalysisLayer[] = [
-  { id: "function_zones", label: "Function zones", category: "function" },
-  { id: "patient_flow", label: "Patient flow", category: "function" },
-  { id: "staff_flow", label: "Staff flow", category: "function" },
-  { id: "clean_dirty_flow", label: "Clean / dirty flow", category: "function" },
-  { id: "daylight", label: "Daylight", category: "environment" },
-  { id: "ventilation", label: "Natural ventilation", category: "environment" },
-  { id: "sightline", label: "Sightline", category: "environment" },
-  { id: "egress_path", label: "Egress path", category: "safety" },
-  { id: "egress_distance", label: "Egress distance", category: "safety" },
-  { id: "core_efficiency", label: "Core efficiency", category: "efficiency" }
-];
+interface DiagramLayerListProps {
+  activeLayers: AnalysisLayerId[];
+  onChange: (layers: AnalysisLayerId[]) => void;
+  projectType?: string;
+}
 
 const categoryLabels: Record<AnalysisLayer["category"], string> = {
   function: "Function",
@@ -22,12 +16,13 @@ const categoryLabels: Record<AnalysisLayer["category"], string> = {
   efficiency: "Efficiency"
 };
 
-interface DiagramLayerListProps {
-  activeLayers: AnalysisLayerId[];
-  onChange: (layers: AnalysisLayerId[]) => void;
+export function getAnalysisLayersForProject(projectType?: string): AnalysisLayer[] {
+  return resolveTypologyPack(projectType).analysisLayers;
 }
 
-export function DiagramLayerList({ activeLayers, onChange }: DiagramLayerListProps) {
+export function DiagramLayerList({ activeLayers, onChange, projectType }: DiagramLayerListProps) {
+  const analysisLayers = getAnalysisLayersForProject(projectType);
+
   function toggle(layerId: AnalysisLayerId) {
     onChange(
       activeLayers.includes(layerId)
@@ -55,20 +50,22 @@ export function DiagramLayerList({ activeLayers, onChange }: DiagramLayerListPro
               {categoryLabels[category]}
             </div>
             <div className="space-y-1.5">
-              {ANALYSIS_LAYERS.filter((layer) => layer.category === category).map((layer) => (
-                <label
-                  className="flex h-8 cursor-pointer items-center justify-between rounded border border-line bg-[#0b1118] px-2 text-xs text-slate-200 hover:border-accent/50"
-                  key={layer.id}
-                >
-                  <span>{layer.label}</span>
-                  <input
-                    checked={activeLayers.includes(layer.id)}
-                    className="h-3.5 w-3.5 accent-[#4fb5c8]"
-                    type="checkbox"
-                    onChange={() => toggle(layer.id)}
-                  />
-                </label>
-              ))}
+              {analysisLayers
+                .filter((layer) => layer.category === category)
+                .map((layer) => (
+                  <label
+                    className="flex h-8 cursor-pointer items-center justify-between rounded border border-line bg-[#0b1118] px-2 text-xs text-slate-200 hover:border-accent/50"
+                    key={layer.id}
+                  >
+                    <span>{layer.label}</span>
+                    <input
+                      checked={activeLayers.includes(layer.id)}
+                      className="h-3.5 w-3.5 accent-[#4fb5c8]"
+                      type="checkbox"
+                      onChange={() => toggle(layer.id)}
+                    />
+                  </label>
+                ))}
             </div>
           </div>
         ))}

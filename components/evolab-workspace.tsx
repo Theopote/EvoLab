@@ -218,8 +218,17 @@ export function EvoLabWorkspace() {
     if (activeTab === "Analysis") {
       return (
         <section className="grid min-h-full grid-cols-[320px_minmax(0,1fr)] gap-4">
-          <DiagramLayerList activeLayers={activeAnalysisLayers} onChange={setActiveAnalysisLayers} />
-          <DiagramCanvas activeLayers={activeAnalysisLayers} version={activeVersion} levelId={activeLevelId} />
+          <DiagramLayerList
+            activeLayers={activeAnalysisLayers}
+            onChange={setActiveAnalysisLayers}
+            projectType={project.projectType}
+          />
+          <DiagramCanvas
+            activeLayers={activeAnalysisLayers}
+            levelId={activeLevelId}
+            projectType={project.projectType}
+            version={activeVersion}
+          />
         </section>
       );
     }

@@ -10,8 +10,10 @@ import {
   defaultHealthcareRulePack,
   officeRulePack,
   residentialRulePack,
+  schoolRulePack,
   resolveRulePack
 } from "@/lib/rules/rule-pack";
+import { resolveTypologyPack, resolveTypologyPackId } from "@/lib/typology/resolve";
 import type { ProgramGoals, ProgramGoalWeights, RulePack, ScoringThresholds } from "@/lib/rules/types";
 
 export type RulePackPresetId = NonNullable<ScoringConfig["rulePackPreset"]>;
@@ -20,13 +22,15 @@ export type ProgramGoalsPresetId = NonNullable<ScoringConfig["programGoalsPreset
 export const RULE_PACK_PRESET_OPTIONS: Array<{ id: RulePackPresetId; label: string; description: string }> = [
   { id: "healthcare", label: "Healthcare", description: "Clinical circulation, egress, and MEP thresholds." },
   { id: "office", label: "Office", description: "Higher egress tolerance and wider corridors." },
-  { id: "residential", label: "Residential", description: "Tighter plumbing reach and daylight depth." }
+  { id: "residential", label: "Residential", description: "Tighter plumbing reach and daylight depth." },
+  { id: "school", label: "School", description: "Wide corridors and egress-focused school thresholds." }
 ];
 
 export const PROGRAM_GOALS_PRESET_OPTIONS: Array<{ id: ProgramGoalsPresetId; label: string; description: string }> = [
   { id: "healthcare", label: "Healthcare", description: "Balanced clinical priorities with egress weight." },
   { id: "office", label: "Office", description: "Area and daylight focused." },
   { id: "residential", label: "Residential", description: "Daylight and egress focused." },
+  { id: "school", label: "School", description: "Circulation and egress focused." },
   { id: "balanced", label: "Balanced", description: "Generic early-design weighting." }
 ];
 
@@ -66,7 +70,8 @@ export const COMPLIANCE_RULE_FIELDS: Array<{ key: "corridor-width" | "egress-dis
 const rulePackByPreset: Record<RulePackPresetId, RulePack> = {
   healthcare: defaultHealthcareRulePack,
   office: officeRulePack,
-  residential: residentialRulePack
+  residential: residentialRulePack,
+  school: schoolRulePack
 };
 
 function inferPresetId(domain?: ProjectDomain, projectType?: string): RulePackPresetId {
@@ -75,15 +80,7 @@ function inferPresetId(domain?: ProjectDomain, projectType?: string): RulePackPr
     return configured;
   }
 
-  const type = (projectType ?? domain?.program.projectType ?? "healthcare").toLowerCase();
-  if (type.includes("office") || type.includes("commercial")) {
-    return "office";
-  }
-  if (type.includes("residential") || type.includes("apartment") || type.includes("housing")) {
-    return "residential";
-  }
-
-  return "healthcare";
+  return resolveTypologyPackId(projectType ?? domain?.program.projectType);
 }
 
 function inferGoalsPresetId(domain?: ProjectDomain, projectType?: string): ProgramGoalsPresetId {
@@ -92,15 +89,7 @@ function inferGoalsPresetId(domain?: ProjectDomain, projectType?: string): Progr
     return configured;
   }
 
-  const type = (projectType ?? domain?.program.projectType ?? "healthcare").toLowerCase();
-  if (type.includes("office") || type.includes("commercial")) {
-    return "office";
-  }
-  if (type.includes("residential") || type.includes("apartment") || type.includes("housing")) {
-    return "residential";
-  }
-
-  return "healthcare";
+  return resolveTypologyPackId(projectType ?? domain?.program.projectType);
 }
 
 function applyRuleThresholdOverrides(rulePack: RulePack, overrides?: ScoringConfig["ruleThresholds"]): RulePack {
@@ -145,7 +134,8 @@ export function normalizeScoringConfig(config: ScoringConfig | undefined, projec
 export function resolveRulePackFromDomain(domain?: ProjectDomain, projectType?: string): RulePack {
   const config = normalizeScoringConfig(domain?.scoringConfig, projectType ?? domain?.program.projectType);
   const presetId = config.rulePackPreset ?? inferPresetId(domain, projectType);
-  const preset = rulePackByPreset[presetId];
+  const typologyPack = resolveTypologyPack(projectType ?? domain?.program.projectType);
+  const preset = rulePackByPreset[presetId] ?? typologyPack.rulePack;
 
   let rulePack: RulePack = {
     ...preset,
@@ -174,7 +164,9 @@ export function resolveProgramGoalsFromDomain(domain?: ProjectDomain, projectTyp
   const baseGoals =
     presetId === "balanced"
       ? defaultProgramGoals
-      : resolveProgramGoalsFromContext({ projectType: presetId === "healthcare" ? "healthcare" : presetId });
+      : resolveProgramGoalsFromContext({
+          projectType: presetId === "healthcare" ? "healthcare" : presetId
+        }) ?? resolveTypologyPack(projectType ?? domain?.program.projectType).programGoals;
 
   if (!config.goalWeights) {
     return baseGoals;

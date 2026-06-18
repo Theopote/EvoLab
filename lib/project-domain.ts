@@ -22,6 +22,7 @@ import {
 import { normalizePlanVersion } from "@/lib/architecture-model";
 import { calculateQuantities } from "@/lib/quantity-engine";
 import { createDefaultScoringConfig, normalizeScoringConfig, resolveProgramGoalsFromDomain, resolveRulePackFromDomain } from "@/lib/rules/scoring-config";
+import { resolveTypologyPack } from "@/lib/typology/resolve";
 import { computeTotalScore } from "@/lib/rules/version-total-score";
 import type { DesignBrief, PlanVersion, Point, ProjectData, Room, TopologyGraph } from "@/lib/project-types";
 import type { SiteContext, ZoningConstraints } from "@/lib/site-types";
@@ -59,6 +60,8 @@ export function createSiteModel(input: {
 }
 
 export function programFromBrief(brief: DesignBrief, topologyGraph?: TopologyGraph): ProgramModel {
+  const typology = resolveTypologyPack(brief.projectType);
+
   const spaces: ProgramSpaceRequirement[] = topologyGraph?.rooms.length
     ? topologyGraph.rooms.map((room) => ({
         id: room.id,
@@ -77,34 +80,16 @@ export function programFromBrief(brief: DesignBrief, topologyGraph?: TopologyGra
           relationship: "prefer" as const
         }))
       }))
-    : [
-        {
-          id: "program-lobby",
-          name: "Public Lobby",
-          roomType: "lobby",
-          zone: "public",
-          targetAreaSqm: Math.max(80, brief.targetArea * 0.12),
-          priority: "required",
-          needsDaylight: true
-        },
-        {
-          id: "program-corridor",
-          name: "Main Corridor",
-          roomType: "corridor",
-          zone: "circulation",
-          targetAreaSqm: Math.max(40, brief.targetArea * 0.08),
-          priority: "required"
-        },
-        {
-          id: "program-clinical",
-          name: "Clinical Rooms",
-          roomType: "consultation",
-          zone: "private",
-          targetAreaSqm: Math.max(60, brief.targetArea * 0.2),
-          priority: "preferred",
-          needsDaylight: true
-        }
-      ];
+    : typology.defaultProgramSpaces.map((space, index) => ({
+        id: `program-${typology.id}-${index + 1}`,
+        ...space,
+        targetAreaSqm: Math.max(
+          space.targetAreaSqm ?? 40,
+          brief.targetArea * (index === 0 ? 0.12 : index === 1 ? 0.08 : 0.2)
+        ),
+        minAreaSqm: Math.max(6, (space.targetAreaSqm ?? brief.targetArea * 0.1) * 0.85),
+        maxAreaSqm: (space.targetAreaSqm ?? brief.targetArea * 0.1) * 1.2
+      }));
 
   return {
     id: "program-01",
@@ -533,6 +518,10 @@ export function getRulePack(domain?: ProjectDomain, projectType?: string) {
 
 export function getProgramGoals(domain?: ProjectDomain, projectType?: string) {
   return resolveProgramGoalsFromDomain(domain, projectType);
+}
+
+export function getTypologyPack(domain?: ProjectDomain, projectType?: string) {
+  return resolveTypologyPack(projectType ?? domain?.program.projectType);
 }
 
 export function scorePlanVersion(version: PlanVersion, domain?: ProjectDomain) {

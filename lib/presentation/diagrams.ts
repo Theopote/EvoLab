@@ -108,15 +108,17 @@ export function renderExplodedDiagram(version: PlanVersion) {
   </svg>`;
 }
 
-export function renderFlowDiagram(version: PlanVersion) {
-  const analysis = computeAnalysis(version, ["patient_flow", "staff_flow", "egress_path", "sightline"]);
+export function renderFlowDiagram(version: PlanVersion, projectType = "healthcare") {
+  const analysis = computeAnalysis(version, ["primary_flow", "staff_flow", "egress_path", "sightline"], {
+    projectType
+  });
   const padding = 10;
   const width = version.overallBounds.width + padding * 2;
   const height = version.overallBounds.height + padding * 2;
 
   const paths = [
-    analysis.patientFlow
-      ? `<polyline points="${analysis.patientFlow.points.map((p) => p.join(",")).join(" ")}" fill="none" stroke="#38bdf8" stroke-width="0.55" marker-end="url(#arrow-flow)" />`
+    analysis.primaryFlow ?? analysis.patientFlow
+      ? `<polyline points="${(analysis.primaryFlow ?? analysis.patientFlow)!.points.map((p) => p.join(",")).join(" ")}" fill="none" stroke="#38bdf8" stroke-width="0.55" marker-end="url(#arrow-flow)" />`
       : "",
     analysis.staffFlow
       ? `<polyline points="${analysis.staffFlow.points.map((p) => p.join(",")).join(" ")}" fill="none" stroke="#a78bfa" stroke-width="0.5" />`
