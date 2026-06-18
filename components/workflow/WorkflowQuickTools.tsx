@@ -1,6 +1,6 @@
 "use client";
 
-import { Boxes, DraftingCompass, MousePointer2, Upload, Wand2, Waypoints } from "lucide-react";
+import { Boxes, DraftingCompass, MousePointer2, Sparkles, Upload, Wand2, Waypoints } from "lucide-react";
 import type { ActiveTool } from "@/lib/interaction-store";
 import { useInteractionStore } from "@/lib/interaction-store";
 import { useCopilotUploadStore } from "@/lib/copilot-upload-store";
@@ -16,6 +16,7 @@ const tools: {
   { label: "Select", title: "Select", icon: MousePointer2, tool: "select", phases: ["brief_site", "scheme", "analyze"] },
   { label: "Outline", title: "Draw outline", icon: DraftingCompass, tool: "outline", phases: ["brief_site", "scheme"] },
   { label: "Trace", title: "Trace room vertices", icon: Wand2, tool: "trace", phases: ["scheme"] },
+  { label: "Inpaint", title: "AI inpaint brush", icon: Sparkles, tool: "inpaint", phases: ["scheme"] },
   { label: "Upload", title: "Upload drawing", icon: Upload, tool: "upload", phases: ["brief_site", "scheme"] },
   { label: "Flow", title: "Analysis flows", icon: Waypoints, tool: "flow", phases: ["analyze"] },
   { label: "Model", title: "3D model", icon: Boxes, tool: "model", phases: ["scheme"] }

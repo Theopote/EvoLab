@@ -9,6 +9,7 @@ import { calculateQuantities, checkCompliance, type ComplianceItem, type Quantit
 import { computeBuildableEnvelope } from "@/lib/buildable-envelope";
 import type { BuildableEnvelope, EnvironmentSurrogate, SiteContext, ZoningConstraints } from "@/lib/site-types";
 import { computeEnvironmentSurrogate } from "@/lib/environment-surrogate";
+import { polygonArea } from "@/lib/plan-validation";
 import { defaultZoningConstraints } from "@/lib/site-types";
 import type {
   AnalysisLayerId,
@@ -224,7 +225,19 @@ function applyRoomPatchToVersion(
 
   const nextLevels = version.levels.map((item) => ({
     ...item,
-    rooms: item.rooms.map((room) => (room.id === roomId ? { ...room, ...patch, id: room.id } : room))
+    rooms: item.rooms.map((room) => {
+      if (room.id !== roomId) {
+        return room;
+      }
+
+      const nextRoom = { ...room, ...patch, id: room.id };
+
+      if (patch.polygon) {
+        nextRoom.areaSqm = Number(polygonArea(patch.polygon).toFixed(1));
+      }
+
+      return nextRoom;
+    })
   }));
 
   return {

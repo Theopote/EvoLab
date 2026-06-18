@@ -1,7 +1,7 @@
 import { createPlanSvg } from "@/lib/export-utils";
 import type { PlanVersion } from "@/lib/project-types";
 
-function buildPlanPrintHtml(version: PlanVersion, totalArea: number) {
+export function buildPlanPrintHtml(version: PlanVersion, totalArea: number) {
   const svg = createPlanSvg(version);
   const title = `${version.label} — Floor Plan`;
 

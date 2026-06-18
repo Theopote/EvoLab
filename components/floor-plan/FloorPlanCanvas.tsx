@@ -10,6 +10,8 @@ import { OpeningLayer } from "@/components/floor-plan/layers/OpeningLayer";
 import { OutlineLayer } from "@/components/floor-plan/layers/OutlineLayer";
 import { RoomFillLayer } from "@/components/floor-plan/layers/RoomFillLayer";
 import { SelectionLayer } from "@/components/floor-plan/layers/SelectionLayer";
+import { InpaintMaskLayer } from "@/components/floor-plan/layers/InpaintMaskLayer";
+import { InpaintToolbar } from "@/components/floor-plan/InpaintToolbar";
 import { WallLayer } from "@/components/floor-plan/layers/WallLayer";
 import { getViewBox } from "@/components/floor-plan/floor-plan-utils";
 import { useEvoProject } from "@/lib/project-store";
@@ -22,6 +24,7 @@ export interface FloorPlanCanvasProps {
   levelId?: string;
   selectedRoomId?: string;
   interactive?: boolean;
+  onInpaintRevision?: (version: PlanVersion, prompt: string) => void;
 }
 
 export function FloorPlanCanvas({
@@ -29,7 +32,8 @@ export function FloorPlanCanvas({
   className,
   levelId: levelIdProp,
   selectedRoomId: selectedRoomIdProp,
-  interactive = true
+  interactive = true,
+  onInpaintRevision
 }: FloorPlanCanvasProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const activeTool = useInteractionStore((state) => state.activeTool);
@@ -81,6 +85,7 @@ export function FloorPlanCanvas({
     ? level?.openings.find((opening) => opening.id === selectedOpeningId)
     : undefined;
   const traceEnabled = interactive && activeTool === "trace";
+  const inpaintEnabled = interactive && activeTool === "inpaint";
   const hud = selectedRoom
     ? {
         type: "ROOM",
@@ -103,6 +108,9 @@ export function FloorPlanCanvas({
 
   return (
     <div className={className}>
+      {inpaintEnabled && onInpaintRevision ? (
+        <InpaintToolbar version={version} onInpaintRevision={onInpaintRevision} />
+      ) : null}
       <div className="relative min-h-[420px] overflow-hidden rounded border border-line bg-[#081018] shadow-insetGrid">
         <div className="pointer-events-none absolute inset-0 cad-grid opacity-70" />
         <svg
@@ -111,7 +119,7 @@ export function FloorPlanCanvas({
           viewBox={getViewBox(version)}
           role="img"
           onClick={() => {
-            if (interactive && !traceEnabled) {
+            if (interactive && !traceEnabled && !inpaintEnabled) {
               clearSelection();
             }
           }}
@@ -121,18 +129,18 @@ export function FloorPlanCanvas({
           <RoomFillLayer
             rooms={rooms}
             selectedRoomId={selectedRoomId}
-            onSelectRoom={interactive ? selectRoom : undefined}
+            onSelectRoom={interactive && !inpaintEnabled ? selectRoom : undefined}
           />
           <WallLayer
             walls={level?.walls ?? []}
             selectedWallId={selectedWallId}
-            onSelectWall={interactive ? selectWall : undefined}
+            onSelectWall={interactive && !inpaintEnabled ? selectWall : undefined}
           />
           <OpeningLayer
             openings={level?.openings ?? []}
             walls={level?.walls ?? []}
             selectedOpeningId={selectedOpeningId}
-            onSelectOpening={interactive ? selectOpening : undefined}
+            onSelectOpening={interactive && !inpaintEnabled ? selectOpening : undefined}
           />
           <CoreSymbolLayer rooms={rooms} />
           <LabelLayer version={visibleVersion} />
@@ -147,10 +155,12 @@ export function FloorPlanCanvas({
             svgRef={svgRef}
             onRoomPolygonChange={(roomId, polygon: Point[]) => updateRoomGeometry(roomId, { polygon })}
           />
+          <InpaintMaskLayer svgRef={svgRef} version={version} enabled={inpaintEnabled} />
         </svg>
         <div className="absolute bottom-3 left-3 rounded border border-line bg-[#081018]/90 px-2 py-1 text-xs text-muted">
           1 grid = 1 m / {version.label}
           {traceEnabled ? " / Trace vertices" : ""}
+          {inpaintEnabled ? " / Inpaint mask" : ""}
         </div>
         {interactive && hud ? (
           <div className="absolute bottom-3 right-3 rounded border border-accent/35 bg-[#081018]/95 px-3 py-2 text-xs">

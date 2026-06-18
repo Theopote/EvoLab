@@ -9,9 +9,15 @@ interface SchemeSplitViewportProps {
   activeVersion?: PlanVersion;
   activeLevelId?: string;
   onLevelChange: (levelId: string) => void;
+  onInpaintRevision?: (version: PlanVersion, prompt: string) => void;
 }
 
-export function SchemeSplitViewport({ activeVersion, activeLevelId, onLevelChange }: SchemeSplitViewportProps) {
+export function SchemeSplitViewport({
+  activeVersion,
+  activeLevelId,
+  onLevelChange,
+  onInpaintRevision
+}: SchemeSplitViewportProps) {
   if (!activeVersion) {
     return (
       <div className="grid min-h-[520px] place-items-center rounded border border-dashed border-line bg-panel/60 text-sm text-muted">
@@ -48,7 +54,11 @@ export function SchemeSplitViewport({ activeVersion, activeLevelId, onLevelChang
       <div className="grid min-h-0 gap-3 lg:grid-cols-2">
         <article className="min-h-[420px] overflow-hidden rounded border border-line bg-[#0b1118] p-2">
           <div className="mb-2 text-[11px] uppercase tracking-[0.12em] text-muted">2D Plan</div>
-          <FloorPlan levelId={activeLevelId} version={activeVersion} />
+          <FloorPlan
+            levelId={activeLevelId}
+            version={activeVersion}
+            onInpaintRevision={onInpaintRevision}
+          />
         </article>
         <article className="min-h-[420px] overflow-hidden rounded border border-line bg-[#081018]">
           <div className="flex items-center justify-between gap-3 border-b border-line px-3 py-2">

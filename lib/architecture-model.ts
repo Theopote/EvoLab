@@ -109,6 +109,21 @@ function createGrid(version: PlanVersionDraft): Grid {
   };
 }
 
+function paramOnWall(point: Point, wall: Wall) {
+  const length = distance(wall.start, wall.end);
+
+  if (length < 0.001) {
+    return 0.5;
+  }
+
+  const t =
+    ((point[0] - wall.start[0]) * (wall.end[0] - wall.start[0]) +
+      (point[1] - wall.start[1]) * (wall.end[1] - wall.start[1])) /
+    (length * length);
+
+  return Math.max(0.05, Math.min(0.95, t));
+}
+
 function createOpenings(rooms: Room[], walls: Wall[]) {
   const wallsByKey = new Map(walls.map((wall) => [edgeKey(wall.start, wall.end), wall]));
   const openings: OpeningElement[] = [];
@@ -140,6 +155,35 @@ function createOpenings(rooms: Room[], walls: Wall[]) {
   });
 
   return openings;
+}
+
+export function remapOpenings(previousOpenings: OpeningElement[], previousWalls: Wall[], nextWalls: Wall[]) {
+  const previousWallById = new Map(previousWalls.map((wall) => [wall.id, wall]));
+  const nextWallByKey = new Map(nextWalls.map((wall) => [edgeKey(wall.start, wall.end), wall]));
+
+  return previousOpenings
+    .map((opening) => {
+      const previousWall = previousWallById.get(opening.wallId);
+
+      if (!previousWall) {
+        return opening;
+      }
+
+      const nextWall = nextWallByKey.get(edgeKey(previousWall.start, previousWall.end));
+
+      if (!nextWall) {
+        return undefined;
+      }
+
+      const t = paramOnWall(opening.center, previousWall);
+
+      return {
+        ...opening,
+        wallId: nextWall.id,
+        center: lerpPoint(nextWall.start, nextWall.end, t)
+      };
+    })
+    .filter((opening): opening is OpeningElement => Boolean(opening));
 }
 
 function attachElementRefs(rooms: Room[], walls: Wall[], openings: OpeningElement[], levelId: string): Room[] {
@@ -191,7 +235,10 @@ export function normalizePlanVersion(version: PlanVersionDraft): PlanVersion {
       : version.rooms.filter((room) => room.levelId === levelId);
     const roomsForLevel = levelRooms.length ? levelRooms : index === 0 ? version.rooms : [];
     const walls = extractWallsFromRooms(roomsForLevel, version.outline);
-    const openings = createOpenings(roomsForLevel, walls);
+    const openings =
+      sourceLevel.openings.length > 0 && sourceLevel.walls.length > 0
+        ? remapOpenings(sourceLevel.openings, sourceLevel.walls, walls)
+        : createOpenings(roomsForLevel, walls);
     const rooms = attachElementRefs(roomsForLevel, walls, openings, levelId);
     const boundary: Boundary = {
       id: `boundary-${levelId}`,

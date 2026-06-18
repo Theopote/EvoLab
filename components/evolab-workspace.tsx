@@ -294,6 +294,18 @@ export function EvoLabWorkspace() {
     }
   }
 
+  function handleInpaintRevision(
+    version: Parameters<typeof updateActiveVersion>[0],
+    prompt: string
+  ) {
+    if (!activeVersion) {
+      updateActiveVersion(version);
+      return;
+    }
+
+    handleCopilotRevision(version, prompt, activeVersion);
+  }
+
   function handleCopilotRevision(
     version: Parameters<typeof updateActiveVersion>[0],
     prompt: string,
@@ -317,6 +329,7 @@ export function EvoLabWorkspace() {
             activeVersion={activeVersion}
             activeLevelId={activeLevelId}
             onLevelChange={setActiveLevel}
+            onInpaintRevision={handleInpaintRevision}
           />
           <PlanResultGrid
             outline={outline}
@@ -368,7 +381,11 @@ export function EvoLabWorkspace() {
                 </span>
               </div>
             </div>
-            <FloorPlan levelId={activeLevelId} version={activeVersion} />
+            <FloorPlan
+              levelId={activeLevelId}
+              version={activeVersion}
+              onInpaintRevision={handleInpaintRevision}
+            />
           </section>
         </div>
 

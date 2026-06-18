@@ -116,11 +116,11 @@ export function extractWallsFromRooms(rooms: Room[], outline: Point[]): Wall[] {
     });
   });
 
-  return [...edges.values()].map((edge, index) => {
+  return [...edges.values()].map((edge) => {
     const type = classifyWall(edge, outlineEdges);
 
     return {
-      id: `wall-${index + 1}`,
+      id: `wall-${edge.key.replace(/\|/g, "-")}`,
       start: edge.start,
       end: edge.end,
       thickness: wallThickness(type),

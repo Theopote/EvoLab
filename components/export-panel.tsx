@@ -13,6 +13,7 @@ import {
   exportVersionJson
 } from "@/lib/export-utils";
 import { openPlanPdfPrint } from "@/lib/export-plan-pdf";
+import { downloadGltfModel } from "@/lib/export-gltf";
 import type { PlanVersion, ProjectData } from "@/lib/project-types";
 
 interface ExportPanelProps {
@@ -22,15 +23,14 @@ interface ExportPanelProps {
   complianceItems: ComplianceItem[];
 }
 
-const plannedExports = [
-  { label: "glTF model", detail: "Needs geometry serialization", icon: FileArchive },
-  { label: "IFC STEP file", detail: "Needs IfcOpenShell service", icon: FileCode2 }
-];
+const plannedExports = [{ label: "IFC STEP file", detail: "Needs IfcOpenShell service", icon: FileCode2 }];
 
 export function ExportPanel({ project, activeVersion, quantities, complianceItems }: ExportPanelProps) {
   const canExportVersion = Boolean(activeVersion);
   const canExportQuantities = Boolean(quantities);
   const [exportNotice, setExportNotice] = useState<string | null>(null);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [isExportingGltf, setIsExportingGltf] = useState(false);
 
   function handlePlanPdfExport() {
     if (!activeVersion) {
@@ -42,6 +42,61 @@ export function ExportPanel({ project, activeVersion, quantities, complianceItem
       setExportNotice("Opened print dialog for the active plan sheet.");
     } catch (error) {
       setExportNotice(error instanceof Error ? error.message : "Failed to open plan PDF print.");
+    }
+  }
+
+  async function handleServerPlanPdfExport() {
+    if (!activeVersion) {
+      return;
+    }
+
+    setIsExportingPdf(true);
+    setExportNotice(null);
+
+    try {
+      const response = await fetch("/api/export-plan-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ version: activeVersion })
+      });
+
+      if (!response.ok) {
+        const data = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(data.error ?? `export-plan-pdf failed with ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `${activeVersion.id}-plan.pdf`;
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      setExportNotice("Server PDF downloaded.");
+    } catch (error) {
+      setExportNotice(error instanceof Error ? error.message : "Server PDF export failed.");
+    } finally {
+      setIsExportingPdf(false);
+    }
+  }
+
+  async function handleGltfExport() {
+    if (!activeVersion) {
+      return;
+    }
+
+    setIsExportingGltf(true);
+    setExportNotice(null);
+
+    try {
+      await downloadGltfModel(activeVersion);
+      setExportNotice("glTF binary (.glb) downloaded.");
+    } catch (error) {
+      setExportNotice(error instanceof Error ? error.message : "glTF export failed.");
+    } finally {
+      setIsExportingGltf(false);
     }
   }
 
@@ -92,6 +147,20 @@ export function ExportPanel({ project, activeVersion, quantities, complianceItem
               label="Drawing PDF"
               detail="Browser print-to-PDF for the active floor plan"
               onClick={handlePlanPdfExport}
+            />
+            <ExportCard
+              disabled={!canExportVersion || isExportingPdf}
+              icon={FileText}
+              label="Server PDF"
+              detail="Playwright-rendered plan sheet download"
+              onClick={() => void handleServerPlanPdfExport()}
+            />
+            <ExportCard
+              disabled={!canExportVersion || isExportingGltf}
+              icon={FileArchive}
+              label="glTF model (.glb)"
+              detail="Serialized room masses, walls and openings"
+              onClick={() => void handleGltfExport()}
             />
             <ExportCard
               disabled={!canExportVersion}
