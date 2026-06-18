@@ -21,6 +21,14 @@ function renderSlide(slide: PresentationDeck["slides"][number], index: number) {
   const diagram = slide.svg
     ? `<div class="diagram">${slide.svg.replace("<svg", '<svg width="100%" height="100%" preserveAspectRatio="xMidYMid meet"')}</div>`
     : "";
+  const images = slide.images?.length
+    ? `<div class="image-grid">${slide.images
+        .map(
+          (image) =>
+            `<figure><img src="${image.dataUrl}" alt="${escapeHtml(image.label)}" /><figcaption>${escapeHtml(image.label)}</figcaption></figure>`
+        )
+        .join("")}</div>`
+    : "";
 
   return `
     <section class="slide" id="slide-${index + 1}">
@@ -29,6 +37,7 @@ function renderSlide(slide: PresentationDeck["slides"][number], index: number) {
       ${slide.subtitle ? `<h2>${escapeHtml(slide.subtitle)}</h2>` : ""}
       <ul>${bullets}</ul>
       ${diagram}
+      ${images}
       ${table}
     </section>`;
 }
@@ -97,6 +106,31 @@ export function renderPresentationHtml(deck: PresentationDeck) {
         overflow: hidden;
         background: #081018;
         margin-top: 12px;
+      }
+      .image-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 12px;
+        margin-top: 12px;
+      }
+      .image-grid figure {
+        margin: 0;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        overflow: hidden;
+        background: #081018;
+      }
+      .image-grid img {
+        display: block;
+        width: 100%;
+        height: 220px;
+        object-fit: cover;
+      }
+      .image-grid figcaption {
+        padding: 8px 10px;
+        font-size: 12px;
+        color: #64748b;
+        background: #f8fafc;
       }
       table {
         width: 100%;

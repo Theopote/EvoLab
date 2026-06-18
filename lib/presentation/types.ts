@@ -14,6 +14,12 @@ export interface PresentationTable {
   rows: string[][];
 }
 
+export interface PresentationSlideImage {
+  id: string;
+  label: string;
+  dataUrl: string;
+}
+
 export interface PresentationSlide {
   id: string;
   kind: PresentationSlideKind;
@@ -21,6 +27,7 @@ export interface PresentationSlide {
   subtitle?: string;
   bullets: string[];
   svg?: string;
+  images?: PresentationSlideImage[];
   table?: PresentationTable;
 }
 

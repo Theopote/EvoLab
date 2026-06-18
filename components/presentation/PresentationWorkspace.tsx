@@ -1,11 +1,15 @@
 "use client";
 
-import { Download, FileText, Loader2, Presentation, Sparkles } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Camera, Download, FileText, Loader2, Presentation, Sparkles } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { buildPresentationDeck } from "@/lib/presentation/storyboard";
+import { PresentationCaptureCanvas } from "@/components/presentation/PresentationCaptureCanvas";
+import { attachModelCaptures } from "@/lib/presentation/merge-captures";
 import { downloadPresentationHtml, renderPresentationHtml } from "@/lib/presentation/render-html";
+import { downloadPresentationPptx, prepareDeckForPptx } from "@/lib/presentation/render-pptx";
+import { buildPresentationDeck } from "@/lib/presentation/storyboard";
 import type { PresentationDeck } from "@/lib/presentation/types";
+import { usePresentationCaptureStore } from "@/lib/presentation-capture-store";
 import { useEvoProject } from "@/lib/project-store";
 
 export function PresentationWorkspace() {
@@ -20,9 +24,16 @@ export function PresentationWorkspace() {
       buildableEnvelope: state.buildableEnvelope
     }))
   );
+  const captureStatus = usePresentationCaptureStore((state) => state.status);
+  const captureImages = usePresentationCaptureStore((state) => state.images);
+  const captureError = usePresentationCaptureStore((state) => state.error);
+  const requestCapture = usePresentationCaptureStore((state) => state.requestCapture);
+  const resetCapture = usePresentationCaptureStore((state) => state.resetCapture);
+
   const [deck, setDeck] = useState<PresentationDeck | undefined>(undefined);
   const [activeSlide, setActiveSlide] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isExportingPptx, setIsExportingPptx] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   const localDeck = useMemo(() => {
@@ -41,6 +52,38 @@ export function PresentationWorkspace() {
 
   const currentDeck = deck ?? localDeck;
   const slide = currentDeck?.slides[activeSlide];
+
+  useEffect(() => {
+    if (captureStatus !== "done" || captureImages.length === 0) {
+      return;
+    }
+
+    setDeck((previous) => {
+      const base = previous ?? localDeck;
+
+      if (!base) {
+        return previous;
+      }
+
+      const withoutModelSlide = base.slides.filter((item) => item.id !== "slide-model-3d");
+      return attachModelCaptures(withoutModelSlide === base.slides ? base : { ...base, slides: withoutModelSlide }, captureImages);
+    });
+
+    const massingIndex = (deck ?? localDeck)?.slides.findIndex((item) => item.id === "slide-massing") ?? -1;
+    if (massingIndex >= 0) {
+      setActiveSlide(massingIndex + 1);
+    }
+
+    setNotice(`Captured ${captureImages.length} WebGL views and inserted into the deck.`);
+    resetCapture();
+  }, [captureImages, captureStatus, deck, localDeck, resetCapture]);
+
+  useEffect(() => {
+    if (captureStatus === "error" && captureError) {
+      setNotice(captureError);
+      resetCapture();
+    }
+  }, [captureError, captureStatus, resetCapture]);
 
   async function generateStoryboard() {
     if (!activeVersion) {
@@ -123,6 +166,34 @@ export function PresentationWorkspace() {
     popup.print();
   }
 
+  async function exportPptx() {
+    if (!currentDeck) {
+      return;
+    }
+
+    setIsExportingPptx(true);
+    setNotice(null);
+
+    try {
+      const prepared = await prepareDeckForPptx(currentDeck);
+      await downloadPresentationPptx(prepared);
+      setNotice("PowerPoint deck exported.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Failed to export PPTX.");
+    } finally {
+      setIsExportingPptx(false);
+    }
+  }
+
+  function captureModelViews() {
+    if (!activeVersion) {
+      return;
+    }
+
+    setNotice("Capturing isometric, eye-level, and plan views from the 3D scene…");
+    requestCapture();
+  }
+
   if (!activeVersion) {
     return (
       <div className="grid min-h-[280px] place-items-center rounded border border-dashed border-line bg-panel/60 text-sm text-muted">
@@ -132,113 +203,149 @@ export function PresentationWorkspace() {
   }
 
   return (
-    <section className="rounded border border-line bg-panel/90 p-3">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-base font-semibold text-white">Automated Presentation</h2>
-          <p className="mt-1 text-xs text-muted">
-            Storyboard, isometric / exploded diagrams, flow overlays, quantities, and AI design narrative.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            className="flex h-9 items-center gap-2 rounded border border-line px-3 text-xs text-slate-100 hover:border-accent/50"
-            type="button"
-            onClick={generateStoryboard}
-            disabled={isGenerating}
-          >
-            {isGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-            Generate storyboard
-          </button>
-          <button
-            className="flex h-9 items-center gap-2 rounded border border-line px-3 text-xs text-slate-100 hover:border-accent/50"
-            type="button"
-            onClick={exportHtml}
-            disabled={!currentDeck}
-          >
-            <Download className="h-3.5 w-3.5" />
-            Export HTML
-          </button>
-          <button
-            className="flex h-9 items-center gap-2 rounded bg-accent px-3 text-xs font-medium text-[#061014]"
-            type="button"
-            onClick={printPdf}
-            disabled={!currentDeck}
-          >
-            <FileText className="h-3.5 w-3.5" />
-            Print / PDF
-          </button>
-        </div>
-      </div>
+    <>
+      <PresentationCaptureCanvas />
 
-      {notice ? <div className="mb-3 rounded border border-warning/40 bg-warning/10 p-2 text-xs text-warning">{notice}</div> : null}
-
-      <div className="grid gap-3 lg:grid-cols-[220px_minmax(0,1fr)]">
-        <aside className="space-y-2">
-          {currentDeck?.slides.map((item, index) => (
+      <section className="rounded border border-line bg-panel/90 p-3">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-base font-semibold text-white">Automated Presentation</h2>
+            <p className="mt-1 text-xs text-muted">
+              Storyboard, isometric / exploded diagrams, flow overlays, 3D captures, quantities, and AI design narrative.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
             <button
-              key={item.id}
-              className={`w-full rounded border px-3 py-2 text-left text-xs ${
-                index === activeSlide ? "border-accent/60 bg-accent/10 text-accent" : "border-line text-muted"
-              }`}
+              className="flex h-9 items-center gap-2 rounded border border-line px-3 text-xs text-slate-100 hover:border-accent/50"
               type="button"
-              onClick={() => setActiveSlide(index)}
+              onClick={generateStoryboard}
+              disabled={isGenerating}
             >
-              <div className="font-medium text-slate-100">{item.title}</div>
-              <div className="mt-1 capitalize">{item.kind}</div>
+              {isGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+              Generate storyboard
             </button>
-          ))}
-        </aside>
+            <button
+              className="flex h-9 items-center gap-2 rounded border border-line px-3 text-xs text-slate-100 hover:border-accent/50"
+              type="button"
+              onClick={captureModelViews}
+              disabled={captureStatus === "capturing"}
+            >
+              {captureStatus === "capturing" ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Camera className="h-3.5 w-3.5" />
+              )}
+              Capture 3D views
+            </button>
+            <button
+              className="flex h-9 items-center gap-2 rounded border border-line px-3 text-xs text-slate-100 hover:border-accent/50"
+              type="button"
+              onClick={exportHtml}
+              disabled={!currentDeck}
+            >
+              <Download className="h-3.5 w-3.5" />
+              Export HTML
+            </button>
+            <button
+              className="flex h-9 items-center gap-2 rounded border border-line px-3 text-xs text-slate-100 hover:border-accent/50"
+              type="button"
+              onClick={exportPptx}
+              disabled={!currentDeck || isExportingPptx}
+            >
+              {isExportingPptx ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+              Export PPTX
+            </button>
+            <button
+              className="flex h-9 items-center gap-2 rounded bg-accent px-3 text-xs font-medium text-[#061014]"
+              type="button"
+              onClick={printPdf}
+              disabled={!currentDeck}
+            >
+              <FileText className="h-3.5 w-3.5" />
+              Print / PDF
+            </button>
+          </div>
+        </div>
 
-        <article className="rounded border border-line bg-[#0b1118] p-4">
-          {slide ? (
-            <>
-              <div className="mb-2 flex items-center gap-2 text-xs text-muted">
-                <Presentation className="h-3.5 w-3.5" />
-                {slide.subtitle ?? currentDeck?.versionLabel}
-              </div>
-              <h3 className="text-lg font-semibold text-white">{slide.title}</h3>
-              <ul className="mt-3 space-y-1 text-sm text-slate-300">
-                {slide.bullets.map((bullet) => (
-                  <li key={bullet}>• {bullet}</li>
-                ))}
-              </ul>
-              {slide.svg ? (
-                <div
-                  className="mt-4 overflow-hidden rounded border border-line bg-[#081018] [&_svg]:h-[320px] [&_svg]:w-full"
-                  dangerouslySetInnerHTML={{ __html: slide.svg }}
-                />
-              ) : null}
-              {slide.table ? (
-                <div className="mt-4 overflow-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className="border-b border-line text-muted">
-                        {slide.table.headers.map((header) => (
-                          <th className="px-2 py-2" key={header}>
-                            {header}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {slide.table.rows.map((row, rowIndex) => (
-                        <tr className="border-b border-line/60" key={rowIndex}>
-                          {row.map((cell, cellIndex) => (
-                            <td className="px-2 py-2 text-slate-200" key={cellIndex}>
-                              {cell}
-                            </td>
+        {notice ? <div className="mb-3 rounded border border-warning/40 bg-warning/10 p-2 text-xs text-warning">{notice}</div> : null}
+
+        <div className="grid gap-3 lg:grid-cols-[220px_minmax(0,1fr)]">
+          <aside className="space-y-2">
+            {currentDeck?.slides.map((item, index) => (
+              <button
+                key={item.id}
+                className={`w-full rounded border px-3 py-2 text-left text-xs ${
+                  index === activeSlide ? "border-accent/60 bg-accent/10 text-accent" : "border-line text-muted"
+                }`}
+                type="button"
+                onClick={() => setActiveSlide(index)}
+              >
+                <div className="font-medium text-slate-100">{item.title}</div>
+                <div className="mt-1 capitalize">{item.kind}</div>
+              </button>
+            ))}
+          </aside>
+
+          <article className="rounded border border-line bg-[#0b1118] p-4">
+            {slide ? (
+              <>
+                <div className="mb-2 flex items-center gap-2 text-xs text-muted">
+                  <Presentation className="h-3.5 w-3.5" />
+                  {slide.subtitle ?? currentDeck?.versionLabel}
+                </div>
+                <h3 className="text-lg font-semibold text-white">{slide.title}</h3>
+                <ul className="mt-3 space-y-1 text-sm text-slate-300">
+                  {slide.bullets.map((bullet) => (
+                    <li key={bullet}>• {bullet}</li>
+                  ))}
+                </ul>
+                {slide.images?.length ? (
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {slide.images.map((image) => (
+                      <figure key={image.id} className="overflow-hidden rounded border border-line bg-[#081018]">
+                        <img alt={image.label} className="h-40 w-full object-cover" src={image.dataUrl} />
+                        <figcaption className="px-2 py-1 text-xs text-muted">{image.label}</figcaption>
+                      </figure>
+                    ))}
+                  </div>
+                ) : null}
+                {slide.svg ? (
+                  <div
+                    className="mt-4 overflow-hidden rounded border border-line bg-[#081018] [&_svg]:h-[320px] [&_svg]:w-full"
+                    dangerouslySetInnerHTML={{ __html: slide.svg }}
+                  />
+                ) : null}
+                {slide.table ? (
+                  <div className="mt-4 overflow-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className="border-b border-line text-muted">
+                          {slide.table.headers.map((header) => (
+                            <th className="px-2 py-2" key={header}>
+                              {header}
+                            </th>
                           ))}
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : null}
-            </>
-          ) : null}
-        </article>
-      </div>
-    </section>
+                      </thead>
+                      <tbody>
+                        {slide.table.rows.map((row, rowIndex) => (
+                          <tr className="border-b border-line/60" key={rowIndex}>
+                            {row.map((cell, cellIndex) => (
+                              <td className="px-2 py-2 text-slate-200" key={cellIndex}>
+                                {cell}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : null}
+              </>
+            ) : null}
+          </article>
+        </div>
+      </section>
+    </>
   );
 }
