@@ -20,6 +20,7 @@ import { QuantityTable } from "@/components/quantity/QuantityTable";
 import { RenderPanel } from "@/components/render-panel";
 import { ToolPalette } from "@/components/tool-palette";
 import { TopNav } from "@/components/top-nav";
+import { PresentationWorkspace } from "@/components/presentation/PresentationWorkspace";
 import { VersionCompareGrid } from "@/components/version-compare/VersionCompareGrid";
 import { Scene } from "@/components/viewer-3d/Scene";
 import { useEvoProject } from "@/lib/project-store";
@@ -136,13 +137,16 @@ export function EvoLabWorkspace() {
             ) : activeTab === "Render" ? (
               <RenderPanel activeVersion={activeVersion} />
             ) : activeTab === "Sheets" ? (
-              <VersionCompareGrid
-                versions={project.versions}
-                activeVersionId={project.activeVersionId}
-                onSelectVersion={setActiveVersion}
-                onGenerateModel={openModelForVersion}
-                onRefineVersion={refineVersion}
-              />
+              <section className="grid min-h-full grid-rows-[auto_minmax(0,1fr)] gap-4">
+                <PresentationWorkspace />
+                <VersionCompareGrid
+                  versions={project.versions}
+                  activeVersionId={project.activeVersionId}
+                  onSelectVersion={setActiveVersion}
+                  onGenerateModel={openModelForVersion}
+                  onRefineVersion={refineVersion}
+                />
+              </section>
             ) : activeTab === "Export" ? (
               <ExportPanel
                 project={project}

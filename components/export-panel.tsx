@@ -48,6 +48,10 @@ export function ExportPanel({ project, activeVersion, quantities, complianceItem
 
       <div className="grid gap-4 xl:grid-cols-[1fr_0.8fr]">
         <section className="rounded border border-line bg-panel/90 p-3">
+          <h2 className="mb-3 text-sm font-semibold text-white">Presentation Export</h2>
+          <p className="mb-3 text-xs text-muted">
+            For full storyboard decks with isometric diagrams and AI narrative, use the Sheets workspace.
+          </p>
           <h2 className="mb-3 text-sm font-semibold text-white">Available Exports</h2>
           <div className="grid gap-3 lg:grid-cols-2">
             <ExportCard
