@@ -205,7 +205,7 @@ function addContentSlide(pptx: import("pptxgenjs").default, slide: PresentationS
   }
 }
 
-export async function downloadPresentationPptx(deck: PresentationDeck) {
+export async function generatePresentationPptxBuffer(deck: PresentationDeck): Promise<Buffer> {
   const { default: PptxGenJS } = await import("pptxgenjs");
   const pptx = new PptxGenJS();
   pptx.layout = "LAYOUT_16x9";
@@ -216,55 +216,6 @@ export async function downloadPresentationPptx(deck: PresentationDeck) {
   addTitleSlide(pptx, deck);
   deck.slides.forEach((slide) => addContentSlide(pptx, slide, deck));
 
-  const fileName = `${deck.projectName.replace(/\s+/g, "-").toLowerCase()}-presentation.pptx`;
-  await pptx.writeFile({ fileName });
-}
-
-export function svgToPngDataUrl(svg: string, width = 1280, height = 720): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-    const url = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-
-    image.onload = () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-      const context = canvas.getContext("2d");
-
-      if (!context) {
-        reject(new Error("Canvas context unavailable."));
-        return;
-      }
-
-      context.fillStyle = "#081018";
-      context.fillRect(0, 0, width, height);
-      context.drawImage(image, 0, 0, width, height);
-      resolve(canvas.toDataURL("image/png"));
-    };
-
-    image.onerror = () => reject(new Error("Failed to rasterize SVG for PPTX export."));
-    image.src = url;
-  });
-}
-
-export async function prepareDeckForPptx(deck: PresentationDeck): Promise<PresentationDeck> {
-  const slides = await Promise.all(
-    deck.slides.map(async (slide) => {
-      if (!slide.svg || slide.images?.length) {
-        return slide;
-      }
-
-      try {
-        const pngDataUrl = await svgToPngDataUrl(slide.svg);
-        return {
-          ...slide,
-          images: [{ id: `${slide.id}-svg`, label: slide.title, dataUrl: pngDataUrl }]
-        };
-      } catch {
-        return slide;
-      }
-    })
-  );
-
-  return { ...deck, slides };
+  const data = await pptx.write({ outputType: "nodebuffer" });
+  return Buffer.from(data as Buffer);
 }

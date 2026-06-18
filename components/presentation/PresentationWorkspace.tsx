@@ -7,7 +7,7 @@ import { PresentationCaptureCanvas } from "@/components/presentation/Presentatio
 import { attachModelCaptures } from "@/lib/presentation/merge-captures";
 import { MODEL_SLIDE_ID, extractModelCaptures } from "@/lib/presentation/model-slide";
 import { downloadPresentationHtml, downloadPresentationViaApi, renderPresentationHtml } from "@/lib/presentation/render-html";
-import { downloadPresentationPptx, prepareDeckForPptx } from "@/lib/presentation/render-pptx";
+import { downloadPresentationPptxViaApi, prepareDeckForPptx } from "@/lib/presentation/render-pptx-client";
 import { buildPresentationDeck } from "@/lib/presentation/storyboard";
 import { presentationTemplates } from "@/lib/presentation/templates";
 import type { PresentationDeck, PresentationTemplateId } from "@/lib/presentation/types";
@@ -266,7 +266,7 @@ export function PresentationWorkspace() {
 
     try {
       const prepared = await prepareDeckForPptx(exportDeck);
-      await downloadPresentationPptx(prepared);
+      await downloadPresentationPptxViaApi(prepared);
       setNotice("PowerPoint deck exported.");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Failed to export PPTX.");
