@@ -1,4 +1,4 @@
-import type { CodeContext, ProgramModel } from "@/lib/building-domain";
+import type { CodeContext, ProgramModel, ProjectDomain } from "@/lib/building-domain";
 import type { PlanVersion } from "@/lib/project-types";
 import { calculateVersionScores } from "@/lib/rules/score-engine";
 import { resolveProgramGoals } from "@/lib/rules/program-goals";

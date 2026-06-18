@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
+import { buildRoomGraph } from "@/lib/analysis/graph";
 import { initialProjectData } from "@/lib/evolab-data";
 import { defaultHealthcareCodeContext } from "@/lib/building-domain";
 import { validatePlanVersion } from "@/lib/plan-validation";
+import { checkCompliance } from "@/lib/quantity-engine";
+import { computeEgressPathMetrics } from "@/lib/rules/path-metrics";
+import { resolveProgramGoals } from "@/lib/rules/program-goals";
 import { calculateVersionScores } from "@/lib/rules/score-engine";
 import { compareVersionScores, computeTotalScore } from "@/lib/rules/version-total-score";
-import { resolveProgramGoals } from "@/lib/rules/program-goals";
-import { computeEgressPathMetrics } from "@/lib/rules/path-metrics";
-import { checkCompliance } from "@/lib/quantity-engine";
 
 const baseVersion = initialProjectData.versions[0]!;
 
@@ -46,5 +47,13 @@ describe("rules score engine", () => {
     const comparison = compareVersionScores(left, right, resolveProgramGoals());
     expect(comparison.totalDelta).toBeGreaterThan(0);
     expect(comparison.explanations.length).toBeGreaterThan(0);
+  });
+
+  it("prefers door-aware navigation graph when door data exists", () => {
+    const graph = buildRoomGraph(baseVersion);
+    const egress = computeEgressPathMetrics(baseVersion);
+
+    expect(["door-aware", "adjacency"]).toContain(graph.method);
+    expect(["door-aware-path", "path", "centroid-fallback"]).toContain(egress.method);
   });
 });
