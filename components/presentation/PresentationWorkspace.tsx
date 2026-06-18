@@ -6,7 +6,7 @@ import { useShallow } from "zustand/react/shallow";
 import { PresentationCaptureCanvas } from "@/components/presentation/PresentationCaptureCanvas";
 import { attachModelCaptures } from "@/lib/presentation/merge-captures";
 import { MODEL_SLIDE_ID, extractModelCaptures } from "@/lib/presentation/model-slide";
-import { downloadPresentationHtml, renderPresentationHtml } from "@/lib/presentation/render-html";
+import { downloadPresentationHtml, downloadPresentationViaApi, renderPresentationHtml } from "@/lib/presentation/render-html";
 import { downloadPresentationPptx, prepareDeckForPptx } from "@/lib/presentation/render-pptx";
 import { buildPresentationDeck } from "@/lib/presentation/storyboard";
 import { presentationTemplates } from "@/lib/presentation/templates";
@@ -43,6 +43,7 @@ export function PresentationWorkspace() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isBuildingFullDeck, setIsBuildingFullDeck] = useState(false);
   const [isExportingPptx, setIsExportingPptx] = useState(false);
+  const [isExportingServerHtml, setIsExportingServerHtml] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   const localDeck = useMemo(() => {
@@ -219,6 +220,24 @@ export function PresentationWorkspace() {
     downloadPresentationHtml(exportDeck);
   }
 
+  async function exportServerHtml() {
+    if (!exportDeck) {
+      return;
+    }
+
+    setIsExportingServerHtml(true);
+    setNotice(null);
+
+    try {
+      await downloadPresentationViaApi(exportDeck);
+      setNotice("Presentation HTML downloaded via server export API.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Server HTML export failed.");
+    } finally {
+      setIsExportingServerHtml(false);
+    }
+  }
+
   function printPdf() {
     if (!exportDeck) {
       return;
@@ -342,6 +361,15 @@ export function PresentationWorkspace() {
             >
               <Download className="h-3.5 w-3.5" />
               Export HTML
+            </button>
+            <button
+              className="flex h-9 items-center gap-2 rounded border border-line px-3 text-xs text-slate-100 hover:border-accent/50"
+              type="button"
+              onClick={() => void exportServerHtml()}
+              disabled={!currentDeck || isExportingServerHtml}
+            >
+              {isExportingServerHtml ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+              Server HTML
             </button>
             <button
               className="flex h-9 items-center gap-2 rounded border border-line px-3 text-xs text-slate-100 hover:border-accent/50"

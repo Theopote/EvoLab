@@ -1,7 +1,7 @@
 import { produce } from "immer";
 import { create } from "zustand";
 
-export type ActiveTool = "select" | "outline" | "upload" | "flow" | "model";
+export type ActiveTool = "select" | "outline" | "upload" | "flow" | "model" | "trace";
 
 interface View3DState {
   frameloop: "always" | "demand";
@@ -12,11 +12,13 @@ interface InteractionState {
   activeTool: ActiveTool;
   selectedRoomId?: string;
   hoveredRoomId?: string;
+  explodeFactor: number;
   view3d: View3DState;
   setActiveTool: (tool: ActiveTool) => void;
   selectRoom: (roomId?: string) => void;
   hoverRoom: (roomId?: string) => void;
   clearSelection: () => void;
+  setExplodeFactor: (factor: number) => void;
   setView3D: (view: Partial<View3DState>) => void;
 }
 
@@ -24,6 +26,7 @@ export const useInteractionStore = create<InteractionState>((set) => ({
   activeTool: "select",
   selectedRoomId: undefined,
   hoveredRoomId: undefined,
+  explodeFactor: 0,
   view3d: {
     frameloop: "demand",
     bvhEnabled: true
@@ -51,6 +54,12 @@ export const useInteractionStore = create<InteractionState>((set) => ({
       produce<InteractionState>((state) => {
         state.selectedRoomId = undefined;
         state.hoveredRoomId = undefined;
+      })
+    ),
+  setExplodeFactor: (factor) =>
+    set(
+      produce<InteractionState>((state) => {
+        state.explodeFactor = Math.max(0, Math.min(1, factor));
       })
     ),
   setView3D: (view) =>

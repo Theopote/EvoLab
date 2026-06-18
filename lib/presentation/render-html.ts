@@ -226,3 +226,23 @@ export function downloadPresentationHtml(deck: PresentationDeck) {
   anchor.click();
   URL.revokeObjectURL(url);
 }
+
+export async function downloadPresentationViaApi(deck: PresentationDeck) {
+  const response = await fetch("/api/export-presentation", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ deck })
+  });
+
+  if (!response.ok) {
+    throw new Error(`export-presentation failed with ${response.status}`);
+  }
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `${deck.projectName.replace(/\s+/g, "-").toLowerCase()}-presentation.html`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}

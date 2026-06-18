@@ -1,6 +1,7 @@
 "use client";
 
 import { FloorPlan } from "@/components/floor-plan";
+import { ExplodeSlider } from "@/components/viewer-3d/ExplodeSlider";
 import { Scene } from "@/components/viewer-3d/Scene";
 import type { PlanVersion } from "@/lib/project-types";
 
@@ -50,8 +51,11 @@ export function SchemeSplitViewport({ activeVersion, activeLevelId, onLevelChang
           <FloorPlan levelId={activeLevelId} version={activeVersion} />
         </article>
         <article className="min-h-[420px] overflow-hidden rounded border border-line bg-[#081018]">
-          <div className="border-b border-line px-3 py-2 text-[11px] uppercase tracking-[0.12em] text-muted">3D Model</div>
-          <div className="h-[calc(100%-2rem)] min-h-[380px]">
+          <div className="flex items-center justify-between gap-3 border-b border-line px-3 py-2">
+            <div className="text-[11px] uppercase tracking-[0.12em] text-muted">3D Model</div>
+            <ExplodeSlider className="max-w-xs flex-1" />
+          </div>
+          <div className="h-[calc(100%-2.75rem)] min-h-[380px]">
             <Scene />
           </div>
         </article>

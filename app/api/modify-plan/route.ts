@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requestAnthropicTool } from "@/lib/anthropic-tool";
+import { normalizeImageInputs } from "@/lib/image-input";
 import { createMockModifiedVersion } from "@/lib/mock-api";
 import { postProcessPlanVersion } from "@/lib/plan-postprocess";
 import { modifyPlanPrompt } from "@/lib/prompts/modifyPlanPrompt";
@@ -9,6 +10,7 @@ import type { CopilotFinding, PlanVersion } from "@/lib/project-types";
 interface ModifyPlanRequest {
   currentVersion?: PlanVersion;
   userRequest?: string;
+  referenceImages?: Array<{ base64: string; mediaType?: string; fileName?: string }>;
 }
 
 interface ModifyPlanResponse {
@@ -29,9 +31,20 @@ export async function POST(request: Request) {
   const fallback = createMockModifiedVersion(body.currentVersion, body.userRequest ?? "");
 
   try {
+    const referenceImages = normalizeImageInputs(body.referenceImages);
+
     const data = await requestAnthropicTool({
       system: modifyPlanPrompt,
-      input: body,
+      input: {
+        currentVersion: body.currentVersion,
+        userRequest: body.userRequest,
+        referenceImageCount: referenceImages.length,
+        referenceImageNames: referenceImages.map((image) => image.fileName).filter(Boolean)
+      },
+      images: referenceImages.map((image) => ({
+        base64: image.base64,
+        mediaType: image.mediaType
+      })),
       toolName: "modify_plan",
       toolDescription: "Return a complete modified EvoLab plan version and concrete Copilot findings.",
       schema: ModifyPlanToolInputSchema,

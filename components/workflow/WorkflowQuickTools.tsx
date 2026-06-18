@@ -1,8 +1,9 @@
 "use client";
 
-import { Boxes, DraftingCompass, MousePointer2, Upload, Waypoints } from "lucide-react";
+import { Boxes, DraftingCompass, MousePointer2, Upload, Wand2, Waypoints } from "lucide-react";
 import type { ActiveTool } from "@/lib/interaction-store";
 import { useInteractionStore } from "@/lib/interaction-store";
+import { useCopilotUploadStore } from "@/lib/copilot-upload-store";
 import type { WorkflowPhase } from "@/lib/workflow-phases";
 
 const tools: {
@@ -14,6 +15,7 @@ const tools: {
 }[] = [
   { label: "Select", title: "Select", icon: MousePointer2, tool: "select", phases: ["brief_site", "scheme", "analyze"] },
   { label: "Outline", title: "Draw outline", icon: DraftingCompass, tool: "outline", phases: ["brief_site", "scheme"] },
+  { label: "Trace", title: "Trace room vertices", icon: Wand2, tool: "trace", phases: ["scheme"] },
   { label: "Upload", title: "Upload drawing", icon: Upload, tool: "upload", phases: ["brief_site", "scheme"] },
   { label: "Flow", title: "Analysis flows", icon: Waypoints, tool: "flow", phases: ["analyze"] },
   { label: "Model", title: "3D model", icon: Boxes, tool: "model", phases: ["scheme"] }
@@ -26,6 +28,7 @@ interface WorkflowQuickToolsProps {
 export function WorkflowQuickTools({ phase }: WorkflowQuickToolsProps) {
   const activeTool = useInteractionStore((state) => state.activeTool);
   const setActiveTool = useInteractionStore((state) => state.setActiveTool);
+  const requestUploadPicker = useCopilotUploadStore((state) => state.requestUploadPicker);
   const visibleTools = tools.filter((tool) => tool.phases.includes(phase));
 
   if (visibleTools.length === 0) {
@@ -51,7 +54,13 @@ export function WorkflowQuickTools({ phase }: WorkflowQuickToolsProps) {
               type="button"
               title={tool.title}
               aria-label={tool.label}
-              onClick={() => setActiveTool(tool.tool)}
+              onClick={() => {
+                setActiveTool(tool.tool);
+
+                if (tool.tool === "upload") {
+                  requestUploadPicker();
+                }
+              }}
             >
               <Icon className="h-4 w-4" />
             </button>

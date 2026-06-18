@@ -62,3 +62,16 @@ export function getViewBox(version: PlanVersion, padding = 8) {
     version.overallBounds.height + padding * 2
   }`;
 }
+
+export function clientToSvgPoint(svg: SVGSVGElement, clientX: number, clientY: number): Point {
+  const point = svg.createSVGPoint();
+  point.x = clientX;
+  point.y = clientY;
+  const transformed = point.matrixTransform(svg.getScreenCTM()?.inverse());
+
+  return [transformed.x, transformed.y];
+}
+
+export function snapPlanCoordinate(value: number, step = 0.25) {
+  return Math.round(value / step) * step;
+}

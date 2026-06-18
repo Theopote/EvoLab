@@ -1,7 +1,7 @@
 "use client";
 
-import { AlertTriangle, Bot, CheckCircle2, ChevronDown, ChevronUp, Info, Loader2, Send, Sparkles } from "lucide-react";
-import { useMemo, useState } from "react";
+import { AlertTriangle, Bot, CheckCircle2, ChevronDown, ChevronUp, Info, Loader2, Paperclip, Send, Sparkles, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AiTimelinePanel } from "@/components/copilot/AiTimelinePanel";
 import type {
   CopilotAction,
@@ -12,6 +12,8 @@ import type {
   WorkspaceTab
 } from "@/lib/project-types";
 import { useCopilotTimelineStore } from "@/lib/copilot-timeline-store";
+import { useCopilotUploadStore } from "@/lib/copilot-upload-store";
+import { readCopilotUpload, type CopilotPinnedFile } from "@/lib/copilot-upload";
 
 interface CopilotConsoleProps {
   projectVersions: PlanVersion[];
@@ -20,6 +22,7 @@ interface CopilotConsoleProps {
   outline: Point[];
   projectType: string;
   onCopilotRevision: (version: PlanVersion, prompt: string, parentVersion: PlanVersion) => void;
+  onAnalyzedVersion: (version: PlanVersion, source: { fileName: string; prompt?: string }) => void;
   onSelectVersion: (version: PlanVersion) => void;
   onTabChange: (tab: WorkspaceTab) => void;
   onRegeneratePlan: () => void;
@@ -39,6 +42,7 @@ export function CopilotConsole({
   outline,
   projectType,
   onCopilotRevision,
+  onAnalyzedVersion,
   onSelectVersion,
   onTabChange,
   onRegeneratePlan
@@ -46,6 +50,9 @@ export function CopilotConsole({
   const [expanded, setExpanded] = useState(true);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [pinnedFiles, setPinnedFiles] = useState<CopilotPinnedFile[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadRequestId = useCopilotUploadStore((state) => state.uploadRequestId);
   const [messages, setMessages] = useState<CopilotMessage[]>([
     {
       id: "welcome",
@@ -66,10 +73,127 @@ export function CopilotConsole({
     [activeTab, activeVersion?.label, outline.length, projectType]
   );
 
-  async function submitMessage(messageText = input, baseVersion = activeVersion) {
+  useEffect(() => {
+    if (uploadRequestId > 0) {
+      fileInputRef.current?.click();
+    }
+  }, [uploadRequestId]);
+
+  async function handleFileSelection(fileList: FileList | null) {
+    const file = fileList?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    try {
+      const pinned = await readCopilotUpload(file);
+      setPinnedFiles((current) => [...current, pinned].slice(0, 3));
+      setMessages((current) => [
+        ...current,
+        {
+          id: `assistant-upload-${Date.now()}`,
+          role: "assistant",
+          content: `Pinned ${file.name}. Add a prompt to align the active scheme, or send without text to recognize a new plan from the drawing.`
+        }
+      ]);
+    } catch (error) {
+      setMessages((current) => [
+        ...current,
+        {
+          id: `assistant-upload-error-${Date.now()}`,
+          role: "assistant",
+          content: error instanceof Error ? error.message : "Failed to read uploaded file."
+        }
+      ]);
+    } finally {
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  }
+
+  async function analyzePinnedDrawing(files = pinnedFiles) {
+    const file = files[0];
+
+    if (!file || isSending) {
+      return;
+    }
+
+    setIsSending(true);
+    setMessages((current) => [
+      ...current,
+      {
+        id: `user-analyze-${Date.now()}`,
+        role: "user",
+        content: `Recognize plan from ${file.fileName}`
+      }
+    ]);
+
+    try {
+      const response = await fetch("/api/analyze-plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          imageBase64: file.base64,
+          fileName: file.fileName
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`analyze-plan failed with ${response.status}`);
+      }
+
+      const data = (await response.json()) as {
+        version?: PlanVersion;
+        warnings?: string[];
+        confidence?: number;
+      };
+
+      if (!data.version?.rooms) {
+        throw new Error("analyze-plan did not return a complete PlanVersion.");
+      }
+
+      const analyzedVersion = data.version;
+      onAnalyzedVersion(analyzedVersion, { fileName: file.fileName });
+      setPinnedFiles([]);
+      setMessages((current) => [
+        ...current,
+        {
+          id: `assistant-analyze-${Date.now()}`,
+          role: "assistant",
+          content: `Imported ${analyzedVersion.label} from ${file.fileName}${
+            data.warnings?.length ? ` (${data.warnings.join(" ")})` : ""
+          }.`
+        }
+      ]);
+    } catch (error) {
+      setMessages((current) => [
+        ...current,
+        {
+          id: `assistant-analyze-error-${Date.now()}`,
+          role: "assistant",
+          content: error instanceof Error ? error.message : "Plan recognition failed."
+        }
+      ]);
+    } finally {
+      setIsSending(false);
+    }
+  }
+
+  async function submitMessage(messageText = input, baseVersion = activeVersion, files = pinnedFiles) {
     const text = messageText.trim();
 
-    if (!text || !baseVersion || isSending) {
+    if (isSending) {
+      return;
+    }
+
+    if (!text && files.length > 0) {
+      await analyzePinnedDrawing(files);
+      return;
+    }
+
+    if (!text || !baseVersion) {
       return;
     }
 
@@ -83,7 +207,12 @@ export function CopilotConsole({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           currentVersion: baseVersion,
-          userRequest: text
+          userRequest: text,
+          referenceImages: files.map((file) => ({
+            base64: file.base64,
+            mediaType: file.mediaType,
+            fileName: file.fileName
+          }))
         })
       });
 
@@ -102,6 +231,7 @@ export function CopilotConsole({
       }
 
       onCopilotRevision(data.version, text, baseVersion);
+      setPinnedFiles([]);
       setMessages((current) => [
         ...current,
         {
@@ -257,6 +387,31 @@ export function CopilotConsole({
               ))}
             </div>
 
+            {pinnedFiles.length ? (
+              <div className="mb-2 flex flex-wrap gap-2">
+                {pinnedFiles.map((file) => (
+                  <div
+                    className="flex items-center gap-2 rounded border border-accent/40 bg-accent/10 px-2 py-1"
+                    key={file.id}
+                  >
+                    <img alt="" className="h-8 w-8 rounded object-cover" src={file.previewUrl} />
+                    <div className="min-w-0">
+                      <div className="truncate text-[11px] text-slate-100">{file.fileName}</div>
+                      <div className="text-[10px] text-muted">Reference pin</div>
+                    </div>
+                    <button
+                      className="text-muted hover:text-accent"
+                      type="button"
+                      aria-label={`Remove ${file.fileName}`}
+                      onClick={() => setPinnedFiles((current) => current.filter((item) => item.id !== file.id))}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
             <form
               className="flex items-center gap-2"
               onSubmit={(event) => {
@@ -265,19 +420,29 @@ export function CopilotConsole({
               }}
             >
               <label className="grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded border border-line text-muted hover:border-accent/50 hover:text-accent">
-                <input accept="image/*,.pdf,.svg" className="hidden" type="file" />
-                <span className="text-[10px]">+</span>
+                <input
+                  ref={fileInputRef}
+                  accept="image/png,image/jpeg,image/gif,image/webp"
+                  className="hidden"
+                  type="file"
+                  onChange={(event) => void handleFileSelection(event.target.files)}
+                />
+                <Paperclip className="h-3.5 w-3.5" />
               </label>
               <input
                 className="h-9 min-w-0 flex-1 rounded border border-line bg-[#0b1118] px-2 text-sm text-slate-100 outline-none focus:border-accent/70"
-                disabled={isSending || !activeVersion}
-                placeholder="Describe a design change for the active scheme..."
+                disabled={isSending}
+                placeholder={
+                  activeVersion
+                    ? "Describe a design change, or send a pinned drawing to recognize..."
+                    : "Pin a drawing and send to recognize a plan..."
+                }
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
               />
               <button
                 className="grid h-9 w-9 place-items-center rounded bg-accent text-[#061014] disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={isSending || !activeVersion || !input.trim()}
+                disabled={isSending || (!input.trim() && pinnedFiles.length === 0)}
                 type="submit"
                 aria-label="Send"
               >

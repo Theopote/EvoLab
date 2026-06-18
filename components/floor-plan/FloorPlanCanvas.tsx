@@ -1,7 +1,8 @@
 "use client";
 
+import { useRef } from "react";
 import { useShallow } from "zustand/react/shallow";
-import type { PlanVersion } from "@/lib/project-types";
+import type { PlanVersion, Point } from "@/lib/project-types";
 import { CoreSymbolLayer } from "@/components/floor-plan/layers/CoreSymbolLayer";
 import { GridLayer } from "@/components/floor-plan/layers/GridLayer";
 import { LabelLayer } from "@/components/floor-plan/layers/LabelLayer";
@@ -12,6 +13,7 @@ import { SelectionLayer } from "@/components/floor-plan/layers/SelectionLayer";
 import { WallLayer } from "@/components/floor-plan/layers/WallLayer";
 import { getViewBox } from "@/components/floor-plan/floor-plan-utils";
 import { useEvoProject } from "@/lib/project-store";
+import { useInteractionStore } from "@/lib/interaction-store";
 import { createSetbackBoundary } from "@/lib/polygon-offset";
 
 export interface FloorPlanCanvasProps {
@@ -29,6 +31,8 @@ export function FloorPlanCanvas({
   selectedRoomId: selectedRoomIdProp,
   interactive = true
 }: FloorPlanCanvasProps) {
+  const svgRef = useRef<SVGSVGElement>(null);
+  const activeTool = useInteractionStore((state) => state.activeTool);
   const {
     selectedRoomId: roomSelectionFromStore,
     selectedWallId: wallSelectionFromStore,
@@ -37,7 +41,8 @@ export function FloorPlanCanvas({
     selectRoom,
     selectWall,
     selectOpening,
-    clearSelection
+    clearSelection,
+    updateRoomGeometry
   } = useEvoProject(
     useShallow((state) => ({
       selectedRoomId: state.selectedRoomId,
@@ -47,7 +52,8 @@ export function FloorPlanCanvas({
       selectRoom: state.selectRoom,
       selectWall: state.selectWall,
       selectOpening: state.selectOpening,
-      clearSelection: state.clearSelection
+      clearSelection: state.clearSelection,
+      updateRoomGeometry: state.updateRoomGeometry
     }))
   );
   const selectedRoomId = interactive ? selectedRoomIdProp ?? roomSelectionFromStore : selectedRoomIdProp;
@@ -74,6 +80,7 @@ export function FloorPlanCanvas({
   const selectedOpening = selectedOpeningId
     ? level?.openings.find((opening) => opening.id === selectedOpeningId)
     : undefined;
+  const traceEnabled = interactive && activeTool === "trace";
   const hud = selectedRoom
     ? {
         type: "ROOM",
@@ -99,11 +106,12 @@ export function FloorPlanCanvas({
       <div className="relative min-h-[420px] overflow-hidden rounded border border-line bg-[#081018] shadow-insetGrid">
         <div className="pointer-events-none absolute inset-0 cad-grid opacity-70" />
         <svg
+          ref={svgRef}
           className="relative h-full min-h-[420px] w-full"
           viewBox={getViewBox(version)}
           role="img"
           onClick={() => {
-            if (interactive) {
+            if (interactive && !traceEnabled) {
               clearSelection();
             }
           }}
@@ -135,10 +143,14 @@ export function FloorPlanCanvas({
             selectedRoomId={selectedRoomId}
             selectedWallId={selectedWallId}
             selectedOpeningId={selectedOpeningId}
+            traceEnabled={traceEnabled}
+            svgRef={svgRef}
+            onRoomPolygonChange={(roomId, polygon: Point[]) => updateRoomGeometry(roomId, { polygon })}
           />
         </svg>
         <div className="absolute bottom-3 left-3 rounded border border-line bg-[#081018]/90 px-2 py-1 text-xs text-muted">
           1 grid = 1 m / {version.label}
+          {traceEnabled ? " / Trace vertices" : ""}
         </div>
         {interactive && hud ? (
           <div className="absolute bottom-3 right-3 rounded border border-accent/35 bg-[#081018]/95 px-3 py-2 text-xs">

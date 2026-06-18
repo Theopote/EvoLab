@@ -3,12 +3,14 @@
 import * as THREE from "three";
 import { Text } from "@react-three/drei";
 import { useLayoutEffect, useMemo, useRef } from "react";
-import type { OpeningElement, PlanVersion, Room, Wall } from "@/lib/project-types";
+import type { OpeningElement, PlanVersion, Point, Room, Wall } from "@/lib/project-types";
 import {
   getGridColumnPositions,
   shouldRenderRoomLabels
 } from "@/lib/viewer-3d/building-model-utils";
 import { useBuildingModelSource } from "@/lib/viewer-3d/use-building-model-source";
+import { getRoomExplodeOffset } from "@/lib/viewer-3d/explode-utils";
+import { useInteractionStore } from "@/lib/interaction-store";
 import { getRoomMaterialSpec, type RoomMaterialSpec, modelPalette } from "@/components/viewer-3d/materials";
 import { getPolygonBounds, getPolygonCenter } from "@/components/viewer-3d/wallGeometry";
 
@@ -46,6 +48,7 @@ export function BuildingModel() {
 }
 
 function BuildingModelContent({ version }: { version: PlanVersion }) {
+  const explodeFactor = useInteractionStore((state) => state.explodeFactor);
   const outlineShape = useMemo(() => createRoomShape({ polygon: version.outline } as Room), [version.outline]);
   const outlineBounds = useMemo(() => getPolygonBounds(version.outline), [version.outline]);
   const level = version.levels[0];
@@ -61,8 +64,10 @@ function BuildingModelContent({ version }: { version: PlanVersion }) {
         <meshStandardMaterial color={modelPalette.slab} opacity={0.22} transparent />
       </mesh>
 
-      <RoomMassMeshes rooms={version.rooms} />
-      {showLabels ? <RoomLabels rooms={version.rooms} /> : null}
+      <RoomMassMeshes rooms={version.rooms} buildingOutline={version.outline} explodeFactor={explodeFactor} />
+      {showLabels ? (
+        <RoomLabels rooms={version.rooms} buildingOutline={version.outline} explodeFactor={explodeFactor} />
+      ) : null}
       {!showLabels ? <RoomCountLabel count={version.rooms.length} bounds={outlineBounds} /> : null}
 
       <InstancedWalls walls={level?.walls ?? []} />
@@ -76,7 +81,15 @@ function getRoomMaterialKey(spec: RoomMaterialSpec) {
   return `${spec.color}:${spec.opacity}:${spec.heightBoost}`;
 }
 
-function RoomMassMeshes({ rooms }: { rooms: Room[] }) {
+function RoomMassMeshes({
+  rooms,
+  buildingOutline,
+  explodeFactor
+}: {
+  rooms: Room[];
+  buildingOutline: Point[];
+  explodeFactor: number;
+}) {
   const roomGroups = useMemo(() => {
     const groups = new Map<string, { spec: RoomMaterialSpec; shapes: THREE.Shape[] }>();
 
@@ -95,6 +108,24 @@ function RoomMassMeshes({ rooms }: { rooms: Room[] }) {
     return Array.from(groups.entries()).map(([key, group]) => ({ key, ...group }));
   }, [rooms]);
 
+  if (explodeFactor > 0) {
+    return (
+      <>
+        {rooms.map((room) => {
+          const spec = getRoomMaterialSpec(room.type, room.zone);
+          const [offsetX, offsetY] = getRoomExplodeOffset(room.polygon, buildingOutline, explodeFactor);
+
+          return (
+            <mesh key={room.id} castShadow receiveShadow position={[offsetX, offsetY, 0]}>
+              <extrudeGeometry args={[createRoomShape(room), { depth: 0.14, bevelEnabled: false }]} />
+              <meshStandardMaterial color={spec.color} opacity={spec.opacity} transparent side={THREE.DoubleSide} />
+            </mesh>
+          );
+        })}
+      </>
+    );
+  }
+
   return (
     <>
       {roomGroups.map(({ key, shapes, spec }) => (
@@ -107,13 +138,22 @@ function RoomMassMeshes({ rooms }: { rooms: Room[] }) {
   );
 }
 
-function RoomLabels({ rooms }: { rooms: Room[] }) {
+function RoomLabels({
+  rooms,
+  buildingOutline,
+  explodeFactor
+}: {
+  rooms: Room[];
+  buildingOutline: Point[];
+  explodeFactor: number;
+}) {
   return (
     <>
       {rooms.map((room) => {
         const spec = getRoomMaterialSpec(room.type, room.zone);
         const roomHeight = Math.max(2.7, room.ceilingHeight + spec.heightBoost);
         const center = getPolygonCenter(room.polygon);
+        const [offsetX, offsetY] = getRoomExplodeOffset(room.polygon, buildingOutline, explodeFactor);
 
         return (
           <Text
@@ -122,7 +162,7 @@ function RoomLabels({ rooms }: { rooms: Room[] }) {
             fontSize={1.2}
             anchorX="center"
             anchorY="middle"
-            position={[center[0], center[1], -roomHeight - 0.35]}
+            position={[center[0] + offsetX, center[1] + offsetY, -roomHeight - 0.35]}
             rotation={[0, 0, 0]}
           >
             {room.name}

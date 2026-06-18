@@ -1,7 +1,8 @@
 "use client";
 
 import { useShallow } from "zustand/react/shallow";
-import { BottomPanel } from "@/componeimport { CopilotConsole } from "@/components/copilot/CopilotConsole";
+import { BottomPanel } from "@/components/bottom-panel";
+import { CopilotConsole } from "@/components/copilot/CopilotConsole";
 import { DiagramCanvas } from "@/components/diagrams/DiagramCanvas";
 import { DiagramLayerList } from "@/components/diagrams/DiagramLayerList";
 import { ExportPanel } from "@/components/export-panel";
@@ -22,6 +23,7 @@ import { PresentationWorkspace } from "@/components/presentation/PresentationWor
 import { VersionCompareGrid } from "@/components/version-compare/VersionCompareGrid";
 import { PhaseSubNav } from "@/components/workflow/PhaseSubNav";
 import { SchemeSplitViewport } from "@/components/workflow/SchemeSplitViewport";
+import { ExplodeSlider } from "@/components/viewer-3d/ExplodeSlider";
 import { VersionSplitCompare } from "@/components/workflow/VersionSplitCompare";
 import { ViewportKpiHud } from "@/components/workflow/ViewportKpiHud";
 import { WorkflowLeftSidebar } from "@/components/workflow/WorkflowLeftSidebar";
@@ -148,6 +150,7 @@ export function EvoLabWorkspace() {
           outline={outline}
           projectType={project.projectType}
           onCopilotRevision={handleCopilotRevision}
+          onAnalyzedVersion={handleAnalyzedVersion}
           onSelectVersion={setActiveVersion}
           onTabChange={setActiveTab}
           onRegeneratePlan={returnToPlanGeneration}
@@ -253,9 +256,9 @@ export function EvoLabWorkspace() {
 
   function ModelWorkspace() {
     return (
-      <section className="grid min-h-full grid-rows-[auto_minmax(560px,1fr)] gap-4">
+      <section className="grid min-h-full grid-rows-[auto_auto_minmax(560px,1fr)] gap-4">
         <div className="rounded border border-line bg-panel/90 p-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <div>
               <h1 className="text-base font-semibold text-white">3D Building Model</h1>
               <p className="mt-1 text-xs text-muted">
@@ -267,9 +270,28 @@ export function EvoLabWorkspace() {
             </span>
           </div>
         </div>
+        <ExplodeSlider className="rounded border border-line bg-panel/90 px-3 py-2" />
         <Scene />
       </section>
     );
+  }
+
+  function handleAnalyzedVersion(
+    version: Parameters<typeof appendGeneratedVersions>[0][number],
+    source: { fileName: string; prompt?: string }
+  ) {
+    const parent = activeVersion;
+    appendGeneratedVersions([version]);
+
+    if (parent) {
+      useCopilotTimelineStore.getState().addEntry({
+        prompt: source.prompt ?? `Recognize plan from ${source.fileName}`,
+        parentVersionId: parent.id,
+        parentVersionLabel: parent.label,
+        resultVersionId: version.id,
+        resultVersionLabel: version.label
+      });
+    }
   }
 
   function handleCopilotRevision(

@@ -1,6 +1,7 @@
 "use client";
 
 import { Download, FileArchive, FileCode2, FileJson, FileSpreadsheet, FileText } from "lucide-react";
+import { useState } from "react";
 import type { ComplianceItem, QuantityResult } from "@/lib/quantity-engine";
 import {
   createComplianceCsv,
@@ -11,6 +12,7 @@ import {
   exportProjectJson,
   exportVersionJson
 } from "@/lib/export-utils";
+import { openPlanPdfPrint } from "@/lib/export-plan-pdf";
 import type { PlanVersion, ProjectData } from "@/lib/project-types";
 
 interface ExportPanelProps {
@@ -21,7 +23,6 @@ interface ExportPanelProps {
 }
 
 const plannedExports = [
-  { label: "Drawing PDF", detail: "Needs PDF layout engine", icon: FileText },
   { label: "glTF model", detail: "Needs geometry serialization", icon: FileArchive },
   { label: "IFC STEP file", detail: "Needs IfcOpenShell service", icon: FileCode2 }
 ];
@@ -29,6 +30,20 @@ const plannedExports = [
 export function ExportPanel({ project, activeVersion, quantities, complianceItems }: ExportPanelProps) {
   const canExportVersion = Boolean(activeVersion);
   const canExportQuantities = Boolean(quantities);
+  const [exportNotice, setExportNotice] = useState<string | null>(null);
+
+  function handlePlanPdfExport() {
+    if (!activeVersion) {
+      return;
+    }
+
+    try {
+      openPlanPdfPrint(activeVersion);
+      setExportNotice("Opened print dialog for the active plan sheet.");
+    } catch (error) {
+      setExportNotice(error instanceof Error ? error.message : "Failed to open plan PDF print.");
+    }
+  }
 
   return (
     <section className="grid min-h-full grid-rows-[auto_minmax(0,1fr)] gap-4">
@@ -45,6 +60,10 @@ export function ExportPanel({ project, activeVersion, quantities, complianceItem
           </span>
         </div>
       </div>
+
+      {exportNotice ? (
+        <div className="rounded border border-accent/30 bg-accent/10 p-2 text-xs text-accent">{exportNotice}</div>
+      ) : null}
 
       <div className="grid gap-4 xl:grid-cols-[1fr_0.8fr]">
         <section className="rounded border border-line bg-panel/90 p-3">
@@ -66,6 +85,13 @@ export function ExportPanel({ project, activeVersion, quantities, complianceItem
               label="Active PlanVersion JSON"
               detail={activeVersion ? `${activeVersion.rooms.length} rooms` : "No active version"}
               onClick={() => activeVersion && exportVersionJson(activeVersion)}
+            />
+            <ExportCard
+              disabled={!canExportVersion}
+              icon={FileText}
+              label="Drawing PDF"
+              detail="Browser print-to-PDF for the active floor plan"
+              onClick={handlePlanPdfExport}
             />
             <ExportCard
               disabled={!canExportVersion}

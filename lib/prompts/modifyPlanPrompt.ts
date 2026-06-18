@@ -5,8 +5,13 @@ Modify the current editable PlanVersion according to the user's natural language
 Input shape:
 {
   "currentVersion": PlanVersion,
-  "userRequest": string
+  "userRequest": string,
+  "referenceImageCount"?: number,
+  "referenceImageNames"?: string[]
 }
+
+When reference images are attached, treat them as design intent pins (sketches, redlines, precedent plans).
+Align room layout, zoning, and circulation with the visual reference while preserving editable PlanVersion structure.
 
 Return strict JSON only. Do not return Markdown, comments, explanations, or code fences.
 
