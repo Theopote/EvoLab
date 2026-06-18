@@ -81,6 +81,7 @@ interface EvoProjectStore {
   isGeneratingMep: boolean;
   mepError: string | null;
   quantities?: QuantityResult;
+  levelQuantities?: QuantityResult;
   complianceItems: ComplianceItem[];
   outlineStale: boolean;
   isRelayouting: boolean;
@@ -220,7 +221,11 @@ function refreshDerivedDraft(state: EvoProjectStore) {
   state.activeVersion = activeVersion;
   state.activeLevelId = activeLevel?.id;
   state.activeLevel = activeLevel;
-  state.quantities = activeVersion ? calculateQuantities(activeVersion) : undefined;
+  state.quantities = activeVersion ? calculateQuantities(activeVersion, { scope: "building" }) : undefined;
+  state.levelQuantities =
+    activeVersion && activeLevel
+      ? calculateQuantities(activeVersion, { levelId: activeLevel.id, scope: "level" })
+      : undefined;
   state.complianceItems = activeVersion ? checkCompliance(activeVersion) : [];
   state.selectedRoom = (activeLevel?.rooms.length ? activeLevel.rooms : activeVersion?.rooms)?.find(
     (room) => room.id === state.selectedRoomId
@@ -246,7 +251,14 @@ function patchTouchesGeometry<T extends object>(patch: Partial<T>, geometryKeys:
 }
 
 function refreshQuantitiesDraft(state: EvoProjectStore) {
-  state.quantities = state.activeVersion ? calculateQuantities(state.activeVersion) : undefined;
+  const activeLevel = getLevel(state.activeVersion, state.activeLevelId);
+  state.quantities = state.activeVersion
+    ? calculateQuantities(state.activeVersion, { scope: "building" })
+    : undefined;
+  state.levelQuantities =
+    state.activeVersion && activeLevel
+      ? calculateQuantities(state.activeVersion, { levelId: activeLevel.id, scope: "level" })
+      : undefined;
   state.complianceItems = state.activeVersion ? checkCompliance(state.activeVersion) : [];
 }
 
@@ -394,7 +406,11 @@ function createInitialState(): Omit<
     activeMepLayers: ["hvac", "plumbing_supply", "plumbing_drain", "electrical", "shafts", "equipment_rooms"],
     isGeneratingMep: false,
     mepError: null,
-    quantities: activeVersion ? calculateQuantities(activeVersion) : undefined,
+    quantities: activeVersion ? calculateQuantities(activeVersion, { scope: "building" }) : undefined,
+    levelQuantities:
+      activeVersion && activeLevel
+        ? calculateQuantities(activeVersion, { levelId: activeLevel.id, scope: "level" })
+        : undefined,
     complianceItems: activeVersion ? checkCompliance(activeVersion) : [],
     outlineStale: false,
     isRelayouting: false,

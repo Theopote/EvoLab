@@ -52,7 +52,7 @@ export function VersionSplitCompare({
       </div>
       <div className="grid gap-3 lg:grid-cols-2">
         {compared.map((version) => {
-          const quantities = calculateQuantities(version, resolvedLevelId);
+          const quantities = calculateQuantities(version, { levelId: resolvedLevelId, scope: "level" });
 
           return (
             <article className="rounded border border-line bg-panel/80 p-3" key={version.id}>

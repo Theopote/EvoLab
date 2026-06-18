@@ -83,11 +83,18 @@ function LevelStack({
   const outlineShape = useMemo(() => createRoomShape({ polygon: version.outline } as Room), [version.outline]);
   const showLabels = shouldRenderRoomLabels(level.rooms.length);
 
+  const slabColor =
+    level.floorProgram === "ground"
+      ? "#4a6a8a"
+      : level.floorProgram === "top"
+        ? "#5a6a4a"
+        : modelPalette.slab;
+
   return (
     <group position={[0, level.elevation, 0]} rotation={[-Math.PI / 2, 0, 0]}>
       <mesh receiveShadow position={[0, 0, -0.08]}>
         <shapeGeometry args={[outlineShape]} />
-        <meshStandardMaterial color={modelPalette.slab} opacity={0.22} transparent />
+        <meshStandardMaterial color={slabColor} opacity={0.22} transparent />
       </mesh>
 
       <RoomMassMeshes rooms={level.rooms} buildingOutline={version.outline} explodeFactor={explodeFactor} />

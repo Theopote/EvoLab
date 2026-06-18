@@ -1,10 +1,11 @@
-import { compareVersionsAcrossLevels, type VersionLevelCompareResult } from "@/lib/version-compare-engine";
+import { compareVersionsAcrossLevelIndices, compareVersionsAcrossLevels, type VersionLevelCompareResult } from "@/lib/version-compare-engine";
 import type { PlanVersion } from "@/lib/project-types";
 
 export interface VersionCompareWorkerRequest {
   requestId: number;
   versions: PlanVersion[];
-  levelIds: string[];
+  levelIds?: string[];
+  levelIndices?: number[];
 }
 
 export interface VersionCompareWorkerResponse {
@@ -14,10 +15,12 @@ export interface VersionCompareWorkerResponse {
 }
 
 self.onmessage = (event: MessageEvent<VersionCompareWorkerRequest>) => {
-  const { requestId, versions, levelIds } = event.data;
+  const { requestId, versions, levelIds, levelIndices } = event.data;
 
   try {
-    const results = compareVersionsAcrossLevels(versions, levelIds);
+    const results = levelIndices?.length
+      ? compareVersionsAcrossLevelIndices(versions, levelIndices)
+      : compareVersionsAcrossLevels(versions, levelIds ?? []);
     self.postMessage({ requestId, results } satisfies VersionCompareWorkerResponse);
   } catch (error) {
     self.postMessage({

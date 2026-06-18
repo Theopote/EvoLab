@@ -3,11 +3,16 @@
 import { Boxes, Check, GitCompare, Loader2, Sparkles, Wand2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FloorPlan } from "@/components/floor-plan";
-import { listComparableLevels } from "@/lib/multi-floor";
+import { listComparableLevelGroups, listComparableLevels } from "@/lib/multi-floor";
 import { calculateQuantities } from "@/lib/quantity-engine";
 import type { PlanVersion } from "@/lib/project-types";
 import {
   compareVersionsAtLevel,
+  compareVersionsAtLevelIndex,
+  compareVersionsBuildingTotal,
+  type VersionBuildingCompareRow,
+  type VersionCompareScope,
+  type VersionLevelCompareResult,
   type VersionLevelCompareRow
 } from "@/lib/version-compare-engine";
 import type { VersionCompareWorkerResponse } from "@/lib/version-compare-worker";
@@ -36,17 +41,35 @@ function scoreVersion(version: PlanVersion) {
 
 function useVersionCompareWorker(
   versions: PlanVersion[],
-  levelId: string | undefined,
+  levelIds: string[],
+  levelIndices: number[],
+  scope: VersionCompareScope,
   enabled: boolean
 ) {
-  const [rows, setRows] = useState<VersionLevelCompareRow[]>([]);
+  const [levelResults, setLevelResults] = useState<VersionLevelCompareResult[]>([]);
+  const [buildingRows, setBuildingRows] = useState<VersionBuildingCompareRow[]>([]);
   const [isComputing, setIsComputing] = useState(false);
   const requestIdRef = useRef(0);
   const workerRef = useRef<Worker | undefined>(undefined);
 
   useEffect(() => {
-    if (!enabled || !levelId || versions.length < 2) {
-      setRows([]);
+    if (!enabled || versions.length < 2) {
+      setLevelResults([]);
+      setBuildingRows([]);
+      setIsComputing(false);
+      return;
+    }
+
+    if (scope === "building-total") {
+      setLevelResults([]);
+      setBuildingRows(compareVersionsBuildingTotal(versions));
+      setIsComputing(false);
+      return;
+    }
+
+    if (!levelIds.length && !levelIndices.length) {
+      setLevelResults([]);
+      setBuildingRows([]);
       setIsComputing(false);
       return;
     }
@@ -66,18 +89,35 @@ function useVersionCompareWorker(
 
         setIsComputing(false);
 
-        if (event.data.results?.[0]?.rows) {
-          setRows(event.data.results[0].rows);
+        if (event.data.results?.length) {
+          setLevelResults(event.data.results);
+        } else if (levelIndices.length) {
+          setLevelResults(
+            levelIndices.map((levelIndex) =>
+              compareVersionsAtLevel(versions, versions[0]?.levels[levelIndex - 1]?.id ?? `level-${String(levelIndex).padStart(2, "0")}`)
+            )
+          );
         } else {
-          setRows(compareVersionsAtLevel(versions, levelId).rows);
+          setLevelResults(levelIds.map((levelId) => compareVersionsAtLevel(versions, levelId)));
         }
       };
-      workerRef.current.postMessage({ requestId, versions, levelIds: [levelId] });
+      workerRef.current.postMessage({
+        requestId,
+        versions,
+        levelIds: levelIndices.length ? undefined : levelIds,
+        levelIndices: levelIndices.length ? levelIndices : undefined
+      });
     } catch {
-      setRows(compareVersionsAtLevel(versions, levelId).rows);
+      setLevelResults(
+        levelIndices.length
+          ? levelIndices.map((levelIndex) =>
+              compareVersionsAtLevel(versions, versions[0]?.levels[levelIndex - 1]?.id ?? `level-${String(levelIndex).padStart(2, "0")}`)
+            )
+          : levelIds.map((levelId) => compareVersionsAtLevel(versions, levelId))
+      );
       setIsComputing(false);
     }
-  }, [enabled, levelId, versions]);
+  }, [enabled, levelIds, levelIndices, scope, versions]);
 
   useEffect(
     () => () => {
@@ -87,7 +127,7 @@ function useVersionCompareWorker(
     []
   );
 
-  return { rows, isComputing };
+  return { levelResults, buildingRows, isComputing };
 }
 
 export function VersionCompareGrid({
@@ -100,12 +140,30 @@ export function VersionCompareGrid({
   onRefineVersion
 }: VersionCompareGridProps) {
   const [compareIds, setCompareIds] = useState<string[]>([]);
+  const [compareScope, setCompareScope] = useState<VersionCompareScope>("selected-level");
   const levelOptions = useMemo(() => listComparableLevels(versions), [versions]);
+  const levelGroups = useMemo(() => listComparableLevelGroups(versions), [versions]);
   const resolvedLevelId = compareLevelId ?? levelOptions[0]?.id;
   const comparedVersions = versions.filter((version) => compareIds.includes(version.id));
-  const { rows: compareRows, isComputing } = useVersionCompareWorker(
+  const compareLevelIds = useMemo(() => {
+    if (compareScope !== "selected-level" || !resolvedLevelId) {
+      return [];
+    }
+
+    return [resolvedLevelId];
+  }, [compareScope, resolvedLevelId]);
+  const compareLevelIndices = useMemo(() => {
+    if (compareScope !== "all-levels") {
+      return [];
+    }
+
+    return levelGroups.map((group) => group.levelIndex);
+  }, [compareScope, levelGroups]);
+  const { levelResults, buildingRows, isComputing } = useVersionCompareWorker(
     comparedVersions,
-    resolvedLevelId,
+    compareLevelIds,
+    compareLevelIndices,
+    compareScope,
     comparedVersions.length >= 2
   );
   const recommendedId = useMemo(
@@ -136,11 +194,20 @@ export function VersionCompareGrid({
           <div>
             <h1 className="text-base font-semibold text-white">Version Compare</h1>
             <p className="mt-1 text-xs text-muted">
-              Compare editable PlanVersion options per floor. Metrics run in a Web Worker.
+              Compare editable PlanVersion options per floor or across all floors in one worker batch.
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            {levelOptions.length > 1 ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              className="h-8 rounded border border-line bg-[#0b1118] px-2 text-xs text-slate-100"
+              value={compareScope}
+              onChange={(event) => setCompareScope(event.target.value as VersionCompareScope)}
+            >
+              <option value="selected-level">Selected level</option>
+              <option value="all-levels">All floors (L1 vs L1…)</option>
+              <option value="building-total">Building total</option>
+            </select>
+            {compareScope === "selected-level" && levelOptions.length > 1 ? (
               <select
                 className="h-8 rounded border border-line bg-[#0b1118] px-2 text-xs text-slate-100"
                 value={resolvedLevelId}
@@ -163,12 +230,19 @@ export function VersionCompareGrid({
       <div className="min-h-0 overflow-auto">
         <div className="grid gap-3 xl:grid-cols-3">
           {versions.map((version) => {
-            const quantities = calculateQuantities(version, resolvedLevelId);
+            const quantities =
+              compareScope === "building-total"
+                ? calculateQuantities(version, { scope: "building" })
+                : calculateQuantities(version, { levelId: resolvedLevelId, scope: "level" });
             const totalScore = scoreVersion(version);
             const isActive = version.id === activeVersionId;
             const isRecommended = version.id === recommendedId;
             const isCompared = compareIds.includes(version.id);
             const floorCount = version.metadata?.floorCount ?? version.levels.length;
+            const previewLevelId =
+              compareScope === "selected-level"
+                ? resolvedLevelId
+                : version.levels[0]?.id;
 
             return (
               <article
@@ -181,8 +255,8 @@ export function VersionCompareGrid({
                   <div className="min-w-0">
                     <h2 className="truncate text-sm font-semibold text-white">{version.label}</h2>
                     <p className="mt-1 text-xs text-muted">
-                      {version.rooms.length} rooms total · {floorCount} floors · {quantities.summary.grossArea} sqm on
-                      selected level
+                      {version.rooms.length} rooms total · {floorCount} floors · {quantities.summary.grossArea} sqm
+                      {compareScope === "building-total" ? " building" : " on selected level"}
                     </p>
                   </div>
                   <div className="flex shrink-0 flex-col gap-1">
@@ -200,7 +274,7 @@ export function VersionCompareGrid({
 
                 <FloorPlan
                   version={version}
-                  levelId={resolvedLevelId}
+                  levelId={previewLevelId}
                   className="mb-3 [&>div]:min-h-[210px] [&_svg]:min-h-[210px]"
                   interactive={false}
                 />
@@ -269,58 +343,102 @@ export function VersionCompareGrid({
               <div className="flex items-center gap-2 text-xs text-muted">
                 {isComputing ? <Loader2 className="h-3.5 w-3.5 animate-spin text-accent" /> : null}
                 <span>
-                  {comparedVersions.length} selected · {levelOptions.find((level) => level.id === resolvedLevelId)?.name}
+                  {comparedVersions.length} selected ·{" "}
+                  {compareScope === "building-total"
+                    ? "Building total"
+                    : compareScope === "all-levels"
+                      ? `${levelResults.length} floors`
+                      : levelOptions.find((level) => level.id === resolvedLevelId)?.name}
                 </span>
               </div>
             </div>
-            <div className="overflow-hidden rounded border border-line">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-white/[0.04] text-xs uppercase tracking-[0.14em] text-muted">
-                  <tr>
-                    <th className="px-3 py-2">Version</th>
-                    <th className="px-3 py-2 text-right">Rooms</th>
-                    <th className="px-3 py-2 text-right">Gross sqm</th>
-                    <th className="px-3 py-2 text-right">Net sqm</th>
-                    <th className="px-3 py-2 text-right">Circ %</th>
-                    <th className="px-3 py-2 text-right">Core X/Y</th>
-                    <th className="px-3 py-2 text-right">Risks</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(compareRows.length ? compareRows : comparedVersions.map((version) => {
-                    const quantities = calculateQuantities(version, resolvedLevelId);
-                    return {
-                      versionId: version.id,
-                      label: version.label,
-                      roomCount: version.levels.find((level) => level.id === resolvedLevelId)?.rooms.length ?? 0,
-                      grossArea: quantities.summary.grossArea,
-                      netArea: quantities.summary.netUsableArea,
-                      circulationRatio: 0,
-                      corePosition: [0, 0] as [number, number],
-                      riskCount: version.scores?.riskCount ?? 0
-                    };
-                  })).map((row) => (
-                    <tr className="border-t border-line" key={`compare-${row.versionId}`}>
-                      <td className="px-3 py-2 text-slate-100">{row.label}</td>
-                      <td className="px-3 py-2 text-right text-muted">{row.roomCount}</td>
-                      <td className="px-3 py-2 text-right text-muted">{row.grossArea}</td>
-                      <td className="px-3 py-2 text-right text-muted">{row.netArea}</td>
-                      <td className="px-3 py-2 text-right text-muted">
-                        {Math.round((row.circulationRatio ?? 0) * 100)}%
-                      </td>
-                      <td className="px-3 py-2 text-right text-muted">
-                        {row.corePosition[0].toFixed(1)} / {row.corePosition[1].toFixed(1)}
-                      </td>
-                      <td className="px-3 py-2 text-right text-warning">{row.riskCount}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+
+            {compareScope === "building-total" ? (
+              <CompareTable
+                rows={(buildingRows.length ? buildingRows : compareVersionsBuildingTotal(comparedVersions)).map((row) => ({
+                  versionId: row.versionId,
+                  label: row.label,
+                  levelId: "building-total",
+                  levelName: "Building total",
+                  roomCount: row.roomCount,
+                  grossArea: row.grossArea,
+                  netArea: row.netArea,
+                  totalScore: row.totalScore,
+                  circulationRatio: row.circulationRatio,
+                  corePosition: [0, 0] as [number, number],
+                  riskCount: row.riskCount,
+                  extraLabel: `${row.floorCount} floors`
+                }))}
+              />
+            ) : (
+              <div className="grid gap-3">
+                {(levelResults.length
+                  ? levelResults
+                  : compareLevelIndices.map((levelIndex) => compareVersionsAtLevelIndex(comparedVersions, levelIndex))
+                ).map((result) => (
+                  <div key={result.levelId}>
+                    {compareScope === "all-levels" ? (
+                      <h3 className="mb-2 text-xs font-medium uppercase tracking-[0.12em] text-muted">
+                        {result.levelName}
+                      </h3>
+                    ) : null}
+                    <CompareTable rows={result.rows} />
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
         ) : null}
       </div>
     </section>
+  );
+}
+
+function CompareTable({
+  rows
+}: {
+  rows: Array<
+    VersionLevelCompareRow & {
+      extraLabel?: string;
+    }
+  >;
+}) {
+  return (
+    <div className="overflow-hidden rounded border border-line">
+      <table className="w-full text-left text-sm">
+        <thead className="bg-white/[0.04] text-xs uppercase tracking-[0.14em] text-muted">
+          <tr>
+            <th className="px-3 py-2">Version</th>
+            <th className="px-3 py-2 text-right">Rooms</th>
+            <th className="px-3 py-2 text-right">Gross sqm</th>
+            <th className="px-3 py-2 text-right">Net sqm</th>
+            <th className="px-3 py-2 text-right">Circ %</th>
+            <th className="px-3 py-2 text-right">Core X/Y</th>
+            <th className="px-3 py-2 text-right">Risks</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr className="border-t border-line" key={`compare-${row.versionId}-${row.levelId ?? "building"}`}>
+              <td className="px-3 py-2 text-slate-100">
+                {row.label}
+                {row.extraLabel ? <span className="ml-2 text-xs text-muted">{row.extraLabel}</span> : null}
+              </td>
+              <td className="px-3 py-2 text-right text-muted">{row.roomCount}</td>
+              <td className="px-3 py-2 text-right text-muted">{row.grossArea}</td>
+              <td className="px-3 py-2 text-right text-muted">{row.netArea}</td>
+              <td className="px-3 py-2 text-right text-muted">
+                {Math.round((row.circulationRatio ?? 0) * 100)}%
+              </td>
+              <td className="px-3 py-2 text-right text-muted">
+                {row.corePosition[0].toFixed(1)} / {row.corePosition[1].toFixed(1)}
+              </td>
+              <td className="px-3 py-2 text-right text-warning">{row.riskCount}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

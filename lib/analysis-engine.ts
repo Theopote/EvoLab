@@ -63,7 +63,10 @@ function nearestCorePoint(version: PlanVersion): Point {
 }
 
 function hasWindowOpening(version: PlanVersion, room: Room) {
-  const openings = version.levels[0]?.openings ?? [];
+  const level = room.levelId
+    ? version.levels.find((item) => item.id === room.levelId) ?? version.levels[0]
+    : version.levels[0];
+  const openings = level?.openings ?? [];
 
   if (openings.length === 0) {
     return room.windows.length > 0;
@@ -267,5 +270,49 @@ export function computeAnalysis(
           to: centroid(room)
         }))
       : []
+  };
+}
+
+export interface BuildingAnalysisSummary {
+  versionId: string;
+  levelSummaries: Array<{
+    levelId: string;
+    levelName: string;
+    maxEgressDistance: number;
+    daylightFailureCount: number;
+    grossArea: number;
+  }>;
+  worstEgressDistance: number;
+  totalDaylightFailures: number;
+  totalGrossArea: number;
+}
+
+export function computeBuildingAnalysis(
+  version: PlanVersion,
+  requestedLayers: AnalysisLayerId[]
+): BuildingAnalysisSummary {
+  const levelSummaries = version.levels.map((level) => {
+    const analysis = computeAnalysis(version, requestedLayers, level.id);
+    const maxEgressDistance = Math.max(0, ...analysis.egressDistances.map((item) => item.distance));
+    const daylightFailureCount = version.rooms
+      .filter((room) => room.levelId === level.id && room.needsDaylight)
+      .filter((room) => !hasWindowOpening({ ...version, levels: [level], rooms: level.rooms }, room)).length;
+    const grossArea = level.rooms.reduce((total, room) => total + room.areaSqm, 0);
+
+    return {
+      levelId: level.id,
+      levelName: level.name,
+      maxEgressDistance,
+      daylightFailureCount,
+      grossArea
+    };
+  });
+
+  return {
+    versionId: version.id,
+    levelSummaries,
+    worstEgressDistance: Math.max(0, ...levelSummaries.map((item) => item.maxEgressDistance)),
+    totalDaylightFailures: levelSummaries.reduce((total, item) => total + item.daylightFailureCount, 0),
+    totalGrossArea: levelSummaries.reduce((total, item) => total + item.grossArea, 0)
   };
 }

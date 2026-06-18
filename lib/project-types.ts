@@ -57,6 +57,8 @@ export interface PlanVersionMetadata {
   };
   floorCount?: number;
   expandedFromSingleFloor?: boolean;
+  differentiatedFloors?: boolean;
+  floorPrograms?: Array<{ levelIndex: number; program: FloorProgram }>;
   topologyGraph?: TopologyGraph;
   relayoutedAt?: string;
   validationWarnings?: string[];
@@ -156,11 +158,17 @@ export interface Building {
   grids: Grid[];
 }
 
+export type FloorProgram = "ground" | "typical" | "top";
+
+export type LevelType = "ground" | "typical" | "top";
+
 export interface Level {
   id: string;
   name: string;
   elevation: number;
   height: number;
+  levelType?: LevelType;
+  floorProgram?: FloorProgram;
   rooms: Room[];
   walls: Wall[];
   openings: OpeningElement[];

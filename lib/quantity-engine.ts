@@ -26,12 +26,21 @@ export interface QuantityResult {
   };
 }
 
+export type QuantityScope = "level" | "building";
+
+export interface QuantityOptions {
+  levelId?: string;
+  scope?: QuantityScope;
+}
+
 export interface ComplianceItem {
   id: string;
   title: string;
   status: "success" | "warning";
   message: string;
   basis: string;
+  levelId?: string;
+  levelName?: string;
 }
 
 function round(value: number, digits = 1) {
@@ -74,11 +83,11 @@ function nearestDistanceToRooms(room: Room, targets: Room[]) {
   return Math.min(...targets.map((target) => distance(roomCenter, centroid(target))));
 }
 
-function maxDistanceToCore(version: PlanVersion) {
-  const coreRooms = version.rooms.filter((room) => ["stair", "elevator", "shaft"].includes(room.type));
-  const corePoint = coreRooms[0] ? centroid(coreRooms[0]) : [version.overallBounds.width / 2, version.overallBounds.height / 2] as Point;
+function maxDistanceToCore(rooms: Room[], fallbackPoint: Point) {
+  const coreRooms = rooms.filter((room) => ["stair", "elevator", "shaft"].includes(room.type));
+  const corePoint = coreRooms[0] ? centroid(coreRooms[0]) : fallbackPoint;
 
-  return Math.max(...version.rooms.map((room) => distance(centroid(room), corePoint)));
+  return Math.max(...rooms.map((room) => distance(centroid(room), corePoint)));
 }
 
 function activeLevel(version: PlanVersion, levelId?: string) {
@@ -89,8 +98,20 @@ function activeLevel(version: PlanVersion, levelId?: string) {
   return version.levels.find((level) => level.id === levelId) ?? version.levels[0];
 }
 
-function roomsForQuantities(version: PlanVersion, levelId?: string) {
-  if (!levelId && version.levels.length > 1) {
+function resolveQuantityScope(version: PlanVersion, levelId?: string, scope?: QuantityScope): QuantityScope {
+  if (scope) {
+    return scope;
+  }
+
+  if (levelId) {
+    return "level";
+  }
+
+  return version.levels.length > 1 ? "building" : "level";
+}
+
+function roomsForQuantities(version: PlanVersion, levelId: string | undefined, scope: QuantityScope) {
+  if (scope === "building") {
     return version.rooms;
   }
 
@@ -98,25 +119,46 @@ function roomsForQuantities(version: PlanVersion, levelId?: string) {
   return level?.rooms ?? version.rooms;
 }
 
+function wallsForQuantities(version: PlanVersion, levelId: string | undefined, scope: QuantityScope) {
+  if (scope === "building") {
+    return version.levels.flatMap((level) => level.walls);
+  }
+
+  return activeLevel(version, levelId)?.walls ?? [];
+}
+
+function openingsForQuantities(version: PlanVersion, levelId: string | undefined, scope: QuantityScope) {
+  if (scope === "building") {
+    return version.levels.flatMap((level) => level.openings);
+  }
+
+  return activeLevel(version, levelId)?.openings ?? [];
+}
+
 function roomOpenings(room: Room, openings: OpeningElement[], type: OpeningElement["type"]) {
   return openings.filter((opening) => opening.type === type && opening.roomIds?.includes(room.id));
 }
 
-export function calculateQuantities(version: PlanVersion, levelId?: string): QuantityResult {
-  const level = activeLevel(version, levelId);
-  const rooms = roomsForQuantities(version, levelId);
-  const walls = level?.walls ?? [];
-  const openings = level?.openings ?? [];
+function buildQuantityResult(
+  rooms: Room[],
+  walls: Wall[],
+  openings: OpeningElement[],
+  outline: Point[],
+  slabAreaBasis: string,
+  roofAreaBasis: string,
+  slabAreaOverride?: number,
+  roofAreaOverride?: number
+): QuantityResult {
   const grossArea = rooms.reduce((total, room) => total + room.areaSqm, 0);
   const netUsableArea = rooms
     .filter((room) => room.zone !== "circulation" && room.type !== "shaft")
     .reduce((total, room) => total + room.areaSqm, 0);
-  const outlineArea = polygonArea(version.outline);
+  const outlineArea = polygonArea(outline);
   const externalWallLength = walls.length
     ? walls
         .filter((wall) => wall.type === "external")
         .reduce((total, wall) => total + wallLength(wall), 0)
-    : polygonPerimeter(version.outline);
+    : polygonPerimeter(outline);
   const roomPerimeterTotal = rooms.reduce((total, room) => total + polygonPerimeter(room.polygon), 0);
   const internalWallLength = walls.length
     ? walls
@@ -134,8 +176,8 @@ export function calculateQuantities(version: PlanVersion, levelId?: string): Qua
   const windowCount = openings.length
     ? openings.filter((opening) => opening.type === "window").length
     : rooms.reduce((total, room) => total + room.windows.length, 0);
-  const slabArea = outlineArea || grossArea;
-  const roofArea = slabArea;
+  const slabArea = slabAreaOverride ?? (outlineArea || grossArea);
+  const roofArea = roofAreaOverride ?? slabArea;
   const curtainWallOrWindowArea = openings.length
     ? openings
         .filter((opening) => opening.type === "window")
@@ -185,7 +227,9 @@ export function calculateQuantities(version: PlanVersion, levelId?: string): Qua
       label: walls.length ? "Internal wall length" : "Internal wall length estimate",
       value: internalWallLength,
       unit: "m",
-      basis: walls.length ? "Sum of Level.walls where type = internal, partition or core" : "(Sum room perimeters - outline perimeter) / 2"
+      basis: walls.length
+        ? "Sum of Level.walls where type = internal, partition or core"
+        : "(Sum room perimeters - outline perimeter) / 2"
     },
     {
       id: "wall-area",
@@ -194,10 +238,22 @@ export function calculateQuantities(version: PlanVersion, levelId?: string): Qua
       unit: "sqm",
       basis: walls.length ? "Sum of wall length * wall height" : "(External + internal wall length) * average ceiling height"
     },
-    { id: "doors", label: "Door count", value: doorCount, unit: "pcs", basis: openings.length ? "Level.openings where type = door" : "Sum of room.doors" },
-    { id: "windows", label: "Window count", value: windowCount, unit: "pcs", basis: openings.length ? "Level.openings where type = window" : "Sum of room.windows" },
-    { id: "slab-area", label: "Floor slab area", value: slabArea, unit: "sqm", basis: "Outline polygon area" },
-    { id: "roof-area", label: "Roof area", value: roofArea, unit: "sqm", basis: "Assume roof equals outline area" },
+    {
+      id: "doors",
+      label: "Door count",
+      value: doorCount,
+      unit: "pcs",
+      basis: openings.length ? "Level.openings where type = door" : "Sum of room.doors"
+    },
+    {
+      id: "windows",
+      label: "Window count",
+      value: windowCount,
+      unit: "pcs",
+      basis: openings.length ? "Level.openings where type = window" : "Sum of room.windows"
+    },
+    { id: "slab-area", label: "Floor slab area", value: slabArea, unit: "sqm", basis: slabAreaBasis },
+    { id: "roof-area", label: "Roof area", value: roofArea, unit: "sqm", basis: roofAreaBasis },
     {
       id: "curtain-window-area",
       label: "Curtain wall / window area estimate",
@@ -226,14 +282,68 @@ export function calculateQuantities(version: PlanVersion, levelId?: string): Qua
   };
 }
 
-export function checkCompliance(version: PlanVersion): ComplianceItem[] {
-  const openings = activeLevel(version)?.openings ?? [];
-  const corridorRooms = version.rooms.filter((room) => room.type === "corridor");
-  const stairRooms = version.rooms.filter((room) => room.type === "stair" || room.type === "elevator");
-  const shaftOrEquipmentRooms = version.rooms.filter((room) => room.type === "shaft" || room.type === "equipment_room");
-  const roomsNeedingDaylight = version.rooms.filter((room) => room.needsDaylight);
-  const roomsNeedingPlumbing = version.rooms.filter((room) => room.needsPlumbing);
-  const maxEgressDistance = maxDistanceToCore(version);
+export function calculateQuantities(
+  version: PlanVersion,
+  levelIdOrOptions?: string | QuantityOptions
+): QuantityResult {
+  const options: QuantityOptions =
+    typeof levelIdOrOptions === "string" ? { levelId: levelIdOrOptions } : (levelIdOrOptions ?? {});
+  const scope = resolveQuantityScope(version, options.levelId, options.scope);
+  const rooms = roomsForQuantities(version, options.levelId, scope);
+  const walls = wallsForQuantities(version, options.levelId, scope);
+  const openings = openingsForQuantities(version, options.levelId, scope);
+  const outlineArea = polygonArea(version.outline);
+  const topLevel = version.levels[version.levels.length - 1];
+
+  if (scope === "building") {
+    const perLevelSlab = version.levels.reduce((total, level) => {
+      const levelOutline = level.floor?.outline ?? version.outline;
+      const levelGross = level.rooms.reduce((sum, room) => sum + room.areaSqm, 0);
+      return total + (polygonArea(levelOutline) || levelGross);
+    }, 0);
+    const roofOutline = topLevel?.floor?.outline ?? version.outline;
+    const roofGross = topLevel?.rooms.reduce((sum, room) => sum + room.areaSqm, 0) ?? 0;
+
+    return buildQuantityResult(
+      rooms,
+      walls,
+      openings,
+      version.outline,
+      "Sum of per-level slab areas",
+      "Top level outline area",
+      perLevelSlab || outlineArea * Math.max(1, version.levels.length),
+      polygonArea(roofOutline) || roofGross || outlineArea
+    );
+  }
+
+  return buildQuantityResult(
+    rooms,
+    walls,
+    openings,
+    version.outline,
+    "Outline polygon area",
+    "Assume roof equals outline area"
+  );
+}
+
+export function calculateQuantitiesByLevel(version: PlanVersion): Record<string, QuantityResult> {
+  return version.levels.reduce<Record<string, QuantityResult>>((acc, level) => {
+    acc[level.id] = calculateQuantities(version, { levelId: level.id, scope: "level" });
+    return acc;
+  }, {});
+}
+
+function checkComplianceForLevel(version: PlanVersion, levelId: string): ComplianceItem[] {
+  const level = activeLevel(version, levelId);
+  const rooms = level?.rooms ?? [];
+  const openings = level?.openings ?? [];
+  const fallbackPoint = [version.overallBounds.width / 2, version.overallBounds.height / 2] as Point;
+  const corridorRooms = rooms.filter((room) => room.type === "corridor");
+  const stairRooms = rooms.filter((room) => room.type === "stair" || room.type === "elevator");
+  const shaftOrEquipmentRooms = rooms.filter((room) => room.type === "shaft" || room.type === "equipment_room");
+  const roomsNeedingDaylight = rooms.filter((room) => room.needsDaylight);
+  const roomsNeedingPlumbing = rooms.filter((room) => room.needsPlumbing);
+  const maxEgressDistance = maxDistanceToCore(rooms, fallbackPoint);
   const narrowCorridors = corridorRooms.filter((room) => {
     const xs = room.polygon.map(([x]) => x);
     const ys = room.polygon.map(([, y]) => y);
@@ -245,8 +355,14 @@ export function checkCompliance(version: PlanVersion): ComplianceItem[] {
     return openings.length ? windowOpenings.length === 0 : room.windows.length === 0;
   });
   const plumbingFarRooms = roomsNeedingPlumbing.filter((room) => nearestDistanceToRooms(room, shaftOrEquipmentRooms) > 12);
-  const equipmentRooms = version.rooms.filter((room) => room.type === "equipment_room");
-  const misalignedEquipmentRooms = equipmentRooms.filter((room) => nearestDistanceToRooms(room, shaftOrEquipmentRooms.filter((target) => target.id !== room.id)) > 10);
+  const equipmentRooms = rooms.filter((room) => room.type === "equipment_room");
+  const misalignedEquipmentRooms = equipmentRooms.filter((room) =>
+    nearestDistanceToRooms(
+      room,
+      shaftOrEquipmentRooms.filter((target) => target.id !== room.id)
+    ) > 10
+  );
+  const levelName = level?.name ?? levelId;
 
   return [
     {
@@ -257,7 +373,9 @@ export function checkCompliance(version: PlanVersion): ComplianceItem[] {
         narrowCorridors.length === 0
           ? "No corridor room is narrower than 1.2m by bounding-box estimate."
           : `${narrowCorridors.length} corridor room may be narrower than 1.2m.`,
-      basis: "Example rule: corridor clear width should not be less than 1.2m."
+      basis: "Example rule: corridor clear width should not be less than 1.2m.",
+      levelId,
+      levelName
     },
     {
       id: "egress-distance",
@@ -267,7 +385,9 @@ export function checkCompliance(version: PlanVersion): ComplianceItem[] {
         maxEgressDistance <= 30
           ? `Maximum room-to-core distance is about ${round(maxEgressDistance)}m.`
           : `Maximum room-to-core distance is about ${round(maxEgressDistance)}m, above 30m.`,
-      basis: "Example rule: egress travel distance should not exceed 30m."
+      basis: "Example rule: egress travel distance should not exceed 30m.",
+      levelId,
+      levelName
     },
     {
       id: "daylight",
@@ -277,7 +397,9 @@ export function checkCompliance(version: PlanVersion): ComplianceItem[] {
         roomsWithoutDaylight.length === 0
           ? "Rooms marked as needing daylight have at least one window."
           : `${roomsWithoutDaylight.length} daylight-required room has no window data.`,
-      basis: "Rooms with needsDaylight should have exterior windows."
+      basis: "Rooms with needsDaylight should have exterior windows.",
+      levelId,
+      levelName
     },
     {
       id: "plumbing-proximity",
@@ -287,7 +409,9 @@ export function checkCompliance(version: PlanVersion): ComplianceItem[] {
         plumbingFarRooms.length === 0
           ? "Rooms needing plumbing are close to shafts or equipment rooms."
           : `${plumbingFarRooms.length} plumbing room may be too far from shafts or equipment rooms.`,
-      basis: "Example rule: wet rooms should be near shafts or service zones."
+      basis: "Example rule: wet rooms should be near shafts or service zones.",
+      levelId,
+      levelName
     },
     {
       id: "stair-count",
@@ -297,7 +421,9 @@ export function checkCompliance(version: PlanVersion): ComplianceItem[] {
         stairRooms.length >= 1
           ? `${stairRooms.length} vertical core room is present.`
           : "No stair or elevator core room is present.",
-      basis: "Early-stage check: at least one stair/elevator core should exist."
+      basis: "Early-stage check: at least one stair/elevator core should exist.",
+      levelId,
+      levelName
     },
     {
       id: "equipment-shaft-alignment",
@@ -307,7 +433,37 @@ export function checkCompliance(version: PlanVersion): ComplianceItem[] {
         misalignedEquipmentRooms.length === 0
           ? "Equipment rooms are aligned with a shaft or service room by distance check."
           : `${misalignedEquipmentRooms.length} equipment room may not align with shafts.`,
-      basis: "Example rule: equipment rooms should align with shafts or service risers."
+      basis: "Example rule: equipment rooms should align with shafts or service risers.",
+      levelId,
+      levelName
     }
   ];
+}
+
+export function checkCompliance(version: PlanVersion): ComplianceItem[] {
+  if (version.levels.length <= 1) {
+    const levelId = version.levels[0]?.id ?? "level-01";
+    return checkComplianceForLevel(version, levelId);
+  }
+
+  const perLevel = version.levels.flatMap((level) => checkComplianceForLevel(version, level.id));
+  const rollup = new Map<string, ComplianceItem>();
+
+  perLevel.forEach((item) => {
+    const existing = rollup.get(item.id);
+
+    if (!existing || (existing.status === "success" && item.status === "warning")) {
+      rollup.set(item.id, {
+        ...item,
+        message:
+          item.status === "warning"
+            ? `${item.message} Worst case on ${item.levelName}.`
+            : item.message,
+        levelId: undefined,
+        levelName: undefined
+      });
+    }
+  });
+
+  return [...rollup.values()];
 }
