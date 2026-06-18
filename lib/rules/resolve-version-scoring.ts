@@ -1,7 +1,7 @@
 import type { CodeContext, ProgramModel, ProjectDomain } from "@/lib/building-domain";
 import type { PlanVersion } from "@/lib/project-types";
 import { calculateVersionScores } from "@/lib/rules/score-engine";
-import { resolveProgramGoals } from "@/lib/rules/program-goals";
+import { resolveProgramGoalsFromContext } from "@/lib/rules/program-goals";
 import { resolveRulePack } from "@/lib/rules/rule-pack";
 import { getCodeContext } from "@/lib/project-domain";
 import { validatePlanVersion, type PlanValidationIssue } from "@/lib/plan-validation";
@@ -38,9 +38,10 @@ export function scoreVersionWithContext(
     ...input,
     issues: resolvedIssues,
     rulePack: resolveRulePack({ codeContext: input.codeContext, projectType: input.projectType }),
-    programGoals: resolveProgramGoals(
-      input.program ?? (input.projectType ? ({ projectType: input.projectType } as ProgramModel) : undefined)
-    )
+    programGoals: resolveProgramGoalsFromContext({
+      program: input.program,
+      projectType: input.projectType
+    })
   });
 }
 

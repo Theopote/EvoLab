@@ -104,6 +104,11 @@ export function resolveProgramGoals(program?: ProgramModel): ProgramGoals {
   return goalsByProjectType[projectType] ?? defaultProgramGoals;
 }
 
+export function resolveProgramGoalsFromContext(options?: { program?: ProgramModel; projectType?: string }): ProgramGoals {
+  const projectType = options?.program?.projectType ?? options?.projectType;
+  return resolveProgramGoals(projectType ? ({ projectType } as ProgramModel) : options?.program);
+}
+
 export function normalizeGoalWeights(weights: ProgramGoalWeights): ProgramGoalWeights {
   const scoreWeightTotal =
     weights.areaEfficiency +

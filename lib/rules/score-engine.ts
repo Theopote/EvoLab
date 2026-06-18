@@ -1,5 +1,5 @@
 import { codeContextFromRulePack, resolveRulePack } from "@/lib/rules/rule-pack";
-import { normalizeGoalWeights, resolveProgramGoals } from "@/lib/rules/program-goals";
+import { normalizeGoalWeights, resolveProgramGoalsFromContext } from "@/lib/rules/program-goals";
 import { scoreAreaEfficiency } from "@/lib/rules/metrics/area-efficiency";
 import { scoreCirculation } from "@/lib/rules/metrics/circulation";
 import { scoreDaylight } from "@/lib/rules/metrics/daylight";
@@ -50,11 +50,10 @@ export const calculateVersionScores = (
   options: ScoreEngineOptions = {}
 ): { scores: VersionScores; breakdown: ScoreBreakdown } => {
   const rulePack = options.rulePack ?? resolveRulePack({ codeContext: options.codeContext, projectType: options.projectType ?? options.program?.projectType });
-  const programGoals =
-    options.programGoals ??
-    resolveProgramGoals(
-      options.program ?? (options.projectType ? ({ projectType: options.projectType } as ProgramModel) : undefined)
-    );
+  const programGoals = options.programGoals ?? resolveProgramGoalsFromContext({
+    program: options.program,
+    projectType: options.projectType
+  });
   const normalizedWeights = normalizeGoalWeights(programGoals.weights);
   const context: ScoringContext = {
     version,

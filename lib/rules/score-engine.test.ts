@@ -6,7 +6,7 @@ import { defaultHealthcareCodeContext } from "@/lib/building-domain";
 import { validatePlanVersion } from "@/lib/plan-validation";
 import { checkCompliance } from "@/lib/quantity-engine";
 import { computeEgressPathMetrics, computeWetCorePathMetrics, computeWetCoreVerticalMetrics } from "@/lib/rules/path-metrics";
-import { resolveProgramGoals } from "@/lib/rules/program-goals";
+import { resolveProgramGoalsFromContext } from "@/lib/rules/program-goals";
 import { calculateVersionScores } from "@/lib/rules/score-engine";
 import { compareVersionScores, computeTotalScore } from "@/lib/rules/version-total-score";
 
@@ -27,7 +27,7 @@ describe("rules score engine", () => {
     expect(scores.breakdown?.metrics.length).toBeGreaterThan(0);
     expect(breakdown.comparisonHints.length).toBeGreaterThanOrEqual(0);
     expect(breakdown.totalScore).toBe(
-      computeTotalScore(scores, resolveProgramGoals({ projectType: "healthcare" }))
+      computeTotalScore(scores, resolveProgramGoalsFromContext({ projectType: "healthcare" }))
     );
   });
 
@@ -48,7 +48,11 @@ describe("rules score engine", () => {
       riskCount: left.riskCount + 2
     };
 
-    const comparison = compareVersionScores(left, right, resolveProgramGoals());
+    const comparison = compareVersionScores(
+      left,
+      right,
+      resolveProgramGoalsFromContext({ projectType: "healthcare" })
+    );
     expect(comparison.totalDelta).toBeGreaterThan(0);
     expect(comparison.explanations.length).toBeGreaterThan(0);
   });
