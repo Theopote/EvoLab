@@ -139,7 +139,12 @@ export function PlanResultGrid({
               <Metric label="Flow" value={version.scores?.circulationScore} />
               <Metric label="Daylight" value={version.scores?.daylightScore} />
               <Metric label="MEP" value={version.scores?.mepAlignmentScore} />
+              <Metric label="Egress" value={version.scores?.egressScore} />
+              <Metric label="Structure" value={version.scores?.structureFitScore} />
             </div>
+            {version.scores?.breakdown?.comparisonHints[0] ? (
+              <p className="mb-3 text-[11px] leading-4 text-muted">{version.scores.breakdown.comparisonHints[0]}</p>
+            ) : null}
             <div className="mb-3 text-xs text-warning">Risks: {version.scores?.riskCount ?? 0}</div>
             <button
               className="flex h-8 w-full items-center justify-center gap-2 rounded border border-line text-xs text-slate-100 hover:border-accent/60 hover:text-accent"

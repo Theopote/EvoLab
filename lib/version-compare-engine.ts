@@ -1,6 +1,9 @@
 import { getLevelById, getLevelByIndex, listComparableLevelGroups } from "@/lib/multi-floor";
 import { calculateQuantities } from "@/lib/quantity-engine";
+import { resolveProgramGoals } from "@/lib/rules/program-goals";
+import { computeTotalScore } from "@/lib/rules/version-total-score";
 import type { PlanVersion, Point } from "@/lib/project-types";
+import type { ProgramModel } from "@/lib/building-domain";
 
 export interface VersionLevelCompareRow {
   versionId: string;
@@ -36,21 +39,19 @@ export interface VersionBuildingCompareRow {
 
 export type VersionCompareScope = "selected-level" | "all-levels" | "building-total";
 
-function scoreVersion(version: PlanVersion) {
-  const scores = version.scores;
-  return Math.round(
-    Math.max(
-      0,
-      (scores?.areaEfficiency ?? 0) * 0.28 +
-        (scores?.circulationScore ?? 0) * 0.26 +
-        (scores?.daylightScore ?? 0) * 0.2 +
-        (scores?.mepAlignmentScore ?? 0) * 0.18 -
-        (scores?.riskCount ?? 0) * 4
-    )
-  );
+const emptyScores = {
+  areaEfficiency: 0,
+  circulationScore: 0,
+  daylightScore: 0,
+  mepAlignmentScore: 0,
+  riskCount: 0
+};
+
+function scoreVersion(version: PlanVersion, program?: ProgramModel) {
+  return computeTotalScore(version.scores ?? emptyScores, resolveProgramGoals(program));
 }
 
-function scoreLevel(version: PlanVersion, levelId: string) {
+function scoreLevel(version: PlanVersion, levelId: string, program?: ProgramModel) {
   const quantities = calculateQuantities(version, { levelId, scope: "level" });
   const level = getLevelById(version, levelId);
   const rooms = level?.rooms ?? [];
@@ -67,15 +68,21 @@ function scoreLevel(version: PlanVersion, levelId: string) {
     daylightRooms.length === 0
       ? version.scores?.daylightScore ?? 70
       : (daylightRooms.filter((room) => room.windows.length > 0).length / daylightRooms.length) * 100;
+  const goals = resolveProgramGoals(program);
+  const weights = goals.weights;
+  const weightTotal =
+    weights.areaEfficiency + weights.circulation + weights.daylight + weights.wetCore + weights.egress + weights.structureFit;
 
   return Math.round(
     Math.max(
       0,
-      areaEfficiency * 0.34 +
-        (1 - circulationRatio) * 100 * 0.28 +
-        daylightScore * 0.22 +
-        (version.scores?.mepAlignmentScore ?? 70) * 0.16 -
-        (version.scores?.riskCount ?? 0) * 2
+      areaEfficiency * (weights.areaEfficiency / weightTotal) +
+        (1 - circulationRatio) * 100 * (weights.circulation / weightTotal) +
+        daylightScore * (weights.daylight / weightTotal) +
+        (version.scores?.mepAlignmentScore ?? 70) * (weights.wetCore / weightTotal) +
+        (version.scores?.egressScore ?? 70) * (weights.egress / weightTotal) +
+        (version.scores?.structureFitScore ?? 70) * (weights.structureFit / weightTotal) -
+        (version.scores?.riskCount ?? 0) * goals.weights.riskPenalty
     )
   );
 }
@@ -93,19 +100,24 @@ function corePositionForLevel(version: PlanVersion, levelId: string): Point {
   return [total[0] / coreRoom.polygon.length, total[1] / coreRoom.polygon.length];
 }
 
-export function compareVersionsAtLevel(versions: PlanVersion[], levelId: string): VersionLevelCompareResult {
+export function compareVersionsAtLevel(
+  versions: PlanVersion[],
+  levelId: string,
+  program?: ProgramModel
+): VersionLevelCompareResult {
   const referenceVersion = versions.find((version) => version.levels.some((level) => level.id === levelId));
   const levelIndex = referenceVersion
     ? Math.max(1, referenceVersion.levels.findIndex((level) => level.id === levelId) + 1)
     : 1;
 
-  return compareVersionsAtLevelIndex(versions, levelIndex, levelId);
+  return compareVersionsAtLevelIndex(versions, levelIndex, levelId, program);
 }
 
 export function compareVersionsAtLevelIndex(
   versions: PlanVersion[],
   levelIndex: number,
-  displayLevelId?: string
+  displayLevelId?: string,
+  program?: ProgramModel
 ): VersionLevelCompareResult {
   const rows = versions.map((version) => {
     const level = getLevelByIndex(version, levelIndex);
@@ -124,7 +136,7 @@ export function compareVersionsAtLevelIndex(
       roomCount: rooms.length,
       grossArea: quantities.summary.grossArea,
       netArea: quantities.summary.netUsableArea,
-      totalScore: scoreLevel(version, levelId),
+      totalScore: scoreLevel(version, levelId, program),
       circulationRatio: quantities.summary.grossArea > 0 ? circulationArea / quantities.summary.grossArea : 0,
       corePosition: corePositionForLevel(version, levelId),
       riskCount: version.scores?.riskCount ?? 0
@@ -138,15 +150,15 @@ export function compareVersionsAtLevelIndex(
   };
 }
 
-export function compareVersionsAcrossLevels(versions: PlanVersion[], levelIds: string[]) {
-  return levelIds.map((levelId) => compareVersionsAtLevel(versions, levelId));
+export function compareVersionsAcrossLevels(versions: PlanVersion[], levelIds: string[], program?: ProgramModel) {
+  return levelIds.map((levelId) => compareVersionsAtLevel(versions, levelId, program));
 }
 
-export function compareVersionsAcrossLevelIndices(versions: PlanVersion[], levelIndices: number[]) {
-  return levelIndices.map((levelIndex) => compareVersionsAtLevelIndex(versions, levelIndex));
+export function compareVersionsAcrossLevelIndices(versions: PlanVersion[], levelIndices: number[], program?: ProgramModel) {
+  return levelIndices.map((levelIndex) => compareVersionsAtLevelIndex(versions, levelIndex, undefined, program));
 }
 
-export function compareVersionsBuildingTotal(versions: PlanVersion[]): VersionBuildingCompareRow[] {
+export function compareVersionsBuildingTotal(versions: PlanVersion[], program?: ProgramModel): VersionBuildingCompareRow[] {
   return versions.map((version) => {
     const quantities = calculateQuantities(version, { scope: "building" });
     const circulationArea = version.rooms
@@ -160,7 +172,7 @@ export function compareVersionsBuildingTotal(versions: PlanVersion[]): VersionBu
       roomCount: version.rooms.length,
       grossArea: quantities.summary.grossArea,
       netArea: quantities.summary.netUsableArea,
-      totalScore: scoreVersion(version),
+      totalScore: scoreVersion(version, program),
       circulationRatio: quantities.summary.grossArea > 0 ? circulationArea / quantities.summary.grossArea : 0,
       riskCount: version.scores?.riskCount ?? 0
     };
@@ -201,3 +213,5 @@ export function recommendLevelId(versions: PlanVersion[], preferredLevelId?: str
 
   return unique[0] ?? "level-01";
 }
+
+export { scoreVersion, computeTotalScore };

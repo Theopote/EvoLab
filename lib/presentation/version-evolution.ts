@@ -1,5 +1,7 @@
 import { calculateQuantities } from "@/lib/quantity-engine";
 import type { PlanVersion, ProjectData } from "@/lib/project-types";
+import { getProgramGoals } from "@/lib/project-domain";
+import { computeTotalScore } from "@/lib/rules/version-total-score";
 
 export interface VersionEvolutionRow {
   id: string;
@@ -27,18 +29,16 @@ export interface VersionEvolutionSummary {
   };
 }
 
-function scoreVersion(version: PlanVersion) {
-  const scores = version.scores;
-
-  return Math.round(
-    Math.max(
-      0,
-      (scores?.areaEfficiency ?? 0) * 0.28 +
-        (scores?.circulationScore ?? 0) * 0.26 +
-        (scores?.daylightScore ?? 0) * 0.2 +
-        (scores?.mepAlignmentScore ?? 0) * 0.18 -
-        (scores?.riskCount ?? 0) * 4
-    )
+function scoreVersion(version: PlanVersion, project: ProjectData) {
+  return computeTotalScore(
+    version.scores ?? {
+      areaEfficiency: 0,
+      circulationScore: 0,
+      daylightScore: 0,
+      mepAlignmentScore: 0,
+      riskCount: 0
+    },
+    getProgramGoals(project.domain)
   );
 }
 
@@ -64,7 +64,7 @@ export function summarizeVersionEvolution(project: ProjectData, activeVersion: P
       label: version.label,
       rooms: version.rooms.length,
       grossArea: quantities.summary.grossArea,
-      totalScore: scoreVersion(version),
+      totalScore: scoreVersion(version, project),
       isActive: version.id === activeVersion.id,
       parentLabel: parent?.label
     };

@@ -253,12 +253,39 @@ export interface Opening {
 
 export type Point = [number, number];
 
+export interface ScoreMetricEvidence {
+  label: string;
+  value: string;
+  impact?: "positive" | "negative" | "neutral";
+}
+
+export interface ScoreMetricContribution {
+  id: string;
+  label: string;
+  score: number;
+  weight: number;
+  weightedScore: number;
+  summary: string;
+  evidence: ScoreMetricEvidence[];
+}
+
+export interface ScoreBreakdown {
+  rulePackId: string;
+  programGoalsId: string;
+  totalScore: number;
+  metrics: ScoreMetricContribution[];
+  comparisonHints: string[];
+}
+
 export interface VersionScores {
   areaEfficiency: number;
   circulationScore: number;
   daylightScore: number;
   mepAlignmentScore: number;
+  egressScore?: number;
+  structureFitScore?: number;
   riskCount: number;
+  breakdown?: ScoreBreakdown;
 }
 
 export interface MepLayout {

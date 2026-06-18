@@ -3,9 +3,10 @@
 import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { formatCost, calculateCostEstimate } from "@/lib/cost-engine";
+import { getProgramGoals } from "@/lib/project-domain";
 import { calculateQuantities } from "@/lib/quantity-engine";
-import type { PlanVersion } from "@/lib/project-types";
 import { useEvoProject } from "@/lib/project-store";
+import { computeTotalScore } from "@/lib/rules/version-total-score";
 
 function polygonArea(points: Array<[number, number]>) {
   const area = points.reduce((total, [x, y], index) => {
@@ -14,22 +15,7 @@ function polygonArea(points: Array<[number, number]>) {
   }, 0);
 
   return Math.abs(area) / 2;
-}
-
-function scoreVersion(version: PlanVersion) {
-  const scores = version.scores;
-
-  return Math.round(
-    Math.max(
-      0,
-      (scores?.areaEfficiency ?? 0) * 0.28 +
-        (scores?.circulationScore ?? 0) * 0.26 +
-        (scores?.daylightScore ?? 0) * 0.2 +
-        (scores?.mepAlignmentScore ?? 0) * 0.18 -
-        (scores?.riskCount ?? 0) * 4
-    )
-  );
-}
+};
 
 export function ViewportKpiHud() {
   const { project, activeVersion, outline, zoning, buildableEnvelope } = useEvoProject(
@@ -62,7 +48,13 @@ export function ViewportKpiHud() {
         tone: far !== undefined && far > farLimit ? ("warning" as const) : ("default" as const)
       },
       { label: "ROM", value: formatCost(cost.totalCost, cost.currency), tone: "default" as const },
-      { label: "Score", value: String(scoreVersion(activeVersion)), tone: "default" as const },
+      { label: "Score", value: String(computeTotalScore(activeVersion.scores ?? {
+        areaEfficiency: 0,
+        circulationScore: 0,
+        daylightScore: 0,
+        mepAlignmentScore: 0,
+        riskCount: 0
+      }, getProgramGoals(project.domain))), tone: "default" as const },
       {
         label: "Envelope",
         value: buildableEnvelope?.valid ? "OK" : "—",

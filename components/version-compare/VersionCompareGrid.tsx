@@ -10,6 +10,7 @@ import {
   compareVersionsAtLevel,
   compareVersionsAtLevelIndex,
   compareVersionsBuildingTotal,
+  scoreVersion,
   type VersionBuildingCompareRow,
   type VersionCompareScope,
   type VersionLevelCompareResult,
@@ -25,18 +26,6 @@ interface VersionCompareGridProps {
   onSelectVersion: (version: PlanVersion) => void;
   onGenerateModel: (version: PlanVersion) => void;
   onRefineVersion: (version: PlanVersion) => void;
-}
-
-function scoreVersion(version: PlanVersion) {
-  const scores = version.scores;
-  const total =
-    (scores?.areaEfficiency ?? 0) * 0.28 +
-    (scores?.circulationScore ?? 0) * 0.26 +
-    (scores?.daylightScore ?? 0) * 0.2 +
-    (scores?.mepAlignmentScore ?? 0) * 0.18 -
-    (scores?.riskCount ?? 0) * 4;
-
-  return Math.round(Math.max(0, total));
 }
 
 function useVersionCompareWorker(

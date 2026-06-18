@@ -126,12 +126,18 @@ export function BottomPanel({
                 onClick={() => onSelectVersion(version)}
               >
                 <div className="truncate text-sm text-slate-100">{version.label}</div>
-                <div className="mt-2 grid grid-cols-4 gap-1 text-[11px] text-muted">
+                <div className="mt-2 grid grid-cols-5 gap-1 text-[11px] text-muted">
                   <span>A {version.scores?.areaEfficiency ?? 0}</span>
                   <span>F {version.scores?.circulationScore ?? 0}</span>
                   <span>D {version.scores?.daylightScore ?? 0}</span>
+                  <span>E {version.scores?.egressScore ?? 0}</span>
                   <span>R {version.scores?.riskCount ?? 0}</span>
                 </div>
+                {version.scores?.breakdown?.comparisonHints[0] ? (
+                  <div className="mt-2 line-clamp-2 text-[10px] leading-4 text-muted">
+                    {version.scores.breakdown.comparisonHints[0]}
+                  </div>
+                ) : null}
               </button>
             ))}
           </div>

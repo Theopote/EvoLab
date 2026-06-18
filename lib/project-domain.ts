@@ -21,6 +21,9 @@ import {
 } from "@/lib/building-domain";
 import { normalizePlanVersion } from "@/lib/architecture-model";
 import { calculateQuantities } from "@/lib/quantity-engine";
+import { resolveProgramGoals } from "@/lib/rules/program-goals";
+import { resolveRulePack } from "@/lib/rules/rule-pack";
+import { computeTotalScore } from "@/lib/rules/version-total-score";
 import type { DesignBrief, PlanVersion, Point, ProjectData, Room, TopologyGraph } from "@/lib/project-types";
 import type { SiteContext, ZoningConstraints } from "@/lib/site-types";
 import { defaultZoningConstraints } from "@/lib/site-types";
@@ -521,6 +524,27 @@ export function normalizeProjectData(
 
 export function getCodeContext(domain?: ProjectDomain): CodeContext {
   return domain?.codeContext ?? defaultHealthcareCodeContext;
+}
+
+export function getRulePack(domain?: ProjectDomain, projectType?: string) {
+  return resolveRulePack({
+    codeContext: domain?.codeContext,
+    projectType: projectType ?? domain?.program.projectType
+  });
+}
+
+export function getProgramGoals(domain?: ProjectDomain) {
+  return resolveProgramGoals(domain?.program);
+}
+
+export function scorePlanVersion(version: PlanVersion, domain?: ProjectDomain) {
+  return computeTotalScore(version.scores ?? {
+    areaEfficiency: 0,
+    circulationScore: 0,
+    daylightScore: 0,
+    mepAlignmentScore: 0,
+    riskCount: 0
+  }, getProgramGoals(domain));
 }
 
 export function getActiveSchedule(domain: ProjectDomain | undefined, versionId?: string): ScheduleBundle | undefined {

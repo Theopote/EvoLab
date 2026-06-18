@@ -72,7 +72,34 @@ export const PlanVersionDraftSchema = z.object({
       circulationScore: FiniteNumberSchema,
       daylightScore: FiniteNumberSchema,
       mepAlignmentScore: FiniteNumberSchema,
-      riskCount: FiniteNumberSchema
+      egressScore: FiniteNumberSchema.optional(),
+      structureFitScore: FiniteNumberSchema.optional(),
+      riskCount: FiniteNumberSchema,
+      breakdown: z
+        .object({
+          rulePackId: z.string(),
+          programGoalsId: z.string(),
+          totalScore: FiniteNumberSchema,
+          comparisonHints: z.array(z.string()),
+          metrics: z.array(
+            z.object({
+              id: z.string(),
+              label: z.string(),
+              score: FiniteNumberSchema,
+              weight: FiniteNumberSchema,
+              weightedScore: FiniteNumberSchema,
+              summary: z.string(),
+              evidence: z.array(
+                z.object({
+                  label: z.string(),
+                  value: z.string(),
+                  impact: z.enum(["positive", "negative", "neutral"]).optional()
+                })
+              )
+            })
+          )
+        })
+        .optional()
     })
     .optional()
 });

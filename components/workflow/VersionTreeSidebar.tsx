@@ -4,26 +4,12 @@ import { GitCompare, Star } from "lucide-react";
 import { useMemo } from "react";
 import { calculateQuantities } from "@/lib/quantity-engine";
 import type { PlanVersion } from "@/lib/project-types";
+import { scoreVersion } from "@/lib/version-compare-engine";
 
 interface VersionTreeNode {
   version: PlanVersion;
   depth: number;
   children: VersionTreeNode[];
-}
-
-function scoreVersion(version: PlanVersion) {
-  const scores = version.scores;
-
-  return Math.round(
-    Math.max(
-      0,
-      (scores?.areaEfficiency ?? 0) * 0.28 +
-        (scores?.circulationScore ?? 0) * 0.26 +
-        (scores?.daylightScore ?? 0) * 0.2 +
-        (scores?.mepAlignmentScore ?? 0) * 0.18 -
-        (scores?.riskCount ?? 0) * 4
-    )
-  );
 }
 
 function buildVersionTree(versions: PlanVersion[]) {

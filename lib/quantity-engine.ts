@@ -1,6 +1,8 @@
 import type { CodeContext } from "@/lib/building-domain";
 import { defaultHealthcareCodeContext } from "@/lib/building-domain";
 import type { FunctionZone, OpeningElement, PlanVersion, Point, Room, RoomType, Wall } from "@/lib/project-types";
+import { computeEgressPathMetrics, computeWetCorePathMetrics } from "@/lib/rules/path-metrics";
+import { resolveRulePack, ruleBasis, ruleThreshold } from "@/lib/rules/rule-pack";
 
 export interface QuantityRow {
   id: string;
@@ -76,20 +78,19 @@ function centroid(room: Room): Point {
   return [total[0] / room.polygon.length, total[1] / room.polygon.length];
 }
 
-function nearestDistanceToRooms(room: Room, targets: Room[]) {
+function nearestDistanceToRooms(room: Room, targets: Room[], version: PlanVersion) {
   if (targets.length === 0) {
     return Infinity;
   }
 
+  const wetMetrics = computeWetCorePathMetrics(version);
+  const roomMetric = wetMetrics.perRoom.find((item) => item.roomId === room.id);
+  if (roomMetric) {
+    return roomMetric.distance;
+  }
+
   const roomCenter = centroid(room);
   return Math.min(...targets.map((target) => distance(roomCenter, centroid(target))));
-}
-
-function maxDistanceToCore(rooms: Room[], fallbackPoint: Point) {
-  const coreRooms = rooms.filter((room) => ["stair", "elevator", "shaft"].includes(room.type));
-  const corePoint = coreRooms[0] ? centroid(coreRooms[0]) : fallbackPoint;
-
-  return Math.max(...rooms.map((room) => distance(centroid(room), corePoint)));
 }
 
 function activeLevel(version: PlanVersion, levelId?: string) {
@@ -335,28 +336,22 @@ export function calculateQuantitiesByLevel(version: PlanVersion): Record<string,
   }, {});
 }
 
-function ruleThreshold(codeContext: CodeContext, ruleId: string, fallback: number) {
-  return codeContext.rules.find((rule) => rule.id === ruleId)?.threshold ?? fallback;
-}
-
-function ruleBasis(codeContext: CodeContext, ruleId: string, fallback: string) {
-  return codeContext.rules.find((rule) => rule.id === ruleId)?.basis ?? fallback;
-}
-
 function checkComplianceForLevel(version: PlanVersion, levelId: string, codeContext: CodeContext): ComplianceItem[] {
+  const rulePack = resolveRulePack({ codeContext });
   const level = activeLevel(version, levelId);
   const rooms = level?.rooms ?? [];
   const openings = level?.openings ?? [];
-  const fallbackPoint = [version.overallBounds.width / 2, version.overallBounds.height / 2] as Point;
   const corridorRooms = rooms.filter((room) => room.type === "corridor");
   const stairRooms = rooms.filter((room) => room.type === "stair" || room.type === "elevator");
   const shaftOrEquipmentRooms = rooms.filter((room) => room.type === "shaft" || room.type === "equipment_room");
   const roomsNeedingDaylight = rooms.filter((room) => room.needsDaylight);
   const roomsNeedingPlumbing = rooms.filter((room) => room.needsPlumbing);
-  const maxEgressDistance = maxDistanceToCore(rooms, fallbackPoint);
-  const corridorMinWidth = ruleThreshold(codeContext, "corridor-width", 1.2);
-  const egressMaxDistance = ruleThreshold(codeContext, "egress-distance", 30);
-  const minCoreCount = ruleThreshold(codeContext, "stair-count", 1);
+  const egressMetrics = computeEgressPathMetrics(version, levelId);
+  const maxEgressDistance = egressMetrics.maxDistance;
+  const corridorMinWidth = ruleThreshold(rulePack, "corridor-width", 1.2);
+  const egressMaxDistance = rulePack.scoring.egressMaxDistanceM;
+  const plumbingMaxDistance = rulePack.scoring.plumbingMaxDistanceM;
+  const minCoreCount = ruleThreshold(rulePack, "stair-count", 1);
   const narrowCorridors = corridorRooms.filter((room) => {
     const xs = room.polygon.map(([x]) => x);
     const ys = room.polygon.map(([, y]) => y);
@@ -367,12 +362,15 @@ function checkComplianceForLevel(version: PlanVersion, levelId: string, codeCont
     const windowOpenings = openings.length ? roomOpenings(room, openings, "window") : [];
     return openings.length ? windowOpenings.length === 0 : room.windows.length === 0;
   });
-  const plumbingFarRooms = roomsNeedingPlumbing.filter((room) => nearestDistanceToRooms(room, shaftOrEquipmentRooms) > 12);
+  const plumbingFarRooms = roomsNeedingPlumbing.filter(
+    (room) => nearestDistanceToRooms(room, shaftOrEquipmentRooms, version) > plumbingMaxDistance
+  );
   const equipmentRooms = rooms.filter((room) => room.type === "equipment_room");
   const misalignedEquipmentRooms = equipmentRooms.filter((room) =>
     nearestDistanceToRooms(
       room,
-      shaftOrEquipmentRooms.filter((target) => target.id !== room.id)
+      shaftOrEquipmentRooms.filter((target) => target.id !== room.id),
+      version
     ) > 10
   );
   const levelName = level?.name ?? levelId;
@@ -386,7 +384,7 @@ function checkComplianceForLevel(version: PlanVersion, levelId: string, codeCont
         narrowCorridors.length === 0
           ? `No corridor room is narrower than ${corridorMinWidth}m by bounding-box estimate.`
           : `${narrowCorridors.length} corridor room may be narrower than ${corridorMinWidth}m.`,
-      basis: ruleBasis(codeContext, "corridor-width", "Corridor clear width should not be less than 1.2m."),
+      basis: ruleBasis(rulePack, "corridor-width", "Corridor clear width should not be less than 1.2m."),
       levelId,
       levelName
     },
@@ -396,9 +394,11 @@ function checkComplianceForLevel(version: PlanVersion, levelId: string, codeCont
       status: maxEgressDistance <= egressMaxDistance ? "success" : "warning",
       message:
         maxEgressDistance <= egressMaxDistance
-          ? `Maximum room-to-core distance is about ${round(maxEgressDistance)}m.`
-          : `Maximum room-to-core distance is about ${round(maxEgressDistance)}m, above ${egressMaxDistance}m.`,
-      basis: ruleBasis(codeContext, "egress-distance", "Egress travel distance should not exceed 30m."),
+          ? `Maximum egress path is about ${round(maxEgressDistance)}m via ${egressMetrics.method}.`
+          : `Maximum egress path is about ${round(maxEgressDistance)}m via ${egressMetrics.method}${
+              egressMetrics.worstRoomName ? ` (${egressMetrics.worstRoomName})` : ""
+            }, above ${egressMaxDistance}m.`,
+      basis: ruleBasis(rulePack, "egress-distance", "Egress travel distance should not exceed 30m."),
       levelId,
       levelName
     },
@@ -420,9 +420,9 @@ function checkComplianceForLevel(version: PlanVersion, levelId: string, codeCont
       status: plumbingFarRooms.length === 0 ? "success" : "warning",
       message:
         plumbingFarRooms.length === 0
-          ? "Rooms needing plumbing are close to shafts or equipment rooms."
-          : `${plumbingFarRooms.length} plumbing room may be too far from shafts or equipment rooms.`,
-      basis: "Example rule: wet rooms should be near shafts or service zones.",
+          ? "Rooms needing plumbing are within path distance of shafts or equipment rooms."
+          : `${plumbingFarRooms.length} plumbing room may exceed ${plumbingMaxDistance}m path distance to shafts.`,
+      basis: `Wet rooms should be within ${plumbingMaxDistance}m path distance of shafts or service zones.`,
       levelId,
       levelName
     },
@@ -434,7 +434,7 @@ function checkComplianceForLevel(version: PlanVersion, levelId: string, codeCont
         stairRooms.length >= minCoreCount
           ? `${stairRooms.length} vertical core room is present.`
           : "No stair or elevator core room is present.",
-      basis: ruleBasis(codeContext, "stair-count", "At least one stair/elevator core should exist."),
+      basis: ruleBasis(rulePack, "stair-count", "At least one stair/elevator core should exist."),
       levelId,
       levelName
     },

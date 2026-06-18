@@ -1,3 +1,4 @@
+import type { CodeContext } from "@/lib/building-domain";
 import type { OpeningElement, PlanVersion, Point, Room } from "@/lib/project-types";
 import {
   intersectionArea,
@@ -5,6 +6,8 @@ import {
   polygonArea as booleanPolygonArea
 } from "@/lib/polygon-ops";
 import { createSetbackBoundary } from "@/lib/polygon-offset";
+import { computeWetCorePathMetrics } from "@/lib/rules/path-metrics";
+import { resolveRulePack } from "@/lib/rules/rule-pack";
 import { extractWallsFromRooms } from "@/lib/wall-extractor";
 
 export type PlanValidationSeverity = "warning" | "error";
@@ -23,6 +26,8 @@ export interface PlanValidationResult {
 
 export interface PlanValidationOptions {
   setbackDistance?: number;
+  codeContext?: CodeContext;
+  projectType?: string;
 }
 
 export function distance(a: Point, b: Point) {
@@ -36,26 +41,6 @@ export function polygonArea(points: Point[]) {
 export function centroid(room: Room): Point {
   const total = room.polygon.reduce((acc, [x, y]) => [acc[0] + x, acc[1] + y] as Point, [0, 0]);
   return [total[0] / room.polygon.length, total[1] / room.polygon.length];
-}
-
-function bounds(points: Point[]) {
-  return points.reduce(
-    (acc, [x, y]) => ({
-      minX: Math.min(acc.minX, x),
-      minY: Math.min(acc.minY, y),
-      maxX: Math.max(acc.maxX, x),
-      maxY: Math.max(acc.maxY, y)
-    }),
-    { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity }
-  );
-}
-
-function bboxDistance(a: Point[], b: Point[]) {
-  const ab = bounds(a);
-  const bb = bounds(b);
-  const dx = Math.max(0, Math.max(ab.minX - bb.maxX, bb.minX - ab.maxX));
-  const dy = Math.max(0, Math.max(ab.minY - bb.maxY, bb.minY - ab.maxY));
-  return Math.hypot(dx, dy);
 }
 
 function hasWindow(version: PlanVersion, room: Room) {
@@ -186,20 +171,19 @@ export function validatePlanVersion(
       }
     });
 
-  const shafts = version.rooms.filter((room) => room.type === "shaft");
-  version.rooms
-    .filter((room) => room.needsPlumbing)
-    .forEach((room) => {
-      const nearestShaft = shafts.length ? Math.min(...shafts.map((shaft) => bboxDistance(room.polygon, shaft.polygon))) : Infinity;
-      if (nearestShaft > 12) {
-        issues.push({
-          id: "plumbing-too-far",
-          severity: "warning",
-          message: `${room.name} needs plumbing and should be near a shaft.`,
-          roomIds: [room.id]
-        });
-      }
+  const rulePack = resolveRulePack({ codeContext: options.codeContext, projectType: options.projectType });
+  const plumbingMaxDistance = rulePack.scoring.plumbingMaxDistanceM;
+  const wetCoreMetrics = computeWetCorePathMetrics(version);
+  const farWetRooms = wetCoreMetrics.perRoom.filter((item) => item.distance > plumbingMaxDistance);
+
+  farWetRooms.forEach((item) => {
+    issues.push({
+      id: "plumbing-too-far",
+      severity: "warning",
+      message: `${item.roomName} needs plumbing and is about ${Math.round(item.distance)}m from the nearest shaft (${plumbingMaxDistance}m limit).`,
+      roomIds: [item.roomId]
     });
+  });
 
   return {
     valid: issues.every((issue) => issue.severity !== "error"),
