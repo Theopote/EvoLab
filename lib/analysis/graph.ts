@@ -6,6 +6,7 @@ import {
   type PathGraph,
   type PathGraphMethod
 } from "@/lib/analysis/path-graph";
+import { computeSemanticEgressForRoom } from "@/lib/analysis/egress-semantics";
 import type { PlanVersion, Point, Room } from "@/lib/project-types";
 import { polygonEdges } from "@/lib/wall-extractor";
 
@@ -261,6 +262,15 @@ export function findNearestExitPath(
   version: PlanVersion,
   startRoomId: string
 ): { path: Point[]; distance: number; exitId: string } | undefined {
+  const semanticRoute = computeSemanticEgressForRoom(version, startRoomId);
+  if (semanticRoute && semanticRoute.semanticValid) {
+    return {
+      path: semanticRoute.path,
+      distance: semanticRoute.distance,
+      exitId: semanticRoute.exitId
+    };
+  }
+
   if (graph.pathGraph) {
     const route = findNearestExitPathGraph(graph.pathGraph, version, startRoomId);
     if (route) {

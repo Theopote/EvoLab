@@ -1,16 +1,35 @@
-import { buildPathGraph, findNearestExitPathGraph, findPathGraphRoute } from "@/lib/analysis/path-graph";
-import { buildRoomGraph, findNearestExitPath, findRoomPath } from "@/lib/analysis/graph";
-import type { PathGraphMethod } from "@/lib/analysis/path-graph";
+import { buildPathGraph, findPathGraphRoute } from "@/lib/analysis/path-graph";
+import { buildRoomGraph, findRoomPath } from "@/lib/analysis/graph";
+import {
+  computeSemanticEgressForRoom,
+  egressMethodLabel,
+  findNearestSemanticExitPath,
+  summarizeEgressMethod,
+  type EgressPathMethod,
+  type SemanticEgressRoute
+} from "@/lib/analysis/egress-semantics";
 import type { PlanVersion, Point, Room } from "@/lib/project-types";
 
-export type EgressPathMethod = "opening-aware-path" | "door-aware-path" | "path" | "centroid-fallback";
+export type { EgressPathMethod, SemanticEgressRoute } from "@/lib/analysis/egress-semantics";
+export { egressMethodLabel } from "@/lib/analysis/egress-semantics";
 
 export interface EgressPathResult {
   maxDistance: number;
   worstRoomId?: string;
   worstRoomName?: string;
   method: EgressPathMethod;
-  perRoom: Array<{ roomId: string; roomName: string; distance: number; method: EgressPathMethod }>;
+  semanticRouteCount: number;
+  incompleteRouteCount: number;
+  fallbackRouteCount: number;
+  perRoom: Array<{
+    roomId: string;
+    roomName: string;
+    distance: number;
+    method: EgressPathMethod;
+    semanticValid: boolean;
+    missingLinks: string[];
+    exitName?: string;
+  }>;
 }
 
 export interface WetCoreVerticalMetrics {
@@ -38,11 +57,6 @@ function distance(a: Point, b: Point) {
   return Math.hypot(a[0] - b[0], a[1] - b[1]);
 }
 
-function nearestCorePoint(version: PlanVersion): Point {
-  const coreRoom = version.rooms.find((room) => ["stair", "elevator", "shaft"].includes(room.type));
-  return coreRoom ? centroid(coreRoom) : [version.overallBounds.width / 2, version.overallBounds.height / 2];
-}
-
 function scopeVersion(version: PlanVersion, levelId?: string): PlanVersion {
   if (!levelId) {
     return version;
@@ -58,18 +72,6 @@ function scopeVersion(version: PlanVersion, levelId?: string): PlanVersion {
     rooms: level.rooms,
     levels: [level]
   };
-}
-
-function egressMethodFromGraph(method: PathGraphMethod): EgressPathMethod {
-  if (method === "opening-aware") {
-    return "opening-aware-path";
-  }
-
-  if (method === "door-aware") {
-    return "door-aware-path";
-  }
-
-  return "path";
 }
 
 function shortestPathDistance(
@@ -129,66 +131,32 @@ function shortestPathDistance(
 
 export function computeEgressPathMetrics(version: PlanVersion, levelId?: string): EgressPathResult {
   const scoped = scopeVersion(version, levelId);
-  const pathGraph = buildPathGraph(scoped);
-  const pathMethod = egressMethodFromGraph(pathGraph.method);
   const occupiableRooms = scoped.rooms.filter((room) => !["stair", "elevator", "shaft"].includes(room.type));
+  const routes: SemanticEgressRoute[] = [];
   const perRoom: EgressPathResult["perRoom"] = [];
   let maxDistance = 0;
   let worstRoomId: string | undefined;
   let worstRoomName: string | undefined;
-  let method: EgressPathResult["method"] = pathMethod;
 
   occupiableRooms.forEach((room) => {
-    const route = findNearestExitPathGraph(pathGraph, scoped, room.id);
-
-    if (route) {
-      perRoom.push({
-        roomId: room.id,
-        roomName: room.name,
-        distance: route.distance,
-        method: pathMethod
-      });
-
-      if (route.distance > maxDistance) {
-        maxDistance = route.distance;
-        worstRoomId = room.id;
-        worstRoomName = room.name;
-      }
+    const route = computeSemanticEgressForRoom(scoped, room.id);
+    if (!route) {
       return;
     }
 
-    const roomGraph = buildRoomGraph(scoped);
-    const legacyRoute = findNearestExitPath(roomGraph, scoped, room.id);
-
-    if (legacyRoute) {
-      perRoom.push({
-        roomId: room.id,
-        roomName: room.name,
-        distance: legacyRoute.distance,
-        method: pathMethod === "opening-aware-path" ? "door-aware-path" : pathMethod
-      });
-
-      if (legacyRoute.distance > maxDistance) {
-        maxDistance = legacyRoute.distance;
-        worstRoomId = room.id;
-        worstRoomName = room.name;
-      }
-      return;
-    }
-
-    const corePoint = nearestCorePoint(scoped);
-    const center = centroid(room);
-    const fallbackDistance = distance(center, corePoint);
+    routes.push(route);
     perRoom.push({
       roomId: room.id,
       roomName: room.name,
-      distance: fallbackDistance,
-      method: "centroid-fallback"
+      distance: route.distance,
+      method: route.method,
+      semanticValid: route.semanticValid,
+      missingLinks: route.missingLinks,
+      exitName: route.exitName
     });
-    method = "centroid-fallback";
 
-    if (fallbackDistance > maxDistance) {
-      maxDistance = fallbackDistance;
+    if (route.distance > maxDistance) {
+      maxDistance = route.distance;
       worstRoomId = room.id;
       worstRoomName = room.name;
     }
@@ -198,7 +166,10 @@ export function computeEgressPathMetrics(version: PlanVersion, levelId?: string)
     maxDistance,
     worstRoomId,
     worstRoomName,
-    method: perRoom.some((item) => item.method !== "centroid-fallback") ? method : "centroid-fallback",
+    method: summarizeEgressMethod(routes),
+    semanticRouteCount: routes.filter((route) => route.semanticValid).length,
+    incompleteRouteCount: routes.filter((route) => route.method === "semantic-incomplete").length,
+    fallbackRouteCount: routes.filter((route) => route.method === "centroid-fallback").length,
     perRoom
   };
 }

@@ -1,5 +1,6 @@
 import { computeDaylightSamples } from "@/lib/analysis/daylight";
-import { buildRoomGraph, findNearestExitPath, findRoomPath, pathLength } from "@/lib/analysis/graph";
+import { computeSemanticEgressForRoom } from "@/lib/analysis/egress-semantics";
+import { buildRoomGraph, findRoomPath, pathLength } from "@/lib/analysis/graph";
 import { computeSightlineCone } from "@/lib/analysis/sightline";
 import {
   canonicalizeAnalysisLayers,
@@ -185,14 +186,14 @@ function computeFlowPaths(version: PlanVersion, graph: ReturnType<typeof buildRo
   }, {});
 }
 
-function computeEgress(version: PlanVersion, graph: ReturnType<typeof buildRoomGraph>) {
+function computeEgress(version: PlanVersion) {
   const egressPaths: AnalysisPathOverlay[] = [];
   const egressDistances: AnalysisDistanceOverlay[] = [];
 
   version.rooms
     .filter((room) => !["stair", "elevator", "shaft"].includes(room.type))
     .forEach((room) => {
-      const route = findNearestExitPath(graph, version, room.id);
+      const route = computeSemanticEgressForRoom(version, room.id);
 
       if (route) {
         egressPaths.push({
@@ -204,6 +205,23 @@ function computeEgress(version: PlanVersion, graph: ReturnType<typeof buildRoomG
           roomId: room.id,
           center: centroid(room),
           distance: route.distance
+        });
+        return;
+      }
+
+      const graph = buildRoomGraph(version);
+      const legacyRoute = findRoomPath(graph, room.id, version.rooms.find((item) => item.type === "stair" || item.type === "elevator")?.id ?? "");
+
+      if (legacyRoute && legacyRoute.length >= 2) {
+        egressPaths.push({
+          id: `egress-${room.id}`,
+          points: legacyRoute,
+          distance: pathLength(legacyRoute)
+        });
+        egressDistances.push({
+          roomId: room.id,
+          center: centroid(room),
+          distance: pathLength(legacyRoute)
         });
         return;
       }
@@ -264,8 +282,8 @@ export function computeAnalysis(
     graph && wantsAnyFlowLayer(layers) ? computeFlowPaths(scopedVersion, graph, pack) : undefined;
 
   const egress =
-    graph && (layerRequested(layers, "egress_path") || layerRequested(layers, "egress_distance"))
-      ? computeEgress(scopedVersion, graph)
+    layerRequested(layers, "egress_path") || layerRequested(layers, "egress_distance")
+      ? computeEgress(scopedVersion)
       : { egressPaths: [], egressDistances: [] };
 
   const publicRoom = roomByTypes(scopedVersion, ["lobby"]) ?? scopedVersion.rooms[0];

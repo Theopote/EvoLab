@@ -1,5 +1,5 @@
 import type { CodeContext } from "@/lib/building-domain";
-import type { OpeningElement, PlanVersion, Point, Room } from "@/lib/project-types";
+import type { PlanVersion, Point, Room } from "@/lib/project-types";
 import {
   intersectionArea,
   isPolygonInside,
@@ -10,7 +10,6 @@ import { computeWetCorePathMetrics } from "@/lib/rules/path-metrics";
 import { checkRoomDaylightCompliance } from "@/lib/rules/metrics/daylight-compliance";
 import { resolveRulePack } from "@/lib/rules/rule-pack";
 import type { RulePack } from "@/lib/rules/types";
-import { extractWallsFromRooms } from "@/lib/wall-extractor";
 
 export type PlanValidationSeverity = "warning" | "error";
 
@@ -46,9 +45,7 @@ export function centroid(room: Room): Point {
   return [total[0] / room.polygon.length, total[1] / room.polygon.length];
 }
 
-function polygonArea(points: Point[]) {
-  return booleanPolygonArea(points);
-}
+function validateCorridorConnectivity(rooms: Room[]) {
   const corridors = rooms.filter((room) => room.type === "corridor");
 
   if (corridors.length <= 1) {

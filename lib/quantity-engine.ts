@@ -1,7 +1,7 @@
 import type { CodeContext } from "@/lib/building-domain";
 import { defaultHealthcareCodeContext } from "@/lib/building-domain";
 import type { FunctionZone, OpeningElement, PlanVersion, Point, Room, RoomType, Wall } from "@/lib/project-types";
-import { computeEgressPathMetrics, computeWetCorePathMetrics } from "@/lib/rules/path-metrics";
+import { computeEgressPathMetrics, computeWetCorePathMetrics, egressMethodLabel } from "@/lib/rules/path-metrics";
 import { measureCorridorsClearWidth } from "@/lib/rules/metrics/corridor-width";
 import { checkDaylightCompliance } from "@/lib/rules/metrics/daylight-compliance";
 import { resolveRulePack, ruleBasis, ruleThreshold } from "@/lib/rules/rule-pack";
@@ -349,9 +349,17 @@ function checkComplianceForLevel(version: PlanVersion, levelId: string, rulePack
   const roomsNeedingDaylight = rooms.filter((room) => room.needsDaylight);
   const roomsNeedingPlumbing = rooms.filter((room) => room.needsPlumbing);
   const egressMetrics = computeEgressPathMetrics(version, levelId);
-  const maxEgressDistance = egressMetrics.maxDistance;
   const corridorMinWidth = ruleThreshold(rulePack, "corridor-width", 1.2);
   const egressMaxDistance = rulePack.scoring.egressMaxDistanceM;
+  const maxEgressDistance = egressMetrics.maxDistance;
+  const egressMethod = egressMetrics.method;
+  const egressLabel = egressMethodLabel(egressMethod);
+  const egressDistanceOk = maxEgressDistance <= egressMaxDistance;
+  const egressSemanticOk =
+    egressMethod !== "centroid-fallback" &&
+    egressMethod !== "semantic-incomplete" &&
+    egressMetrics.incompleteRouteCount === 0 &&
+    egressMetrics.fallbackRouteCount === 0;
   const plumbingMaxDistance = rulePack.scoring.plumbingMaxDistanceM;
   const daylightMaxDepth = rulePack.scoring.daylightMaxDepthM;
   const minCoreCount = ruleThreshold(rulePack, "stair-count", 1);
@@ -390,13 +398,18 @@ function checkComplianceForLevel(version: PlanVersion, levelId: string, rulePack
     {
       id: "egress-distance",
       title: "Egress travel distance",
-      status: maxEgressDistance <= egressMaxDistance ? "success" : "warning",
-      message:
-        maxEgressDistance <= egressMaxDistance
-          ? `Maximum egress path is about ${round(maxEgressDistance)}m via ${egressMetrics.method}.`
-          : `Maximum egress path is about ${round(maxEgressDistance)}m via ${egressMetrics.method}${
-              egressMetrics.worstRoomName ? ` (${egressMetrics.worstRoomName})` : ""
-            }, above ${egressMaxDistance}m.`,
+      status: egressDistanceOk && egressSemanticOk ? "success" : "warning",
+      message: !egressDistanceOk
+        ? `Maximum egress path is about ${round(maxEgressDistance)}m via ${egressLabel}${
+            egressMetrics.worstRoomName ? ` (${egressMetrics.worstRoomName})` : ""
+          }, above ${egressMaxDistance}m.`
+        : !egressSemanticOk
+          ? `Maximum egress path is about ${round(maxEgressDistance)}m, but ${
+              egressMetrics.fallbackRouteCount > 0
+                ? `${egressMetrics.fallbackRouteCount} room(s) lack door-corridor-stair geometry for a semantic egress path.`
+                : `${egressMetrics.incompleteRouteCount} room(s) reach an exit without a complete door → corridor → stair chain.`
+            }`
+          : `Maximum egress path is about ${round(maxEgressDistance)}m via ${egressLabel}.`,
       basis: ruleBasis(rulePack, "egress-distance", "Egress travel distance should not exceed 30m."),
       levelId,
       levelName
