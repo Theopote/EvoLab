@@ -25,6 +25,8 @@ import {
 } from "@/lib/program-validation";
 import { topologiesToPlanVersions, type TopologyLayoutOptions } from "@/lib/topology-geometry";
 import { topologyGraphFromTopology } from "@/lib/topology-graph";
+import { resolveTypologyPack } from "@/lib/typology/resolve";
+import { getTopologyPromptContext } from "@/lib/typology/topology";
 import type { PlanVersion } from "@/lib/project-types";
 
 export interface GeneratePlanPipelineMeta {
@@ -101,10 +103,12 @@ function postProcessOptions(body: GeneratePlanRequest, program: ReturnType<typeo
   };
 }
 
-function topologyLayoutOptions(constraints: GeneratePlanConstraints): TopologyLayoutOptions {
+function topologyLayoutOptions(constraints: GeneratePlanConstraints, projectType?: string): TopologyLayoutOptions {
+  const pack = resolveTypologyPack(projectType);
   return {
     siteOutline: constraints.siteOutline,
-    layoutOutline: constraints.layoutOutline
+    layoutOutline: constraints.layoutOutline,
+    wetRoomTypes: pack.topology.wetRoomTypes
   };
 }
 
@@ -114,6 +118,7 @@ function topologyInput(
   program: ReturnType<typeof resolveProgramForGeneration>,
   correction?: unknown
 ) {
+  const pack = resolveTypologyPack(body.projectType);
   return {
     outline: constraints.siteOutline,
     layoutOutline: constraints.layoutOutline,
@@ -123,6 +128,16 @@ function topologyInput(
     projectType: body.projectType,
     floors: constraints.floors,
     buildableEnvelope: constraints.envelope,
+    typologyPack: {
+      id: pack.id,
+      label: pack.label,
+      roomTypes: pack.roomTypes,
+      strategies: pack.topology.strategies,
+      roomTemplates: pack.topology.roomTemplates,
+      adjacencyRules: pack.adjacencyRules,
+      wetRoomTypes: pack.topology.wetRoomTypes,
+      guidance: getTopologyPromptContext(pack)
+    },
     correction
   };
 }
@@ -288,7 +303,7 @@ export async function runGeneratePlanPipeline(body: GeneratePlanRequest): Promis
   const constraints = resolveGeneratePlanConstraints(body);
   const program = resolveProgramForGeneration(body);
   const scoringOptions = postProcessOptions(body, program);
-  const layoutOptions = topologyLayoutOptions(constraints);
+  const layoutOptions = topologyLayoutOptions(constraints, body.projectType);
   const meta: GeneratePlanPipelineMeta = {
     phases: { topology: false, geometry: false, refinement: false },
     refinedCount: 0,

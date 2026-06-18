@@ -2,7 +2,7 @@ import { optimizeLayoutRects } from "@/lib/layout-optimizer";
 import { postProcessPlanVersion } from "@/lib/plan-postprocess";
 import { topologyGraphFromTopology } from "@/lib/topology-graph";
 import type { PlanTopologyVersion, TopologyRoom } from "@/lib/schemas/plan-version-schema";
-import type { Opening, PlanVersion, Point, Room } from "@/lib/project-types";
+import type { Opening, PlanVersion, Point, Room, RoomType } from "@/lib/project-types";
 
 interface Bounds {
   minX: number;
@@ -95,7 +95,16 @@ function uniqueRooms(rooms: TopologyRoom[]) {
   });
 }
 
-function fallbackRoom(id: string, name: string, type: Room["type"], zone: Room["zone"], targetAreaSqm: number): TopologyRoom {
+const DEFAULT_WET_ROOM_TYPES: RoomType[] = ["bathroom", "kitchen", "consultation", "equipment_room", "shaft"];
+
+function fallbackRoom(
+  id: string,
+  name: string,
+  type: Room["type"],
+  zone: Room["zone"],
+  targetAreaSqm: number,
+  wetRoomTypes: RoomType[] = DEFAULT_WET_ROOM_TYPES
+): TopologyRoom {
   return {
     id,
     name,
@@ -104,28 +113,28 @@ function fallbackRoom(id: string, name: string, type: Room["type"], zone: Room["
     targetAreaSqm,
     ceilingHeight: type === "lobby" ? 5.2 : type === "equipment_room" ? 3.6 : 3.3,
     needsDaylight: zone !== "service" && type !== "corridor",
-    needsPlumbing: ["bathroom", "kitchen", "consultation", "equipment_room", "shaft"].includes(type),
+    needsPlumbing: wetRoomTypes.includes(type),
     preferredEdge: zone === "service" || type === "corridor" ? "interior" : "south",
     adjacencyIds: []
   };
 }
 
-function completeTopologyRooms(topology: PlanTopologyVersion, bounds: Bounds) {
+function completeTopologyRooms(topology: PlanTopologyVersion, bounds: Bounds, wetRoomTypes: RoomType[] = DEFAULT_WET_ROOM_TYPES) {
   const rooms = uniqueRooms(topology.rooms);
   const hasCorridor = rooms.some((room) => room.type === "corridor");
   const hasCore = rooms.some((room) => room.type === "stair" || room.type === "elevator");
   const hasShaft = rooms.some((room) => room.type === "shaft");
 
   if (!hasCorridor) {
-    rooms.push(fallbackRoom("corridor-01", "Main Corridor", "corridor", "circulation", bounds.width * bounds.height * 0.12));
+    rooms.push(fallbackRoom("corridor-01", "Main Corridor", "corridor", "circulation", bounds.width * bounds.height * 0.12, wetRoomTypes));
   }
 
   if (!hasCore) {
-    rooms.push(fallbackRoom("core-01", "Vertical Core", "elevator", "circulation", bounds.width * bounds.height * 0.06));
+    rooms.push(fallbackRoom("core-01", "Vertical Core", "elevator", "circulation", bounds.width * bounds.height * 0.06, wetRoomTypes));
   }
 
-  if (!hasShaft && rooms.some((room) => room.needsPlumbing || room.type === "equipment_room")) {
-    rooms.push(fallbackRoom("shaft-01", "Service Shaft", "shaft", "service", bounds.width * bounds.height * 0.025));
+  if (!hasShaft && rooms.some((room) => room.needsPlumbing || wetRoomTypes.includes(room.type))) {
+    rooms.push(fallbackRoom("shaft-01", "Service Shaft", "shaft", "service", bounds.width * bounds.height * 0.025, wetRoomTypes));
   }
 
   return rooms;
@@ -238,6 +247,7 @@ function buildAdjacencyIds(room: TopologyRoom, topology: PlanTopologyVersion, co
 export interface TopologyLayoutOptions {
   layoutOutline?: Point[];
   siteOutline?: Point[];
+  wetRoomTypes?: RoomType[];
 }
 
 function resolveTopologyLayout(outlineOrOptions?: Point[] | TopologyLayoutOptions) {
@@ -276,7 +286,11 @@ export function topologyToPlanVersion(
   index = 0
 ): PlanVersion {
   const { localizedSite, bounds } = resolveTopologyLayout(outlineOrOptions);
-  const rooms = completeTopologyRooms(topology, bounds);
+  const wetRoomTypes =
+    !Array.isArray(outlineOrOptions) && outlineOrOptions?.wetRoomTypes?.length
+      ? outlineOrOptions.wetRoomTypes
+      : DEFAULT_WET_ROOM_TYPES;
+  const rooms = completeTopologyRooms(topology, bounds, wetRoomTypes);
   const rects = bounds.width >= bounds.height ? layoutHorizontal(rooms, bounds) : layoutVertical(rooms, bounds);
   optimizeLayoutRects(rects, topology, bounds);
   const corridorIds = rooms.filter((room) => room.type === "corridor").map((room) => room.id);

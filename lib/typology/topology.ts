@@ -42,7 +42,7 @@ function topologyRoomFromTemplate(template: TopologyRoomTemplate, grossAreaSqm: 
     zone: template.zone,
     targetAreaSqm,
     ceilingHeight: template.roomType === "lobby" ? 5.2 : template.roomType === "equipment_room" ? 3.6 : 3.3,
-    needsDaylight: template.needsDaylight ?? template.zone !== "service" && template.roomType !== "corridor",
+    needsDaylight: template.needsDaylight ?? (template.zone !== "service" && template.roomType !== "corridor"),
     needsPlumbing: template.needsPlumbing ?? isPlumbingRoomType(template.roomType),
     preferredEdge: template.preferredEdge ?? defaultPreferredEdge(template),
     adjacencyIds: template.adjacencyIds ?? []
