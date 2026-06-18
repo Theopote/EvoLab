@@ -1,10 +1,11 @@
 "use client";
 
-import { Camera, Download, FileText, Loader2, Presentation, Sparkles } from "lucide-react";
+import { Camera, Download, FileText, Layers, Loader2, Presentation, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { PresentationCaptureCanvas } from "@/components/presentation/PresentationCaptureCanvas";
 import { attachModelCaptures } from "@/lib/presentation/merge-captures";
+import { MODEL_SLIDE_ID, extractModelCaptures } from "@/lib/presentation/model-slide";
 import { downloadPresentationHtml, renderPresentationHtml } from "@/lib/presentation/render-html";
 import { downloadPresentationPptx, prepareDeckForPptx } from "@/lib/presentation/render-pptx";
 import { buildPresentationDeck } from "@/lib/presentation/storyboard";
@@ -13,7 +14,8 @@ import { usePresentationCaptureStore } from "@/lib/presentation-capture-store";
 import { useEvoProject } from "@/lib/project-store";
 
 export function PresentationWorkspace() {
-  const { project, activeVersion, brief, outline, siteContext, zoning, buildableEnvelope } = useEvoProject(
+  const { project, activeVersion, brief, outline, siteContext, zoning, buildableEnvelope, environmentSurrogate } =
+    useEvoProject(
     useShallow((state) => ({
       project: state.project,
       activeVersion: state.activeVersion,
@@ -21,7 +23,8 @@ export function PresentationWorkspace() {
       outline: state.outline,
       siteContext: state.siteContext,
       zoning: state.zoning,
-      buildableEnvelope: state.buildableEnvelope
+      buildableEnvelope: state.buildableEnvelope,
+      environmentSurrogate: state.environmentSurrogate
     }))
   );
   const captureStatus = usePresentationCaptureStore((state) => state.status);
@@ -33,6 +36,7 @@ export function PresentationWorkspace() {
   const [deck, setDeck] = useState<PresentationDeck | undefined>(undefined);
   const [activeSlide, setActiveSlide] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isBuildingFullDeck, setIsBuildingFullDeck] = useState(false);
   const [isExportingPptx, setIsExportingPptx] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -46,9 +50,11 @@ export function PresentationWorkspace() {
       version: activeVersion,
       brief,
       siteContext,
-      envelope: buildableEnvelope
+      envelope: buildableEnvelope,
+      environmentSurrogate,
+      outline
     });
-  }, [activeVersion, brief, buildableEnvelope, project, siteContext]);
+  }, [activeVersion, brief, buildableEnvelope, environmentSurrogate, outline, project, siteContext]);
 
   const currentDeck = deck ?? localDeck;
   const slide = currentDeck?.slides[activeSlide];
@@ -65,25 +71,79 @@ export function PresentationWorkspace() {
         return previous;
       }
 
-      const withoutModelSlide = base.slides.filter((item) => item.id !== "slide-model-3d");
-      return attachModelCaptures(withoutModelSlide === base.slides ? base : { ...base, slides: withoutModelSlide }, captureImages);
+      return attachModelCaptures(base, captureImages);
     });
 
-    const massingIndex = (deck ?? localDeck)?.slides.findIndex((item) => item.id === "slide-massing") ?? -1;
-    if (massingIndex >= 0) {
-      setActiveSlide(massingIndex + 1);
+    const modelSlideIndex = (deck ?? localDeck)?.slides.findIndex((item) => item.id === MODEL_SLIDE_ID) ?? -1;
+    if (modelSlideIndex >= 0) {
+      setActiveSlide(modelSlideIndex);
     }
 
-    setNotice(`Captured ${captureImages.length} WebGL views and inserted into the deck.`);
+    setNotice(
+      isBuildingFullDeck
+        ? `Full deck ready: storyboard plus ${captureImages.length} WebGL views.`
+        : `Captured ${captureImages.length} WebGL views and inserted into the deck.`
+    );
+    setIsBuildingFullDeck(false);
     resetCapture();
-  }, [captureImages, captureStatus, deck, localDeck, resetCapture]);
+  }, [captureImages, captureStatus, deck, isBuildingFullDeck, localDeck, resetCapture]);
 
   useEffect(() => {
     if (captureStatus === "error" && captureError) {
       setNotice(captureError);
+      setIsBuildingFullDeck(false);
       resetCapture();
     }
   }, [captureError, captureStatus, resetCapture]);
+
+  async function fetchStoryboardDeck(): Promise<PresentationDeck> {
+    if (!activeVersion) {
+      throw new Error("No active version.");
+    }
+
+    const response = await fetch("/api/generate-storyboard", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        project,
+        version: activeVersion,
+        brief,
+        siteContext,
+        zoning,
+        outline,
+        environmentSurrogate
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`generate-storyboard failed with ${response.status}`);
+    }
+
+    const data = (await response.json()) as {
+      deck?: PresentationDeck;
+      warning?: string;
+      storyArc?: string[];
+    };
+
+    if (!data.deck) {
+      throw new Error("No presentation deck returned.");
+    }
+
+    const preservedCaptures = extractModelCaptures(deck ?? localDeck);
+    const mergedDeck = preservedCaptures.length ? attachModelCaptures(data.deck, preservedCaptures) : data.deck;
+
+    setDeck(mergedDeck);
+    setActiveSlide(0);
+    setNotice(
+      data.warning
+        ? data.warning
+        : data.storyArc?.length
+          ? `Story arc: ${data.storyArc.join(" → ")}`
+          : "Storyboard generated."
+    );
+
+    return mergedDeck;
+  }
 
   async function generateStoryboard() {
     if (!activeVersion) {
@@ -94,44 +154,32 @@ export function PresentationWorkspace() {
     setNotice(null);
 
     try {
-      const response = await fetch("/api/generate-storyboard", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          project,
-          version: activeVersion,
-          brief,
-          siteContext,
-          zoning,
-          outline
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`generate-storyboard failed with ${response.status}`);
-      }
-
-      const data = (await response.json()) as {
-        deck?: PresentationDeck;
-        warning?: string;
-        storyArc?: string[];
-      };
-
-      if (!data.deck) {
-        throw new Error("No presentation deck returned.");
-      }
-
-      setDeck(data.deck);
-      setActiveSlide(0);
-      setNotice(
-        data.warning
-          ? data.warning
-          : data.storyArc?.length
-            ? `Story arc: ${data.storyArc.join(" → ")}`
-            : "Storyboard generated."
-      );
+      await fetchStoryboardDeck();
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Failed to generate storyboard.");
+      if (localDeck) {
+        setDeck(localDeck);
+      }
+    } finally {
+      setIsGenerating(false);
+    }
+  }
+
+  async function buildFullDeck() {
+    if (!activeVersion) {
+      return;
+    }
+
+    setIsBuildingFullDeck(true);
+    setIsGenerating(true);
+    setNotice("Building full deck: AI storyboard, then 3D captures…");
+
+    try {
+      await fetchStoryboardDeck();
+      requestCapture();
+    } catch (error) {
+      setIsBuildingFullDeck(false);
+      setNotice(error instanceof Error ? error.message : "Failed to build full deck.");
       if (localDeck) {
         setDeck(localDeck);
       }
@@ -215,6 +263,15 @@ export function PresentationWorkspace() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <button
+              className="flex h-9 items-center gap-2 rounded border border-accent/40 bg-accent/10 px-3 text-xs text-accent hover:border-accent/60"
+              type="button"
+              onClick={buildFullDeck}
+              disabled={isGenerating || captureStatus === "capturing"}
+            >
+              {isBuildingFullDeck ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Layers className="h-3.5 w-3.5" />}
+              Build full deck
+            </button>
             <button
               className="flex h-9 items-center gap-2 rounded border border-line px-3 text-xs text-slate-100 hover:border-accent/50"
               type="button"
@@ -307,6 +364,10 @@ export function PresentationWorkspace() {
                         <figcaption className="px-2 py-1 text-xs text-muted">{image.label}</figcaption>
                       </figure>
                     ))}
+                  </div>
+                ) : slide.id === MODEL_SLIDE_ID ? (
+                  <div className="mt-4 grid min-h-[180px] place-items-center rounded border border-dashed border-line bg-[#081018] px-4 text-center text-sm text-muted">
+                    No WebGL captures yet. Use Capture 3D views or Build full deck.
                   </div>
                 ) : null}
                 {slide.svg ? (

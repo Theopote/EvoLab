@@ -5,16 +5,12 @@ import { Canvas, useThree } from "@react-three/fiber";
 import { useEffect, useRef } from "react";
 import { BuildingModel } from "@/components/viewer-3d/BuildingModel";
 import { SiteContextBuildings, SiteEnvelopeMesh } from "@/components/viewer-3d/SiteContextScene";
+import { buildCaptureViews } from "@/lib/presentation/capture-views";
 import type { PresentationCaptureImage } from "@/lib/presentation-capture-store";
 import { usePresentationCaptureStore } from "@/lib/presentation-capture-store";
+import { useEvoProject } from "@/lib/project-store";
 
-const CAPTURE_VIEWS = [
-  { id: "iso", label: "Isometric", position: [42, 36, 42] as [number, number, number], target: [0, 0, 0] as [number, number, number] },
-  { id: "eye", label: "Eye Level", position: [0, 18, 52] as [number, number, number], target: [0, 0, 0] as [number, number, number] },
-  { id: "plan", label: "Plan View", position: [0.1, 58, 0.1] as [number, number, number], target: [0, 0, 0] as [number, number, number] }
-];
-
-function CaptureRig() {
+function CaptureRig({ spanMeters }: { spanMeters: number }) {
   const { gl, camera, scene } = useThree();
   const completeCapture = usePresentationCaptureStore((state) => state.completeCapture);
   const failCapture = usePresentationCaptureStore((state) => state.failCapture);
@@ -35,11 +31,13 @@ function CaptureRig() {
     }
 
     async function runCapture() {
+      const views = buildCaptureViews(spanMeters);
+
       try {
-        await waitFrames(4);
+        await waitFrames(6);
         const images: PresentationCaptureImage[] = [];
 
-        for (const view of CAPTURE_VIEWS) {
+        for (const view of views) {
           if (cancelled) {
             return;
           }
@@ -70,24 +68,33 @@ function CaptureRig() {
     return () => {
       cancelled = true;
     };
-  }, [camera, completeCapture, failCapture, gl, scene]);
+  }, [camera, completeCapture, failCapture, gl, scene, spanMeters]);
 
   return null;
 }
 
 export function PresentationCaptureCanvas() {
   const status = usePresentationCaptureStore((state) => state.status);
+  const activeVersion = useEvoProject((state) => state.activeVersion);
 
-  if (status !== "capturing") {
+  if (status !== "capturing" || !activeVersion) {
     return null;
   }
+
+  const span = Math.max(activeVersion.overallBounds.width, activeVersion.overallBounds.height);
+  const initialView = buildCaptureViews(span)[0];
 
   return (
     <div className="pointer-events-none fixed -left-[9999px] top-0 h-[720px] w-[1280px] overflow-hidden opacity-0">
       <Canvas
         frameloop="always"
         shadows
-        camera={{ position: [42, 36, 42], fov: 42, near: 0.1, far: 1000 }}
+        camera={{
+          position: initialView.position,
+          fov: 42,
+          near: 0.1,
+          far: Math.max(span * 8, 1000)
+        }}
         gl={{ antialias: true, preserveDrawingBuffer: true }}
         style={{ width: 1280, height: 720 }}
       >
@@ -98,7 +105,7 @@ export function PresentationCaptureCanvas() {
         <SiteContextBuildings />
         <BuildingModel />
         <Environment preset="city" />
-        <CaptureRig />
+        <CaptureRig spanMeters={span} />
       </Canvas>
     </div>
   );

@@ -1,5 +1,6 @@
 import { computeAnalysis } from "@/lib/analysis-engine";
-import type { PlanVersion, Room } from "@/lib/project-types";
+import type { PlanVersion, Point, Room } from "@/lib/project-types";
+import type { EnvironmentSurrogate } from "@/lib/site-types";
 
 function escapeXml(value: string) {
   return value
@@ -176,5 +177,54 @@ export function renderZoneDiagram(version: PlanVersion) {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-padding} ${-padding} ${width} ${height}" role="img">
     <rect width="100%" height="100%" fill="#081018" />
     ${rooms}
+  </svg>`;
+}
+
+function environmentColor(channel: "sun" | "wind", value: number) {
+  if (channel === "sun") {
+    const normalized = Math.max(0, Math.min(1, (value - 1) / 7));
+    const red = Math.round(30 + normalized * 220);
+    const green = Math.round(60 + normalized * 140);
+    return `rgba(${red}, ${green}, 80, 0.78)`;
+  }
+
+  const normalized = Math.max(0, Math.min(1, value));
+  const blue = Math.round(80 + normalized * 120);
+  return `rgba(56, 189, ${blue}, 0.72)`;
+}
+
+export function renderEnvironmentDiagram(surrogate: EnvironmentSurrogate, outline: Point[]) {
+  const padding = 8;
+  const minX = Math.min(...outline.map(([x]) => x));
+  const minY = Math.min(...outline.map(([, y]) => y));
+  const maxX = Math.max(...outline.map(([x]) => x));
+  const maxY = Math.max(...outline.map(([, y]) => y));
+  const width = maxX - minX + padding * 2;
+  const height = maxY - minY + padding * 2;
+  const cellWidth = width / surrogate.gridSize;
+  const cellHeight = height / surrogate.gridSize;
+
+  const sunCells = surrogate.cells
+    .map((cell) => {
+      const x = cell.x - minX - cellWidth / 2;
+      const y = cell.y - minY - cellHeight / 2;
+      return `<rect x="${x}" y="${y}" width="${cellWidth}" height="${cellHeight}" fill="${environmentColor("sun", cell.sunHours)}" />`;
+    })
+    .join("\n");
+
+  const windCells = surrogate.cells
+    .map((cell) => {
+      const x = cell.x - minX - cellWidth / 2;
+      const y = cell.y - minY - cellHeight / 2;
+      return `<rect x="${x}" y="${y}" width="${cellWidth * 0.42}" height="${cellHeight * 0.42}" fill="${environmentColor("wind", cell.windShelter)}" opacity="0.9" />`;
+    })
+    .join("\n");
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-padding} ${-padding} ${width} ${height}" role="img">
+    <rect width="100%" height="100%" fill="#081018" />
+    ${sunCells}
+    <polygon points="${polygonPoints(outline)}" fill="rgba(255,255,255,0.03)" stroke="#e2e8f0" stroke-width="0.35" />
+    ${windCells}
+    <text x="2" y="-4" fill="#94a3b8" font-size="1.3">Sun proxy (field) · Wind shelter (inset squares)</text>
   </svg>`;
 }

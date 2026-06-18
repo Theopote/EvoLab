@@ -1,14 +1,16 @@
 import { createPlanSvg } from "@/lib/export-utils";
 import { calculateQuantities } from "@/lib/quantity-engine";
 import {
+  renderEnvironmentDiagram,
   renderExplodedDiagram,
   renderFlowDiagram,
   renderIsometricDiagram,
   renderZoneDiagram
 } from "@/lib/presentation/diagrams";
+import { createModelSlidePlaceholder } from "@/lib/presentation/model-slide";
 import type { PresentationDeck, PresentationSlide, StoryboardRequest } from "@/lib/presentation/types";
-import type { DesignBrief, PlanVersion, ProjectData } from "@/lib/project-types";
-import type { BuildableEnvelope, SiteContext } from "@/lib/site-types";
+import type { DesignBrief, PlanVersion, Point, ProjectData } from "@/lib/project-types";
+import type { BuildableEnvelope, EnvironmentSurrogate, SiteContext } from "@/lib/site-types";
 
 function scoreLine(version: PlanVersion) {
   const scores = version.scores;
@@ -25,6 +27,8 @@ export function buildPresentationDeck(input: {
   brief?: DesignBrief;
   siteContext?: SiteContext;
   envelope?: BuildableEnvelope;
+  environmentSurrogate?: EnvironmentSurrogate;
+  outline?: Point[];
 }): PresentationDeck {
   const quantities = calculateQuantities(input.version);
   const slides: PresentationSlide[] = [
@@ -65,6 +69,7 @@ export function buildPresentationDeck(input: {
       ],
       svg: renderIsometricDiagram(input.version)
     },
+    createModelSlidePlaceholder(),
     {
       id: "slide-exploded",
       kind: "massing",
@@ -102,6 +107,34 @@ export function buildPresentationDeck(input: {
         "Derived from graph pathfinding and raycasting analysis."
       ],
       svg: renderFlowDiagram(input.version)
+    },
+    {
+      id: "slide-environment",
+      kind: "analysis",
+      title: "Environmental Context",
+      subtitle: input.environmentSurrogate
+        ? `Dominant wind from ${input.environmentSurrogate.dominantWindFrom}`
+        : "Site surrogate analysis",
+      bullets: input.environmentSurrogate
+        ? (() => {
+            const sunValues = input.environmentSurrogate!.cells.map((cell) => cell.sunHours);
+            const windValues = input.environmentSurrogate!.cells.map((cell) => cell.windShelter);
+            const avgSun = sunValues.reduce((sum, value) => sum + value, 0) / sunValues.length;
+            const avgWind = windValues.reduce((sum, value) => sum + value, 0) / windValues.length;
+
+            return [
+              `Average sun proxy ${avgSun.toFixed(1)} h · wind shelter ${(avgWind * 100).toFixed(0)}%`,
+              "Heatmap shows instant surrogate sun exposure and wind shelter across the site grid.",
+              input.siteContext
+                ? `${input.siteContext.buildings.length} context buildings inform obstruction and shelter.`
+                : "Fetch site context for richer environmental storytelling."
+            ];
+          })()
+        : ["Fetch site context to include sun and wind surrogate overlays in the deck."],
+      svg:
+        input.environmentSurrogate && input.outline && input.outline.length >= 3
+          ? renderEnvironmentDiagram(input.environmentSurrogate, input.outline)
+          : undefined
     },
     {
       id: "slide-quantities",

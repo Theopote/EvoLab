@@ -4,7 +4,7 @@ import { appendNarrativeSlide, buildPresentationDeck, toStoryboardRequest } from
 import { presentationNarrativePrompt } from "@/lib/prompts/presentationNarrativePrompt";
 import { GenerateStoryboardToolInputSchema } from "@/lib/schemas/presentation-schema";
 import type { DesignBrief, PlanVersion, ProjectData } from "@/lib/project-types";
-import type { BuildableEnvelope, SiteContext, ZoningConstraints } from "@/lib/site-types";
+import type { BuildableEnvelope, EnvironmentSurrogate, SiteContext, ZoningConstraints } from "@/lib/site-types";
 import { computeBuildableEnvelope } from "@/lib/buildable-envelope";
 
 interface GenerateStoryboardRequest {
@@ -14,6 +14,7 @@ interface GenerateStoryboardRequest {
   siteContext?: SiteContext;
   zoning?: ZoningConstraints;
   outline?: Array<[number, number]>;
+  environmentSurrogate?: EnvironmentSurrogate;
 }
 
 export async function POST(request: Request) {
@@ -33,7 +34,9 @@ export async function POST(request: Request) {
     version: body.version,
     brief: body.brief,
     siteContext: body.siteContext,
-    envelope: envelope?.valid ? envelope : undefined
+    envelope: envelope?.valid ? envelope : undefined,
+    environmentSurrogate: body.environmentSurrogate,
+    outline: body.outline
   });
 
   try {
