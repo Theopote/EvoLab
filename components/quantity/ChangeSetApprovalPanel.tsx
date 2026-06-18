@@ -170,6 +170,11 @@ function ChangeSetDetail({
           <span>Created: {new Date(changeSet.createdAt).toLocaleString()}</span>
           {changeSet.reviewedAt ? <span>Reviewed: {new Date(changeSet.reviewedAt).toLocaleString()}</span> : null}
         </div>
+        {changeSet.proposalId ? (
+          <div className="text-[11px] text-accent">
+            Linked Copilot proposal · {changeSet.acceptedOperationIds?.length ?? 0} accepted operation(s)
+          </div>
+        ) : null}
       </div>
 
       {changeSet.status === "draft" ? (

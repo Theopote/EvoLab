@@ -377,6 +377,8 @@ export function createChangeSet(input: {
   baseVersion: PlanVersion;
   targetVersion: PlanVersion;
   status?: ChangeSet["status"];
+  proposalId?: string;
+  acceptedOperationIds?: string[];
 }): ChangeSet {
   const status = input.status ?? (input.source === "ai" || input.source === "import" ? "draft" : "applied");
 
@@ -391,7 +393,9 @@ export function createChangeSet(input: {
     lockedElementIds: [],
     createdAt: new Date().toISOString(),
     appliedAt: status === "applied" || status === "approved" ? new Date().toISOString() : undefined,
-    baseVersionSnapshot: input.baseVersion
+    baseVersionSnapshot: input.baseVersion,
+    proposalId: input.proposalId,
+    acceptedOperationIds: input.acceptedOperationIds
   };
 }
 
@@ -429,6 +433,7 @@ export function createDefaultProjectDomain(input: ProjectDomainSyncInput): Proje
     doorWindowFamilies: defaultDoorWindowFamilies,
     schedules: input.activeVersion ? [buildScheduleBundle(input.activeVersion)] : [],
     changeSets: [],
+    copilotProposals: [],
     lockedElementIds: []
   };
 }
@@ -479,6 +484,7 @@ export function normalizeProjectDomain(domain?: ProjectDomain, input?: ProjectDo
       doorWindowFamilies: domain.doorWindowFamilies?.length ? domain.doorWindowFamilies : defaultDoorWindowFamilies,
       schedules: domain.schedules ?? [],
       changeSets: domain.changeSets ?? [],
+      copilotProposals: domain.copilotProposals ?? [],
       lockedElementIds: domain.lockedElementIds ?? []
     };
   }

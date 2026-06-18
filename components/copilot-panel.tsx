@@ -3,7 +3,9 @@
 import { AlertTriangle, Bot, CheckCircle2, Info, Loader2, Send, Sparkles } from "lucide-react";
 import { useMemo, useState } from "react";
 import { PlanChangeProposalPanel } from "@/components/copilot/PlanChangeProposalPanel";
-import type { PendingCopilotProposal, ModifyPlanResponse } from "@/lib/copilot-modify-types";
+import type { ModifyPlanResponse } from "@/lib/copilot-modify-types";
+import { useEvoProject } from "@/lib/project-store";
+import { useShallow } from "zustand/react/shallow";
 import type {
   CopilotAction,
   CopilotFinding,
@@ -45,7 +47,39 @@ export function CopilotPanel({
 }: CopilotPanelProps) {
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
-  const [pendingProposal, setPendingProposal] = useState<PendingCopilotProposal | null>(null);
+  const [pendingProposalId, setPendingProposalId] = useState<string | null>(null);
+  const {
+    lockedElementIds,
+    copilotProposals,
+    registerCopilotProposal,
+    applyCopilotProposal,
+    dismissCopilotProposal,
+    addCopilotProposalComment
+  } = useEvoProject(
+    useShallow((state) => ({
+      lockedElementIds: state.project.domain.lockedElementIds,
+      copilotProposals: state.project.domain.copilotProposals,
+      registerCopilotProposal: state.registerCopilotProposal,
+      applyCopilotProposal: state.applyCopilotProposal,
+      dismissCopilotProposal: state.dismissCopilotProposal,
+      addCopilotProposalComment: state.addCopilotProposalComment
+    }))
+  );
+  const pendingProposal = useMemo(() => {
+    if (!pendingProposalId || !activeVersion) {
+      return null;
+    }
+
+    const stored = copilotProposals.find((item) => item.id === pendingProposalId);
+
+    if (!stored || stored.status !== "draft") {
+      return null;
+    }
+
+    const baseVersion = stored.baseVersionSnapshot ?? activeVersion;
+
+    return { ...stored, baseVersion };
+  }, [activeVersion, copilotProposals, pendingProposalId]);
   const [messages, setMessages] = useState<CopilotMessage[]>([
     {
       id: "welcome",
@@ -97,7 +131,8 @@ export function CopilotPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           currentVersion: activeVersion,
-          userRequest: text
+          userRequest: text,
+          lockedElementIds
         })
       });
 
@@ -111,43 +146,27 @@ export function CopilotPanel({
         throw new Error("modify-plan did not return a usable PlanVersion.");
       }
 
-      if (data.mode === "proposal" && data.proposal) {
-        setPendingProposal({
-          id: `proposal-${Date.now()}`,
-          prompt: text,
-          baseVersion: activeVersion,
-          proposal: data.proposal,
-          findings: data.findings ?? [],
-          warning: data.warning
-        });
-        setMessages((current) => [
-          ...current,
-          {
-            id: `assistant-${Date.now()}`,
-            role: "assistant",
-            content: data.warning
-              ? `Copilot prepared a change proposal (fallback). ${data.warning}`
-              : "Copilot prepared a change proposal. Review each operation, then apply the selected changes."
-          },
-          {
-            id: `findings-${Date.now()}`,
-            role: "findings",
-            title: "Copilot findings",
-            items: data.findings ?? []
-          }
-        ]);
-        return;
+      if (!data.proposal?.operations?.length) {
+        throw new Error("modify-plan did not return a change proposal.");
       }
 
-      onVersionUpdated(data.version);
+      const stored = registerCopilotProposal({
+        prompt: text,
+        baseVersion: activeVersion,
+        proposal: data.proposal,
+        findings: data.findings ?? [],
+        warning: data.warning
+      });
+
+      setPendingProposalId(stored.id);
       setMessages((current) => [
         ...current,
         {
           id: `assistant-${Date.now()}`,
           role: "assistant",
           content: data.warning
-            ? `Fallback design update applied. ${data.warning}`
-            : "Design data updated. The active plan, inspector and 3D model now reference the new version."
+            ? `Copilot prepared a change proposal (fallback). ${data.warning}`
+            : "Copilot prepared a change proposal. Review each operation, then apply the selected changes."
         },
         {
           id: `findings-${Date.now()}`,
@@ -170,13 +189,18 @@ export function CopilotPanel({
     }
   }
 
-  function applyPendingProposal(version: PlanVersion) {
+  function applyPendingProposal(version: PlanVersion, acceptedOperationIds: string[]) {
     if (!pendingProposal) {
       return;
     }
 
-    onVersionUpdated(version);
-    setPendingProposal(null);
+    const result = applyCopilotProposal(pendingProposal.id, version, acceptedOperationIds);
+
+    if (result) {
+      onVersionUpdated(result.resultVersion);
+    }
+
+    setPendingProposalId(null);
     setMessages((current) => [
       ...current,
       {
@@ -185,6 +209,14 @@ export function CopilotPanel({
         content: `Applied selected changes for: ${pendingProposal.proposal.intent}`
       }
     ]);
+  }
+
+  function dismissPendingProposal() {
+    if (pendingProposal) {
+      dismissCopilotProposal(pendingProposal.id);
+    }
+
+    setPendingProposalId(null);
   }
 
   function handleAction(action: CopilotAction) {
@@ -254,9 +286,11 @@ export function CopilotPanel({
         {pendingProposal ? (
           <PlanChangeProposalPanel
             baseVersion={pendingProposal.baseVersion}
+            lockedElementIds={lockedElementIds}
             proposal={pendingProposal.proposal}
-            onApply={(version) => applyPendingProposal(version)}
-            onDismiss={() => setPendingProposal(null)}
+            onAddComment={(text) => addCopilotProposalComment(pendingProposal.id, text)}
+            onApply={(version, acceptedOperationIds) => applyPendingProposal(version, acceptedOperationIds)}
+            onDismiss={dismissPendingProposal}
           />
         ) : null}
         {messages.map((message) => {

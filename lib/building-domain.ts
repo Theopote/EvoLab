@@ -1,4 +1,5 @@
-import type { Point, PlanVersion, RoomType, FunctionZone } from "@/lib/project-types";
+import type { Point, PlanVersion, RoomType, FunctionZone, CopilotFinding } from "@/lib/project-types";
+import type { PlanChangeProposal } from "@/lib/schemas/plan-change-proposal-schema";
 import type { SiteContext, ZoningConstraints } from "@/lib/site-types";
 
 export type ChangeSource = "ai" | "user" | "import" | "system";
@@ -223,6 +224,54 @@ export interface ChangeSet {
   appliedAt?: string;
   reviewedAt?: string;
   baseVersionSnapshot?: PlanVersion;
+  proposalId?: string;
+  acceptedOperationIds?: string[];
+}
+
+export type CopilotProposalStatus = "draft" | "applied" | "dismissed";
+
+export type CopilotProposalAuditAction =
+  | "proposed"
+  | "accepted"
+  | "rejected"
+  | "skipped_locked"
+  | "commented"
+  | "applied"
+  | "dismissed";
+
+export interface CopilotProposalComment {
+  id: string;
+  author: string;
+  text: string;
+  createdAt: string;
+}
+
+export interface CopilotProposalAuditEntry {
+  id: string;
+  operationId?: string;
+  operationLabel?: string;
+  action: CopilotProposalAuditAction;
+  detail?: string;
+  actor: string;
+  createdAt: string;
+}
+
+export interface StoredCopilotProposal {
+  id: string;
+  prompt: string;
+  status: CopilotProposalStatus;
+  baseVersionId: string;
+  resultVersionId?: string;
+  changeSetId?: string;
+  proposal: PlanChangeProposal;
+  findings: CopilotFinding[];
+  acceptedOperationIds: string[];
+  auditLog: CopilotProposalAuditEntry[];
+  comments: CopilotProposalComment[];
+  createdAt: string;
+  reviewedAt?: string;
+  warning?: string;
+  baseVersionSnapshot?: PlanVersion;
 }
 
 export interface ProjectDomain {
@@ -236,6 +285,7 @@ export interface ProjectDomain {
   doorWindowFamilies: DoorWindowFamily[];
   schedules: ScheduleBundle[];
   changeSets: ChangeSet[];
+  copilotProposals: StoredCopilotProposal[];
   lockedElementIds: string[];
 }
 

@@ -345,13 +345,13 @@ Input:
 }
 ```
 
-Output (proposal-first):
+Output (proposal-only):
 
 ```ts
 {
-  mode: "proposal" | "legacy"
-  proposal?: PlanChangeProposal   // intent + constraints + operations
-  version: PlanVersion            // preview after applying operations
+  mode: "proposal"
+  proposal: PlanChangeProposal
+  version: PlanVersion
   findings: CopilotFinding[]
   fallback?: boolean
   warning?: string

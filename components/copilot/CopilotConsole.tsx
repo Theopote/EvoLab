@@ -3,8 +3,10 @@
 import { AlertTriangle, Bot, CheckCircle2, ChevronDown, ChevronUp, Info, Loader2, Paperclip, Send, Sparkles, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AiTimelinePanel } from "@/components/copilot/AiTimelinePanel";
+import { CopilotProposalHistoryPanel } from "@/components/copilot/CopilotProposalHistoryPanel";
 import { PlanChangeProposalPanel } from "@/components/copilot/PlanChangeProposalPanel";
-import type { ModifyPlanResponse, PendingCopilotProposal } from "@/lib/copilot-modify-types";
+import type { ModifyPlanResponse } from "@/lib/copilot-modify-types";
+import { useEvoProject } from "@/lib/project-store";
 import type {
   CopilotAction,
   CopilotFinding,
@@ -16,6 +18,7 @@ import type {
 import { useCopilotTimelineStore } from "@/lib/copilot-timeline-store";
 import { useCopilotUploadStore } from "@/lib/copilot-upload-store";
 import { readCopilotUpload, type CopilotPinnedFile } from "@/lib/copilot-upload";
+import { useShallow } from "zustand/react/shallow";
 
 interface CopilotConsoleProps {
   projectVersions: PlanVersion[];
@@ -23,7 +26,6 @@ interface CopilotConsoleProps {
   activeTab: WorkspaceTab;
   outline: Point[];
   projectType: string;
-  lockedElementIds?: string[];
   onCopilotRevision: (version: PlanVersion, prompt: string, parentVersion: PlanVersion) => void;
   onAnalyzedVersion: (version: PlanVersion, source: { fileName: string; prompt?: string }) => void;
   onSelectVersion: (version: PlanVersion) => void;
@@ -44,7 +46,6 @@ export function CopilotConsole({
   activeTab,
   outline,
   projectType,
-  lockedElementIds = [],
   onCopilotRevision,
   onAnalyzedVersion,
   onSelectVersion,
@@ -55,8 +56,45 @@ export function CopilotConsole({
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [pinnedFiles, setPinnedFiles] = useState<CopilotPinnedFile[]>([]);
-  const [pendingProposal, setPendingProposal] = useState<PendingCopilotProposal | null>(null);
+  const [pendingProposalId, setPendingProposalId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const {
+    copilotProposals,
+    lockedElementIds,
+    registerCopilotProposal,
+    applyCopilotProposal,
+    dismissCopilotProposal,
+    addCopilotProposalComment
+  } = useEvoProject(
+    useShallow((state) => ({
+      copilotProposals: state.project.domain.copilotProposals,
+      lockedElementIds: state.project.domain.lockedElementIds,
+      registerCopilotProposal: state.registerCopilotProposal,
+      applyCopilotProposal: state.applyCopilotProposal,
+      dismissCopilotProposal: state.dismissCopilotProposal,
+      addCopilotProposalComment: state.addCopilotProposalComment
+    }))
+  );
+  const pendingProposal = useMemo(() => {
+    if (!pendingProposalId) {
+      return null;
+    }
+
+    const stored = copilotProposals.find((item) => item.id === pendingProposalId);
+
+    if (!stored || stored.status !== "draft") {
+      return null;
+    }
+
+    const baseVersion =
+      projectVersions.find((version) => version.id === stored.baseVersionId) ?? stored.baseVersionSnapshot;
+
+    if (!baseVersion) {
+      return null;
+    }
+
+    return { ...stored, baseVersion };
+  }, [copilotProposals, pendingProposalId, projectVersions]);
   const uploadRequestId = useCopilotUploadStore((state) => state.uploadRequestId);
   const [messages, setMessages] = useState<CopilotMessage[]>([
     {
@@ -232,36 +270,19 @@ export function CopilotConsole({
         throw new Error("modify-plan did not return a usable PlanVersion.");
       }
 
-      if (data.mode === "proposal" && data.proposal) {
-        setPendingProposal({
-          id: `proposal-${Date.now()}`,
-          prompt: text,
-          baseVersion: baseVersion,
-          proposal: data.proposal,
-          findings: data.findings ?? [],
-          warning: data.warning
-        });
-        setPinnedFiles([]);
-        setMessages((current) => [
-          ...current,
-          {
-            id: `assistant-${Date.now()}`,
-            role: "assistant",
-            content: data.warning
-              ? `Copilot prepared a change proposal (fallback). ${data.warning}`
-              : "Copilot prepared a change proposal. Review each operation before forking a new version."
-          },
-          {
-            id: `findings-${Date.now()}`,
-            role: "findings",
-            title: "Copilot findings",
-            items: data.findings ?? []
-          }
-        ]);
-        return;
+      if (!data.proposal?.operations?.length) {
+        throw new Error("modify-plan did not return a change proposal.");
       }
 
-      onCopilotRevision(data.version, text, baseVersion);
+      const stored = registerCopilotProposal({
+        prompt: text,
+        baseVersion,
+        proposal: data.proposal,
+        findings: data.findings ?? [],
+        warning: data.warning
+      });
+
+      setPendingProposalId(stored.id);
       setPinnedFiles([]);
       setMessages((current) => [
         ...current,
@@ -269,8 +290,8 @@ export function CopilotConsole({
           id: `assistant-${Date.now()}`,
           role: "assistant",
           content: data.warning
-            ? `Fallback design update applied. ${data.warning}`
-            : "Design revision forked. Plan, inspector and 3D model now reference the new version."
+            ? `Copilot prepared a change proposal (fallback). ${data.warning}`
+            : "Copilot prepared a change proposal. Review each operation before forking a new version."
         },
         {
           id: `findings-${Date.now()}`,
@@ -293,13 +314,19 @@ export function CopilotConsole({
     }
   }
 
-  function applyPendingProposal(version: PlanVersion) {
+  function applyPendingProposal(version: PlanVersion, acceptedOperationIds: string[]) {
     if (!pendingProposal) {
       return;
     }
 
-    onCopilotRevision(version, pendingProposal.prompt, pendingProposal.baseVersion);
-    setPendingProposal(null);
+    const result = applyCopilotProposal(pendingProposal.id, version, acceptedOperationIds);
+
+    if (!result) {
+      return;
+    }
+
+    onCopilotRevision(result.resultVersion, result.prompt, result.parentVersion);
+    setPendingProposalId(null);
     setMessages((current) => [
       ...current,
       {
@@ -308,6 +335,14 @@ export function CopilotConsole({
         content: `Applied selected changes for: ${pendingProposal.proposal.intent}`
       }
     ]);
+  }
+
+  function dismissPendingProposal() {
+    if (pendingProposal) {
+      dismissCopilotProposal(pendingProposal.id);
+    }
+
+    setPendingProposalId(null);
   }
 
   function handleUndo(entryId: string, parentVersionId: string) {
@@ -397,8 +432,9 @@ export function CopilotConsole({
                   baseVersion={pendingProposal.baseVersion}
                   lockedElementIds={lockedElementIds}
                   proposal={pendingProposal.proposal}
-                  onApply={(version) => applyPendingProposal(version)}
-                  onDismiss={() => setPendingProposal(null)}
+                  onAddComment={(text) => addCopilotProposalComment(pendingProposal.id, text)}
+                  onApply={(version, acceptedOperationIds) => applyPendingProposal(version, acceptedOperationIds)}
+                  onDismiss={dismissPendingProposal}
                 />
               ) : null}
               {messages.map((message) => {
@@ -508,12 +544,19 @@ export function CopilotConsole({
             </form>
           </div>
 
-          <AiTimelinePanel
-            versions={projectVersions}
-            activeVersionId={activeVersion?.id ?? ""}
-            onUndo={handleUndo}
-            onRegenerate={handleRegenerate}
-          />
+          <div className="flex min-h-0 flex-col gap-2">
+            <CopilotProposalHistoryPanel
+              activeProposalId={pendingProposal?.id}
+              proposals={copilotProposals}
+              onSelectProposal={setPendingProposalId}
+            />
+            <AiTimelinePanel
+              versions={projectVersions}
+              activeVersionId={activeVersion?.id ?? ""}
+              onUndo={handleUndo}
+              onRegenerate={handleRegenerate}
+            />
+          </div>
         </div>
       ) : null}
     </section>

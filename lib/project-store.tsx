@@ -4,7 +4,15 @@ import { produce } from "immer";
 import { type ReactNode } from "react";
 import { create } from "zustand";
 import { normalizePlanVersion, normalizeProjectVersions } from "@/lib/architecture-model";
-import type { ScheduleBundle } from "@/lib/building-domain";
+import type { ScheduleBundle, StoredCopilotProposal } from "@/lib/building-domain";
+import {
+  addCopilotProposalComment as addCopilotProposalCommentInDomain,
+  appendCopilotProposal,
+  createStoredCopilotProposal,
+  dismissCopilotProposal as dismissCopilotProposalInDomain,
+  markCopilotProposalApplied,
+  resolveProposalOperationSets
+} from "@/lib/copilot-proposals";
 import { initialProjectData } from "@/lib/evolab-data";
 import {
   appendChangeSet,
@@ -137,6 +145,20 @@ interface EvoProjectStore {
   approveChangeSet: (changeSetId: string, lockChangedElements?: boolean) => void;
   rejectChangeSet: (changeSetId: string) => void;
   toggleElementLock: (elementId: string) => void;
+  registerCopilotProposal: (input: {
+    prompt: string;
+    baseVersion: PlanVersion;
+    proposal: StoredCopilotProposal["proposal"];
+    findings: StoredCopilotProposal["findings"];
+    warning?: string;
+  }) => StoredCopilotProposal;
+  applyCopilotProposal: (
+    proposalId: string,
+    version: PlanVersion,
+    acceptedOperationIds: string[]
+  ) => { prompt: string; parentVersion: PlanVersion; resultVersion: PlanVersion } | undefined;
+  dismissCopilotProposal: (proposalId: string) => void;
+  addCopilotProposalComment: (proposalId: string, text: string) => void;
   generateMep: () => Promise<void>;
   openModelForVersion: (version: PlanVersion) => void;
   refineVersion: (version: PlanVersion) => void;
@@ -450,6 +472,10 @@ function createInitialState(): Omit<
   | "approveChangeSet"
   | "rejectChangeSet"
   | "toggleElementLock"
+  | "registerCopilotProposal"
+  | "applyCopilotProposal"
+  | "dismissCopilotProposal"
+  | "addCopilotProposalComment"
   | "generateMep"
   | "openModelForVersion"
   | "refineVersion"
@@ -708,6 +734,82 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
         state.project.domain.lockedElementIds = locked.includes(elementId)
           ? locked.filter((id) => id !== elementId)
           : [...locked, elementId];
+      })
+    ),
+  registerCopilotProposal: (input) => {
+    const stored = createStoredCopilotProposal(input);
+
+    set(
+      produce<EvoProjectStore>((state) => {
+        state.project.domain = appendCopilotProposal(state.project.domain, stored);
+      })
+    );
+
+    return stored;
+  },
+  applyCopilotProposal: (proposalId, version, acceptedOperationIds) => {
+    const state = get();
+    const stored = state.project.domain.copilotProposals.find((item) => item.id === proposalId);
+
+    if (!stored || stored.status !== "draft") {
+      return undefined;
+    }
+
+    const parentVersion =
+      stored.baseVersionSnapshot ??
+      state.project.versions.find((item) => item.id === stored.baseVersionId);
+
+    if (!parentVersion) {
+      return undefined;
+    }
+
+    const normalized = normalizePlanVersion(version);
+    const operationSets = resolveProposalOperationSets(
+      stored.proposal,
+      acceptedOperationIds,
+      state.project.domain.lockedElementIds,
+      parentVersion
+    );
+    const changeSet = createChangeSet({
+      source: "ai",
+      summary: stored.proposal.intent,
+      baseVersion: parentVersion,
+      targetVersion: normalized,
+      proposalId,
+      acceptedOperationIds: operationSets.acceptedOperationIds
+    });
+
+    set(
+      produce<EvoProjectStore>((draft) => {
+        draft.project.versions = [...draft.project.versions, normalized];
+        draft.project.activeVersionId = normalized.id;
+        draft.project.domain = appendChangeSet(draft.project.domain, changeSet);
+        draft.project.domain = markCopilotProposalApplied(draft.project.domain, proposalId, {
+          resultVersionId: normalized.id,
+          changeSetId: changeSet.id,
+          ...operationSets
+        });
+        bumpGeometryRevision(draft);
+        refreshDerivedDraft(draft);
+      })
+    );
+
+    return {
+      prompt: stored.prompt,
+      parentVersion,
+      resultVersion: normalized
+    };
+  },
+  dismissCopilotProposal: (proposalId) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        state.project.domain = dismissCopilotProposalInDomain(state.project.domain, proposalId);
+      })
+    ),
+  addCopilotProposalComment: (proposalId, text) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        state.project.domain = addCopilotProposalCommentInDomain(state.project.domain, proposalId, text);
       })
     ),
   selectChangeSet: (changeSetId) =>

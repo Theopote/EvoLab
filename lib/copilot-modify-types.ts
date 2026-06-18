@@ -2,15 +2,15 @@ import type { PlanChangeProposal } from "@/lib/schemas/plan-change-proposal-sche
 import type { CopilotFinding, PlanVersion } from "@/lib/project-types";
 
 export interface ModifyPlanResponse {
-  mode: "proposal" | "legacy";
-  proposal?: PlanChangeProposal;
+  mode: "proposal";
+  proposal: PlanChangeProposal;
   version: PlanVersion;
   findings: CopilotFinding[];
   fallback?: boolean;
   warning?: string;
 }
 
-export interface PendingCopilotProposal {
+export interface PendingCopilotProposalView {
   id: string;
   prompt: string;
   baseVersion: PlanVersion;

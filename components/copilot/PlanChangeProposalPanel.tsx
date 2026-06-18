@@ -20,6 +20,7 @@ interface PlanChangeProposalPanelProps {
   lockedElementIds?: string[];
   onApply: (version: PlanVersion, acceptedOperationIds: string[]) => void;
   onDismiss: () => void;
+  onAddComment?: (text: string) => void;
 }
 
 export function PlanChangeProposalPanel({
@@ -27,9 +28,11 @@ export function PlanChangeProposalPanel({
   proposal,
   lockedElementIds = [],
   onApply,
-  onDismiss
+  onDismiss,
+  onAddComment
 }: PlanChangeProposalPanelProps) {
   const [expanded, setExpanded] = useState(true);
+  const [commentInput, setCommentInput] = useState("");
   const [hoveredOperationId, setHoveredOperationId] = useState<string | null>(null);
   const [acceptedIds, setAcceptedIds] = useState<Set<string>>(() => {
     const unlocked = proposal.operations
@@ -191,6 +194,37 @@ export function PlanChangeProposalPanel({
               );
             })}
           </div>
+
+          {onAddComment ? (
+            <form
+              className="flex gap-1.5"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const text = commentInput.trim();
+
+                if (!text) {
+                  return;
+                }
+
+                onAddComment(text);
+                setCommentInput("");
+              }}
+            >
+              <input
+                className="h-8 min-w-0 flex-1 rounded border border-line bg-[#0b1118] px-2 text-[11px] text-slate-100 outline-none focus:border-accent/70"
+                placeholder="Add a review comment..."
+                value={commentInput}
+                onChange={(event) => setCommentInput(event.target.value)}
+              />
+              <button
+                className="rounded border border-line px-2 py-1 text-[11px] text-muted hover:text-accent"
+                disabled={!commentInput.trim()}
+                type="submit"
+              >
+                Comment
+              </button>
+            </form>
+          ) : null}
 
           <div className="flex flex-wrap gap-1.5">
             <button
