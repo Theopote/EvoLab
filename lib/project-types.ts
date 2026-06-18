@@ -74,6 +74,8 @@ export interface PlanVersionMetadata {
     refinement: boolean;
   };
   refinementSummary?: string;
+  programCompliant?: boolean;
+  programValidationWarnings?: string[];
 }
 
 export interface TopologyGraphRoom {

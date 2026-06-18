@@ -1,4 +1,5 @@
-import { Cloud, Share2, Sparkles } from "lucide-react";
+import { Cloud, GitCompareArrows, Share2, Sparkles } from "lucide-react";
+import { pendingChangeSets } from "@/lib/project-domain";
 import { workflowPhaseDefinitions, type WorkflowPhase } from "@/lib/workflow-phases";
 import type { ProjectData } from "@/lib/project-types";
 
@@ -6,9 +7,11 @@ interface TopNavProps {
   project: ProjectData;
   workflowPhase: WorkflowPhase;
   onPhaseChange: (phase: WorkflowPhase) => void;
+  onOpenReviews?: () => void;
 }
 
-export function TopNav({ project, workflowPhase, onPhaseChange }: TopNavProps) {
+export function TopNav({ project, workflowPhase, onPhaseChange, onOpenReviews }: TopNavProps) {
+  const pendingReviewCount = pendingChangeSets(project.domain).length;
   return (
     <header className="flex h-14 items-center border-b border-line bg-[#0b1118] px-4">
       <div className="mr-6 flex items-center gap-2">
@@ -39,6 +42,16 @@ export function TopNav({ project, workflowPhase, onPhaseChange }: TopNavProps) {
       </nav>
       <div className="ml-auto flex items-center gap-3 text-sm">
         <span className="max-w-48 truncate text-slate-300">{project.projectName}</span>
+        {pendingReviewCount > 0 ? (
+          <button
+            className="flex items-center gap-1 rounded border border-warning/40 bg-warning/10 px-2 py-1 text-xs text-warning hover:border-warning"
+            type="button"
+            onClick={onOpenReviews}
+          >
+            <GitCompareArrows className="h-3.5 w-3.5" />
+            {pendingReviewCount} review{pendingReviewCount === 1 ? "" : "s"}
+          </button>
+        ) : null}
         <span className="rounded border border-line px-2 py-1 text-xs text-muted">
           AI Credits 1,240
         </span>

@@ -4,12 +4,14 @@ import { Check, Loader2, RefreshCcw } from "lucide-react";
 import { useState } from "react";
 import { FloorPlan } from "@/components/floor-plan";
 import type { DesignBrief, PlanVersion, Point } from "@/lib/project-types";
+import type { ProgramModel } from "@/lib/building-domain";
 import type { ZoningConstraints } from "@/lib/site-types";
 
 interface PlanResultGridProps {
   outline: Point[];
   closed: boolean;
   brief: DesignBrief;
+  program: ProgramModel;
   zoning?: ZoningConstraints;
   versions: PlanVersion[];
   activeVersionId: string;
@@ -21,6 +23,7 @@ export function PlanResultGrid({
   outline,
   closed,
   brief,
+  program,
   zoning,
   versions,
   activeVersionId,
@@ -45,6 +48,8 @@ export function PlanResultGrid({
           projectType: brief.projectType,
           floors: brief.floors,
           zoning,
+          designBrief: brief,
+          program,
           brief: [
             brief.description,
             `${brief.floors} floors`,

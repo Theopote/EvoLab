@@ -16,8 +16,9 @@ import { SiteContextPanel } from "@/components/site/SiteContextPanel";
 import { BriefForm } from "@/components/plan-editor/BriefForm";
 import { OutlineCanvas } from "@/components/plan-editor/OutlineCanvas";
 import { PlanResultGrid } from "@/components/plan-editor/PlanResultGrid";
-import { ComplianceChecklist } from "@/components/quantity/ComplianceChecklist";
 import { ChangeSetApprovalPanel } from "@/components/quantity/ChangeSetApprovalPanel";
+import { ComplianceChecklist } from "@/components/quantity/ComplianceChecklist";
+import { ProgramCompliancePanel } from "@/components/quantity/ProgramCompliancePanel";
 import { QuantityTable } from "@/components/quantity/QuantityTable";
 import { RenderPanel } from "@/components/render-panel";
 import { TopNav } from "@/components/top-nav";
@@ -131,7 +132,15 @@ export function EvoLabWorkspace() {
 
   return (
     <main className="flex min-h-screen flex-col bg-canvas text-slate-100">
-      <TopNav project={project} workflowPhase={workflowPhase} onPhaseChange={setWorkflowPhase} />
+      <TopNav
+        project={project}
+        workflowPhase={workflowPhase}
+        onPhaseChange={setWorkflowPhase}
+        onOpenReviews={() => {
+          setWorkflowPhase("scheme");
+          setActiveTab("Quantity");
+        }}
+      />
       <PhaseSubNav phase={workflowPhase} activeTab={activeTab} onTabChange={setActiveTab} />
       <section className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_auto_218px] overflow-hidden">
         <div className="grid min-h-0 grid-cols-[260px_minmax(0,1fr)_300px] overflow-hidden">
@@ -247,7 +256,7 @@ export function EvoLabWorkspace() {
               Select or generate a plan version to calculate quantities.
             </div>
           )}
-          <div className="grid min-h-0 grid-rows-[minmax(0,1.2fr)_auto] gap-4">
+          <div className="grid min-h-0 grid-rows-[minmax(0,1fr)_auto_auto] gap-4">
             <ChangeSetApprovalPanel
               changeSets={project.domain.changeSets}
               versions={project.versions}
@@ -258,6 +267,7 @@ export function EvoLabWorkspace() {
               onReject={rejectChangeSet}
               onToggleElementLock={toggleElementLock}
             />
+            <ProgramCompliancePanel program={project.domain.program} activeVersion={activeVersion} />
             <ComplianceChecklist items={complianceItems} />
           </div>
         </section>
@@ -380,6 +390,7 @@ export function EvoLabWorkspace() {
             outline={outline}
             closed={outlineClosed}
             brief={brief}
+            program={project.domain.program}
             zoning={zoning}
             versions={project.versions}
             activeVersionId={project.activeVersionId}
@@ -455,6 +466,7 @@ export function EvoLabWorkspace() {
           outline={outline}
           closed={outlineClosed}
           brief={brief}
+          program={project.domain.program}
           zoning={zoning}
           versions={project.versions}
           activeVersionId={project.activeVersionId}
