@@ -5,6 +5,7 @@ import {
   findSemanticEgressRoute
 } from "@/lib/analysis/egress-semantics";
 import { initialProjectData } from "@/lib/evolab-data";
+import type { PlanVersion, Point } from "@/lib/project-types";
 import { computeEgressPathMetrics } from "@/lib/rules/path-metrics";
 
 const baseVersion = initialProjectData.versions[0]!;
@@ -31,7 +32,7 @@ describe("semantic egress chain", () => {
   });
 
   it("reports incomplete chains when door and corridor are missing", () => {
-    const boxedVersion = {
+    const boxedVersion: PlanVersion = {
       ...baseVersion,
       levels: baseVersion.levels.map((level) => ({ ...level, openings: [] })),
       rooms: [
@@ -45,7 +46,7 @@ describe("semantic egress chain", () => {
             [10, 0],
             [10, 8],
             [0, 8]
-          ],
+          ] satisfies Point[],
           areaSqm: 80,
           ceilingHeight: 3,
           doors: [],
@@ -62,7 +63,7 @@ describe("semantic egress chain", () => {
             [14, 0],
             [14, 8],
             [10, 8]
-          ],
+          ] satisfies Point[],
           areaSqm: 32,
           ceilingHeight: 3,
           doors: [],
