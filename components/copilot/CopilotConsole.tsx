@@ -3,6 +3,8 @@
 import { AlertTriangle, Bot, CheckCircle2, ChevronDown, ChevronUp, Info, Loader2, Paperclip, Send, Sparkles, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AiTimelinePanel } from "@/components/copilot/AiTimelinePanel";
+import { PlanChangeProposalPanel } from "@/components/copilot/PlanChangeProposalPanel";
+import type { ModifyPlanResponse, PendingCopilotProposal } from "@/lib/copilot-modify-types";
 import type {
   CopilotAction,
   CopilotFinding,
@@ -51,6 +53,7 @@ export function CopilotConsole({
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [pinnedFiles, setPinnedFiles] = useState<CopilotPinnedFile[]>([]);
+  const [pendingProposal, setPendingProposal] = useState<PendingCopilotProposal | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadRequestId = useCopilotUploadStore((state) => state.uploadRequestId);
   const [messages, setMessages] = useState<CopilotMessage[]>([
@@ -220,14 +223,39 @@ export function CopilotConsole({
         throw new Error(`modify-plan failed with ${response.status}`);
       }
 
-      const data = (await response.json()) as {
-        version?: PlanVersion;
-        findings?: CopilotFinding[];
-        warning?: string;
-      };
+      const data = (await response.json()) as ModifyPlanResponse;
 
       if (!data.version?.rooms) {
-        throw new Error("modify-plan did not return a complete PlanVersion.");
+        throw new Error("modify-plan did not return a usable PlanVersion.");
+      }
+
+      if (data.mode === "proposal" && data.proposal) {
+        setPendingProposal({
+          id: `proposal-${Date.now()}`,
+          prompt: text,
+          baseVersion: baseVersion,
+          proposal: data.proposal,
+          findings: data.findings ?? [],
+          warning: data.warning
+        });
+        setPinnedFiles([]);
+        setMessages((current) => [
+          ...current,
+          {
+            id: `assistant-${Date.now()}`,
+            role: "assistant",
+            content: data.warning
+              ? `Copilot prepared a change proposal (fallback). ${data.warning}`
+              : "Copilot prepared a change proposal. Review each operation before forking a new version."
+          },
+          {
+            id: `findings-${Date.now()}`,
+            role: "findings",
+            title: "Copilot findings",
+            items: data.findings ?? []
+          }
+        ]);
+        return;
       }
 
       onCopilotRevision(data.version, text, baseVersion);
@@ -260,6 +288,23 @@ export function CopilotConsole({
     } finally {
       setIsSending(false);
     }
+  }
+
+  function applyPendingProposal(version: PlanVersion) {
+    if (!pendingProposal) {
+      return;
+    }
+
+    onCopilotRevision(version, pendingProposal.prompt, pendingProposal.baseVersion);
+    setPendingProposal(null);
+    setMessages((current) => [
+      ...current,
+      {
+        id: `assistant-applied-${Date.now()}`,
+        role: "assistant",
+        content: `Applied selected changes for: ${pendingProposal.proposal.intent}`
+      }
+    ]);
   }
 
   function handleUndo(entryId: string, parentVersionId: string) {
@@ -344,6 +389,14 @@ export function CopilotConsole({
             </div>
 
             <div className="mb-2 min-h-0 flex-1 space-y-2 overflow-auto rounded border border-line bg-[#0b1118] p-2">
+              {pendingProposal ? (
+                <PlanChangeProposalPanel
+                  baseVersion={pendingProposal.baseVersion}
+                  proposal={pendingProposal.proposal}
+                  onApply={(version) => applyPendingProposal(version)}
+                  onDismiss={() => setPendingProposal(null)}
+                />
+              ) : null}
               {messages.map((message) => {
                 if (message.role === "findings") {
                   return (

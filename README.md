@@ -341,17 +341,24 @@ Input:
 {
   currentVersion: PlanVersion
   userRequest: string
+  referenceImages?: Array<{ base64: string; mediaType?: string; fileName?: string }>
 }
 ```
 
-Output:
+Output (proposal-first):
 
 ```ts
 {
-  version: PlanVersion
+  mode: "proposal" | "legacy"
+  proposal?: PlanChangeProposal   // intent + constraints + operations
+  version: PlanVersion            // preview after applying operations
   findings: CopilotFinding[]
+  fallback?: boolean
+  warning?: string
 }
 ```
+
+See `docs/copilot-change-proposals.md` for the change-proposal architecture.
 
 ### `POST /api/generate-diagram`
 

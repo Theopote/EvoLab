@@ -2,10 +2,16 @@ import { NextResponse } from "next/server";
 import { requestAnthropicTool } from "@/lib/anthropic-tool";
 import { normalizeImageInputs } from "@/lib/image-input";
 import { createMockModifiedVersion } from "@/lib/mock-api";
+import { buildPreviewVersion } from "@/lib/plan-change-engine";
 import { postProcessPlanVersion } from "@/lib/plan-postprocess";
 import { modifyPlanPrompt } from "@/lib/prompts/modifyPlanPrompt";
+import { proposePlanChangesPrompt } from "@/lib/prompts/proposePlanChangesPrompt";
 import { ModifyPlanToolInputSchema } from "@/lib/schemas/plan-version-schema";
-import type { CopilotFinding, PlanVersion } from "@/lib/project-types";
+import { ProposePlanChangesToolInputSchema } from "@/lib/schemas/plan-change-proposal-schema";
+import type { PlanVersion } from "@/lib/project-types";
+import type { ModifyPlanResponse } from "@/lib/copilot-modify-types";
+
+export type { ModifyPlanResponse } from "@/lib/copilot-modify-types";
 
 interface ModifyPlanRequest {
   currentVersion?: PlanVersion;
@@ -13,9 +19,14 @@ interface ModifyPlanRequest {
   referenceImages?: Array<{ base64: string; mediaType?: string; fileName?: string }>;
 }
 
-interface ModifyPlanResponse {
-  version: PlanVersion;
-  findings: CopilotFinding[];
+function legacyVersionFromTool(
+  version: PlanVersion,
+  currentVersion: PlanVersion
+): PlanVersion {
+  return postProcessPlanVersion({
+    ...version,
+    parentVersionId: version.parentVersionId ?? currentVersion.id
+  });
 }
 
 export async function POST(request: Request) {
@@ -29,10 +40,43 @@ export async function POST(request: Request) {
   }
 
   const fallback = createMockModifiedVersion(body.currentVersion, body.userRequest ?? "");
+  const referenceImages = normalizeImageInputs(body.referenceImages);
 
   try {
-    const referenceImages = normalizeImageInputs(body.referenceImages);
+    const proposalData = await requestAnthropicTool({
+      system: proposePlanChangesPrompt,
+      input: {
+        currentVersion: body.currentVersion,
+        userRequest: body.userRequest,
+        referenceImageCount: referenceImages.length,
+        referenceImageNames: referenceImages.map((image) => image.fileName).filter(Boolean)
+      },
+      images: referenceImages.map((image) => ({
+        base64: image.base64,
+        mediaType: image.mediaType
+      })),
+      toolName: "propose_plan_changes",
+      toolDescription:
+        "Return a structured PlanChangeProposal with intent, constraints, and geometry operations.",
+      schema: ProposePlanChangesToolInputSchema,
+      maxTokens: 4096
+    });
 
+    if (proposalData.proposal?.operations?.length) {
+      const version = buildPreviewVersion(body.currentVersion, proposalData.proposal);
+
+      return NextResponse.json({
+        mode: "proposal",
+        proposal: proposalData.proposal,
+        version,
+        findings: proposalData.findings ?? []
+      } satisfies ModifyPlanResponse);
+    }
+  } catch {
+    // Fall through to legacy full-version modify path.
+  }
+
+  try {
     const data = await requestAnthropicTool({
       system: modifyPlanPrompt,
       input: {
@@ -56,17 +100,15 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({
-      ...data,
-      version: postProcessPlanVersion({
-        ...data.version,
-        parentVersionId: data.version.parentVersionId ?? body.currentVersion.id
-      })
-    });
+      mode: "legacy",
+      version: legacyVersionFromTool(data.version as PlanVersion, body.currentVersion),
+      findings: data.findings
+    } satisfies ModifyPlanResponse);
   } catch (error) {
     return NextResponse.json({
       ...fallback,
       fallback: true,
       warning: error instanceof Error ? error.message : "Failed to modify plan."
-    });
+    } satisfies ModifyPlanResponse);
   }
 }

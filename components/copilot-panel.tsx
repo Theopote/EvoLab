@@ -2,6 +2,8 @@
 
 import { AlertTriangle, Bot, CheckCircle2, Info, Loader2, Send, Sparkles } from "lucide-react";
 import { useMemo, useState } from "react";
+import { PlanChangeProposalPanel } from "@/components/copilot/PlanChangeProposalPanel";
+import type { PendingCopilotProposal, ModifyPlanResponse } from "@/lib/copilot-modify-types";
 import type {
   CopilotAction,
   CopilotFinding,
@@ -43,6 +45,7 @@ export function CopilotPanel({
 }: CopilotPanelProps) {
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [pendingProposal, setPendingProposal] = useState<PendingCopilotProposal | null>(null);
   const [messages, setMessages] = useState<CopilotMessage[]>([
     {
       id: "welcome",
@@ -102,14 +105,38 @@ export function CopilotPanel({
         throw new Error(`modify-plan failed with ${response.status}`);
       }
 
-      const data = (await response.json()) as {
-        version?: PlanVersion;
-        findings?: CopilotFinding[];
-        warning?: string;
-      };
+      const data = (await response.json()) as ModifyPlanResponse;
 
       if (!data.version?.rooms) {
-        throw new Error("modify-plan did not return a complete PlanVersion.");
+        throw new Error("modify-plan did not return a usable PlanVersion.");
+      }
+
+      if (data.mode === "proposal" && data.proposal) {
+        setPendingProposal({
+          id: `proposal-${Date.now()}`,
+          prompt: text,
+          baseVersion: activeVersion,
+          proposal: data.proposal,
+          findings: data.findings ?? [],
+          warning: data.warning
+        });
+        setMessages((current) => [
+          ...current,
+          {
+            id: `assistant-${Date.now()}`,
+            role: "assistant",
+            content: data.warning
+              ? `Copilot prepared a change proposal (fallback). ${data.warning}`
+              : "Copilot prepared a change proposal. Review each operation, then apply the selected changes."
+          },
+          {
+            id: `findings-${Date.now()}`,
+            role: "findings",
+            title: "Copilot findings",
+            items: data.findings ?? []
+          }
+        ]);
+        return;
       }
 
       onVersionUpdated(data.version);
@@ -141,6 +168,23 @@ export function CopilotPanel({
     } finally {
       setIsSending(false);
     }
+  }
+
+  function applyPendingProposal(version: PlanVersion) {
+    if (!pendingProposal) {
+      return;
+    }
+
+    onVersionUpdated(version);
+    setPendingProposal(null);
+    setMessages((current) => [
+      ...current,
+      {
+        id: `assistant-applied-${Date.now()}`,
+        role: "assistant",
+        content: `Applied selected changes for: ${pendingProposal.proposal.intent}`
+      }
+    ]);
   }
 
   function handleAction(action: CopilotAction) {
@@ -207,6 +251,14 @@ export function CopilotPanel({
       </div>
 
       <div className="mb-3 flex max-h-80 flex-col gap-2 overflow-auto rounded border border-line bg-[#0b1118] p-2">
+        {pendingProposal ? (
+          <PlanChangeProposalPanel
+            baseVersion={pendingProposal.baseVersion}
+            proposal={pendingProposal.proposal}
+            onApply={(version) => applyPendingProposal(version)}
+            onDismiss={() => setPendingProposal(null)}
+          />
+        ) : null}
         {messages.map((message) => {
           if (message.role === "findings") {
             return (
