@@ -9,6 +9,7 @@ import { calculateQuantities, checkCompliance, type ComplianceItem, type Quantit
 import { computeBuildableEnvelope } from "@/lib/buildable-envelope";
 import type { BuildableEnvelope, EnvironmentSurrogate, SiteContext, ZoningConstraints } from "@/lib/site-types";
 import { computeEnvironmentSurrogate } from "@/lib/environment-surrogate";
+import { isOutlineStale } from "@/lib/outline-sync";
 import { polygonArea } from "@/lib/plan-validation";
 import { defaultZoningConstraints } from "@/lib/site-types";
 import type {
@@ -81,6 +82,9 @@ interface EvoProjectStore {
   mepError: string | null;
   quantities?: QuantityResult;
   complianceItems: ComplianceItem[];
+  outlineStale: boolean;
+  isRelayouting: boolean;
+  relayoutError: string | null;
   setActiveTab: (tab: WorkspaceTab) => void;
   setOutline: (outline: Point[]) => void;
   setOutlineClosed: (closed: boolean) => void;
@@ -109,6 +113,7 @@ interface EvoProjectStore {
   appendGeneratedVersions: (versions: PlanVersion[], projectType?: string) => void;
   setActiveVersion: (version: PlanVersion) => void;
   updateActiveVersion: (version: PlanVersion) => void;
+  relayoutActiveVersion: () => Promise<void>;
   generateMep: () => Promise<void>;
   openModelForVersion: (version: PlanVersion) => void;
   refineVersion: (version: PlanVersion) => void;
@@ -176,6 +181,21 @@ function refreshSiteDerivedDraft(state: EvoProjectStore) {
   });
 }
 
+function refreshOutlineSyncDraft(state: EvoProjectStore) {
+  state.outlineStale = state.activeVersion ? isOutlineStale(state.outline, state.activeVersion.outline) : false;
+}
+
+function syncOutlineFromVersionDraft(state: EvoProjectStore, version: PlanVersion) {
+  if (version.outline.length < 3) {
+    return;
+  }
+
+  state.outline = version.outline;
+  state.outlineClosed = true;
+  refreshSiteDerivedDraft(state);
+  refreshOutlineSyncDraft(state);
+}
+
 function refreshDerivedDraft(state: EvoProjectStore) {
   const activeVersion = getActiveVersion(state.project);
   const activeLevel = getLevel(activeVersion, state.activeLevelId);
@@ -192,6 +212,7 @@ function refreshDerivedDraft(state: EvoProjectStore) {
   state.selectedOpening = activeLevel?.openings.find((opening) => opening.id === state.selectedOpeningId);
 
   validateSelectionDraft(state);
+  refreshOutlineSyncDraft(state);
 }
 
 function bumpGeometryRevision(state: EvoProjectStore) {
@@ -264,6 +285,7 @@ function commitNormalizedVersionDraft(
 
   if (resetSelection) {
     clearSelectionDraft(state);
+    syncOutlineFromVersionDraft(state, normalizedVersion);
   }
 
   if (bumpGeometry) {
@@ -312,6 +334,7 @@ function createInitialState(): Omit<
   | "appendGeneratedVersions"
   | "setActiveVersion"
   | "updateActiveVersion"
+  | "relayoutActiveVersion"
   | "generateMep"
   | "openModelForVersion"
   | "refineVersion"
@@ -353,7 +376,10 @@ function createInitialState(): Omit<
     isGeneratingMep: false,
     mepError: null,
     quantities: activeVersion ? calculateQuantities(activeVersion) : undefined,
-    complianceItems: activeVersion ? checkCompliance(activeVersion) : []
+    complianceItems: activeVersion ? checkCompliance(activeVersion) : [],
+    outlineStale: false,
+    isRelayouting: false,
+    relayoutError: null
   };
 }
 
@@ -379,6 +405,7 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
       produce<EvoProjectStore>((state) => {
         state.outline = outline;
         refreshSiteDerivedDraft(state);
+        refreshOutlineSyncDraft(state);
       })
     ),
   setOutlineClosed: (closed) =>
@@ -730,6 +757,11 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
         clearSelectionDraft(state);
         bumpGeometryRevision(state);
         refreshDerivedDraft(state);
+
+        const nextActiveVersion = getActiveVersion(state.project);
+        if (nextActiveVersion) {
+          syncOutlineFromVersionDraft(state, nextActiveVersion);
+        }
       })
     ),
   setActiveVersion: (version) =>
@@ -744,6 +776,62 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
         commitNormalizedVersionDraft(state, normalizePlanVersion(version));
       })
     ),
+  relayoutActiveVersion: async () => {
+    const { activeVersion, outline, buildableEnvelope } = get();
+
+    if (!activeVersion || get().isRelayouting) {
+      return;
+    }
+
+    set(
+      produce<EvoProjectStore>((state) => {
+        state.isRelayouting = true;
+        state.relayoutError = null;
+      })
+    );
+
+    try {
+      const response = await fetch("/api/relayout-plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          version: activeVersion,
+          outline,
+          layoutOutline: buildableEnvelope?.valid ? buildableEnvelope.footprint : outline
+        })
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(payload.error ?? `relayout-plan failed with ${response.status}`);
+      }
+
+      const data = (await response.json()) as { version?: PlanVersion };
+
+      if (!data.version) {
+        throw new Error("relayout-plan did not return a version.");
+      }
+
+      set(
+        produce<EvoProjectStore>((state) => {
+          commitNormalizedVersionDraft(state, normalizePlanVersion(data.version!), true);
+          state.relayoutError = null;
+        })
+      );
+    } catch (error) {
+      set(
+        produce<EvoProjectStore>((state) => {
+          state.relayoutError = error instanceof Error ? error.message : "Failed to relayout active version.";
+        })
+      );
+    } finally {
+      set(
+        produce<EvoProjectStore>((state) => {
+          state.isRelayouting = false;
+        })
+      );
+    }
+  },
   generateMep: async () => {
     const activeVersion = get().activeVersion;
 

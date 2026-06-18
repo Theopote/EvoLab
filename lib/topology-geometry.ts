@@ -1,4 +1,6 @@
+import { optimizeLayoutRects } from "@/lib/layout-optimizer";
 import { postProcessPlanVersion } from "@/lib/plan-postprocess";
+import { topologyGraphFromTopology } from "@/lib/topology-graph";
 import type { PlanTopologyVersion, TopologyRoom } from "@/lib/schemas/plan-version-schema";
 import type { Opening, PlanVersion, Point, Room } from "@/lib/project-types";
 
@@ -141,70 +143,6 @@ function classifyRooms(rooms: TopologyRoom[]) {
   return { corridors, service, south, north };
 }
 
-function rectCentroid(rect: Rect): [number, number] {
-  return [rect.x + rect.width / 2, rect.y + rect.height / 2];
-}
-
-function rectsGap(a: Rect, b: Rect) {
-  const dx = Math.max(0, Math.max(a.x - (b.x + b.width), b.x - (a.x + a.width)));
-  const dy = Math.max(0, Math.max(a.y - (b.y + b.height), b.y - (a.y + a.height)));
-  return Math.hypot(dx, dy);
-}
-
-function applySpringNudge(rects: Map<string, Rect>, topology: PlanTopologyVersion, bounds: Bounds, iterations = 6) {
-  const ids = [...rects.keys()];
-
-  for (let iteration = 0; iteration < iterations; iteration += 1) {
-    const forces = new Map<string, { dx: number; dy: number }>();
-    ids.forEach((id) => forces.set(id, { dx: 0, dy: 0 }));
-
-    topology.edges.forEach((edge) => {
-      if (edge.relationship === "separated") {
-        return;
-      }
-
-      const fromRect = rects.get(edge.from);
-      const toRect = rects.get(edge.to);
-      if (!fromRect || !toRect) {
-        return;
-      }
-
-      const gap = rectsGap(fromRect, toRect);
-      if (gap <= 0.5) {
-        return;
-      }
-
-      const [ax, ay] = rectCentroid(fromRect);
-      const [bx, by] = rectCentroid(toRect);
-      const distance = Math.hypot(bx - ax, by - ay) || 1;
-      const strength = Math.min(gap * 0.22, 1.8);
-      const fx = ((bx - ax) / distance) * strength;
-      const fy = ((by - ay) / distance) * strength;
-      const fromForce = forces.get(edge.from)!;
-      const toForce = forces.get(edge.to)!;
-      fromForce.dx += fx;
-      fromForce.dy += fy;
-      toForce.dx -= fx;
-      toForce.dy -= fy;
-    });
-
-    ids.forEach((id) => {
-      const rect = rects.get(id);
-      const force = forces.get(id);
-      if (!rect || !force) {
-        return;
-      }
-
-      rects.set(id, {
-        x: clamp(rect.x + force.dx, 0, bounds.width - rect.width),
-        y: clamp(rect.y + force.dy, 0, bounds.height - rect.height),
-        width: rect.width,
-        height: rect.height
-      });
-    });
-  }
-}
-
 function layoutHorizontal(rooms: TopologyRoom[], bounds: Bounds) {
   const { corridors, service, south, north } = classifyRooms(rooms);
   const rects = new Map<string, Rect>();
@@ -340,7 +278,7 @@ export function topologyToPlanVersion(
   const { localizedSite, bounds } = resolveTopologyLayout(outlineOrOptions);
   const rooms = completeTopologyRooms(topology, bounds);
   const rects = bounds.width >= bounds.height ? layoutHorizontal(rooms, bounds) : layoutVertical(rooms, bounds);
-  applySpringNudge(rects, topology, bounds);
+  optimizeLayoutRects(rects, topology, bounds);
   const corridorIds = rooms.filter((room) => room.type === "corridor").map((room) => room.id);
   const planRooms: Room[] = rooms.map((room) => {
     const rect = rects.get(room.id) ?? { x: 0, y: 0, width: bounds.width, height: bounds.height };
@@ -370,7 +308,8 @@ export function topologyToPlanVersion(
     createdAt: new Date().toISOString(),
     metadata: {
       strategy: topology.strategy,
-      topology: topology.topology
+      topology: topology.topology,
+      topologyGraph: topologyGraphFromTopology(topology)
     },
     outline: localizedSite,
     overallBounds: {

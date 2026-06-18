@@ -1,5 +1,6 @@
 "use client";
 
+import { Loader2, RefreshCcw } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { BottomPanel } from "@/components/bottom-panel";
 import { CopilotConsole } from "@/components/copilot/CopilotConsole";
@@ -50,6 +51,9 @@ export function EvoLabWorkspace() {
     mepError,
     quantities,
     complianceItems,
+    outlineStale,
+    isRelayouting,
+    relayoutError,
     setActiveTab,
     setWorkflowPhase,
     toggleCompareVersion,
@@ -62,6 +66,7 @@ export function EvoLabWorkspace() {
     appendGeneratedVersions,
     setActiveVersion,
     updateActiveVersion,
+    relayoutActiveVersion,
     generateMep,
     openModelForVersion,
     refineVersion,
@@ -84,6 +89,9 @@ export function EvoLabWorkspace() {
       mepError: state.mepError,
       quantities: state.quantities,
       complianceItems: state.complianceItems,
+      outlineStale: state.outlineStale,
+      isRelayouting: state.isRelayouting,
+      relayoutError: state.relayoutError,
       setActiveTab: state.setActiveTab,
       setWorkflowPhase: state.setWorkflowPhase,
       toggleCompareVersion: state.toggleCompareVersion,
@@ -96,6 +104,7 @@ export function EvoLabWorkspace() {
       appendGeneratedVersions: state.appendGeneratedVersions,
       setActiveVersion: state.setActiveVersion,
       updateActiveVersion: state.updateActiveVersion,
+      relayoutActiveVersion: state.relayoutActiveVersion,
       generateMep: state.generateMep,
       openModelForVersion: state.openModelForVersion,
       refineVersion: state.refineVersion,
@@ -363,6 +372,17 @@ export function EvoLabWorkspace() {
                 </p>
               </div>
               <div className="flex items-center gap-2">
+                {outlineStale && activeVersion ? (
+                  <button
+                    className="flex h-8 items-center gap-2 rounded border border-warning/50 bg-warning/10 px-2 text-xs text-warning hover:border-warning"
+                    type="button"
+                    onClick={() => void relayoutActiveVersion()}
+                    disabled={isRelayouting}
+                  >
+                    {isRelayouting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCcw className="h-3.5 w-3.5" />}
+                    Relayout active plan
+                  </button>
+                ) : null}
                 {activeVersion?.levels.length ? (
                   <select
                     className="h-8 rounded border border-line bg-[#0b1118] px-2 text-xs text-slate-100"
@@ -379,8 +399,14 @@ export function EvoLabWorkspace() {
                 <span className="rounded border border-success/30 px-2 py-1 text-xs text-success">
                   {outlineClosed ? "Outline closed" : "Outline open"}
                 </span>
+                {outlineStale ? (
+                  <span className="rounded border border-warning/40 px-2 py-1 text-xs text-warning">Outline changed</span>
+                ) : null}
               </div>
             </div>
+            {relayoutError ? (
+              <div className="mb-3 rounded border border-danger/40 bg-danger/10 p-2 text-xs text-danger">{relayoutError}</div>
+            ) : null}
             <FloorPlan
               levelId={activeLevelId}
               version={activeVersion}

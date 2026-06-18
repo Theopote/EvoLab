@@ -55,6 +55,8 @@ export interface PlanVersionMetadata {
     daylight?: string;
     plumbing?: string;
   };
+  topologyGraph?: TopologyGraph;
+  relayoutedAt?: string;
   validationWarnings?: string[];
   repairs?: string[];
   zoningApplied?: boolean;
@@ -65,6 +67,39 @@ export interface PlanVersionMetadata {
     refinement: boolean;
   };
   refinementSummary?: string;
+}
+
+export interface TopologyGraphRoom {
+  id: string;
+  name: string;
+  type: RoomType;
+  zone: FunctionZone;
+  targetAreaSqm: number;
+  ceilingHeight?: number;
+  needsDaylight?: boolean;
+  needsPlumbing?: boolean;
+  preferredEdge?: "north" | "south" | "east" | "west" | "interior";
+  adjacencyIds?: string[];
+}
+
+export interface TopologyGraphEdge {
+  from: string;
+  to: string;
+  relationship: "direct" | "near" | "separated";
+}
+
+export interface TopologyGraph {
+  id: string;
+  label: string;
+  strategy: string;
+  topology: NonNullable<PlanVersionMetadata["topology"]> & {
+    circulation: string;
+    core: string;
+    daylight: string;
+    plumbing: string;
+  };
+  rooms: TopologyGraphRoom[];
+  edges: TopologyGraphEdge[];
 }
 
 export interface Room {

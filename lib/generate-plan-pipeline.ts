@@ -17,6 +17,7 @@ import {
   type PlanTopologyVersion
 } from "@/lib/schemas/plan-version-schema";
 import { topologiesToPlanVersions, type TopologyLayoutOptions } from "@/lib/topology-geometry";
+import { topologyGraphFromTopology } from "@/lib/topology-graph";
 import type { PlanVersion } from "@/lib/project-types";
 
 export interface GeneratePlanPipelineMeta {
@@ -318,15 +319,23 @@ export async function runGeneratePlanPipeline(body: GeneratePlanRequest): Promis
   }
 
   return {
-    versions: finalValidation.versions.map((version) => ({
-      ...version,
-      metadata: {
-        ...version.metadata,
-        zoningApplied: Boolean(constraints.envelope),
-        envelopeCompliant: true,
-        pipelinePhases: meta.phases
-      }
-    })),
+    versions: finalValidation.versions.map((version, index) => {
+      const pair = pairs.find((item) => item.version.id === version.id) ?? pairs[index];
+      const topologyGraph = pair
+        ? topologyGraphFromTopology(pair.topology)
+        : version.metadata?.topologyGraph;
+
+      return {
+        ...version,
+        metadata: {
+          ...version.metadata,
+          topologyGraph,
+          zoningApplied: Boolean(constraints.envelope),
+          envelopeCompliant: true,
+          pipelinePhases: meta.phases
+        }
+      };
+    }),
     meta
   };
 }
