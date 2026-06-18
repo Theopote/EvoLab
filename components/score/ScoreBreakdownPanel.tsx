@@ -4,12 +4,13 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { PlanVersion } from "@/lib/project-types";
 import { computeTotalScore } from "@/lib/rules/version-total-score";
-import { resolveProgramGoals } from "@/lib/rules/program-goals";
+import { resolveProgramGoalsFromContext } from "@/lib/rules/program-goals";
 import type { ProgramModel } from "@/lib/building-domain";
 
 interface ScoreBreakdownPanelProps {
   version: PlanVersion;
   program?: ProgramModel;
+  projectType?: string;
   className?: string;
   compact?: boolean;
 }
@@ -20,18 +21,23 @@ const impactTone = {
   neutral: "text-muted"
 } as const;
 
-export function ScoreBreakdownPanel({ version, program, className = "", compact = false }: ScoreBreakdownPanelProps) {
+export function ScoreBreakdownPanel({ version, program, projectType, className = "", compact = false }: ScoreBreakdownPanelProps) {
   const [expandedMetricId, setExpandedMetricId] = useState<string | null>(null);
   const breakdown = version.scores?.breakdown;
   const totalScore = useMemo(
-    () => (breakdown?.totalScore ?? computeTotalScore(version.scores ?? {
-      areaEfficiency: 0,
-      circulationScore: 0,
-      daylightScore: 0,
-      mepAlignmentScore: 0,
-      riskCount: 0
-    }, resolveProgramGoals(program))),
-    [breakdown?.totalScore, program, version.scores]
+    () =>
+      breakdown?.totalScore ??
+      computeTotalScore(
+        version.scores ?? {
+          areaEfficiency: 0,
+          circulationScore: 0,
+          daylightScore: 0,
+          mepAlignmentScore: 0,
+          riskCount: 0
+        },
+        resolveProgramGoalsFromContext({ program, projectType })
+      ),
+    [breakdown?.totalScore, program, projectType, version.scores]
   );
 
   if (!breakdown) {

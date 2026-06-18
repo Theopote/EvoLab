@@ -21,8 +21,7 @@ import {
 } from "@/lib/building-domain";
 import { normalizePlanVersion } from "@/lib/architecture-model";
 import { calculateQuantities } from "@/lib/quantity-engine";
-import { resolveProgramGoals } from "@/lib/rules/program-goals";
-import { resolveRulePack } from "@/lib/rules/rule-pack";
+import { createDefaultScoringConfig, normalizeScoringConfig, resolveProgramGoalsFromDomain, resolveRulePackFromDomain } from "@/lib/rules/scoring-config";
 import { computeTotalScore } from "@/lib/rules/version-total-score";
 import type { DesignBrief, PlanVersion, Point, ProjectData, Room, TopologyGraph } from "@/lib/project-types";
 import type { SiteContext, ZoningConstraints } from "@/lib/site-types";
@@ -433,6 +432,7 @@ export function createDefaultProjectDomain(input: ProjectDomainSyncInput): Proje
     }),
     program: programFromBrief(input.brief, topologyGraph),
     codeContext: defaultHealthcareCodeContext,
+    scoringConfig: createDefaultScoringConfig(input.projectType),
     doorWindowFamilies: defaultDoorWindowFamilies,
     schedules: input.activeVersion ? [buildScheduleBundle(input.activeVersion)] : [],
     changeSets: [],
@@ -484,6 +484,7 @@ export function normalizeProjectDomain(domain?: ProjectDomain, input?: ProjectDo
     return {
       ...domain,
       codeContext: domain.codeContext ?? defaultHealthcareCodeContext,
+      scoringConfig: normalizeScoringConfig(domain.scoringConfig, domain.program.projectType),
       doorWindowFamilies: domain.doorWindowFamilies?.length ? domain.doorWindowFamilies : defaultDoorWindowFamilies,
       schedules: domain.schedules ?? [],
       changeSets: domain.changeSets ?? [],
@@ -527,14 +528,11 @@ export function getCodeContext(domain?: ProjectDomain): CodeContext {
 }
 
 export function getRulePack(domain?: ProjectDomain, projectType?: string) {
-  return resolveRulePack({
-    codeContext: domain?.codeContext,
-    projectType: projectType ?? domain?.program.projectType
-  });
+  return resolveRulePackFromDomain(domain, projectType);
 }
 
-export function getProgramGoals(domain?: ProjectDomain) {
-  return resolveProgramGoals(domain?.program);
+export function getProgramGoals(domain?: ProjectDomain, projectType?: string) {
+  return resolveProgramGoalsFromDomain(domain, projectType);
 }
 
 export function scorePlanVersion(version: PlanVersion, domain?: ProjectDomain) {

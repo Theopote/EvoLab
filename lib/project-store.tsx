@@ -4,7 +4,7 @@ import { produce } from "immer";
 import { type ReactNode } from "react";
 import { create } from "zustand";
 import { normalizePlanVersion, normalizeProjectVersions } from "@/lib/architecture-model";
-import type { ScheduleBundle, StoredCopilotProposal } from "@/lib/building-domain";
+import type { ScheduleBundle, StoredCopilotProposal, ScoringConfig } from "@/lib/building-domain";
 import {
   addCopilotProposalComment as addCopilotProposalCommentInDomain,
   appendCopilotProposal,
@@ -20,11 +20,14 @@ import {
   createChangeSet,
   getActiveSchedule,
   getCodeContext,
+  getRulePack,
   pendingChangeSets,
   rejectChangeSetInDomain,
   syncProjectDomain
 } from "@/lib/project-domain";
 import { calculateQuantities, checkCompliance, type ComplianceItem, type QuantityResult } from "@/lib/quantity-engine";
+import { rescoreVersions, scoringInputFromDomain } from "@/lib/rules/resolve-version-scoring";
+import { createDefaultScoringConfig, normalizeScoringConfig } from "@/lib/rules/scoring-config";
 import { computeBuildableEnvelope } from "@/lib/buildable-envelope";
 import type { BuildableEnvelope, EnvironmentSurrogate, SiteContext, ZoningConstraints } from "@/lib/site-types";
 import { computeEnvironmentSurrogate } from "@/lib/environment-surrogate";
@@ -119,6 +122,8 @@ interface EvoProjectStore {
   setShowEnvironmentOverlay: (visible: boolean) => void;
   refreshEnvironmentSurrogate: () => void;
   updateBrief: (brief: DesignBrief) => void;
+  updateScoringConfig: (patch: Partial<ScoringConfig>) => void;
+  resetScoringConfig: () => void;
   setWorkflowPhase: (phase: WorkflowPhase) => void;
   toggleCompareVersion: (versionId: string) => void;
   setActiveAnalysisLayers: (layers: AnalysisLayerId[]) => void;
@@ -303,10 +308,21 @@ function isElementLocked(state: EvoProjectStore, elementId: string) {
   return state.project.domain.lockedElementIds.includes(elementId);
 }
 
+function rescoreProjectVersions(state: EvoProjectStore) {
+  const scoringInput = scoringInputFromDomain(state.project.domain, state.project.projectType);
+  state.project.versions = rescoreVersions(state.project.versions, scoringInput);
+  const activeVersion = getActiveVersion(state.project);
+  state.activeVersion = activeVersion;
+  if (activeVersion && state.project.activeVersionId === activeVersion.id) {
+    state.project.activeVersionId = activeVersion.id;
+  }
+}
+
 function refreshDerivedDraft(state: EvoProjectStore) {
   const activeVersion = getActiveVersion(state.project);
   const activeLevel = getLevel(activeVersion, state.activeLevelId);
   const codeContext = getCodeContext(state.project.domain);
+  const rulePack = getRulePack(state.project.domain, state.project.projectType);
 
   state.activeVersion = activeVersion;
   state.activeLevelId = activeLevel?.id;
@@ -316,7 +332,7 @@ function refreshDerivedDraft(state: EvoProjectStore) {
     activeVersion && activeLevel
       ? calculateQuantities(activeVersion, { levelId: activeLevel.id, scope: "level" })
       : undefined;
-  state.complianceItems = activeVersion ? checkCompliance(activeVersion, codeContext) : [];
+  state.complianceItems = activeVersion ? checkCompliance(activeVersion, codeContext, rulePack) : [];
   state.selectedRoom = (activeLevel?.rooms.length ? activeLevel.rooms : activeVersion?.rooms)?.find(
     (room) => room.id === state.selectedRoomId
   );
@@ -352,7 +368,7 @@ function refreshQuantitiesDraft(state: EvoProjectStore) {
     state.activeVersion && activeLevel
       ? calculateQuantities(state.activeVersion, { levelId: activeLevel.id, scope: "level" })
       : undefined;
-  state.complianceItems = state.activeVersion ? checkCompliance(state.activeVersion, codeContext) : [];
+  state.complianceItems = state.activeVersion ? checkCompliance(state.activeVersion, codeContext, getRulePack(state.project.domain, state.project.projectType)) : [];
   refreshDomainDraft(state);
 }
 
@@ -449,6 +465,8 @@ function createInitialState(): Omit<
   | "setShowEnvironmentOverlay"
   | "refreshEnvironmentSurrogate"
   | "updateBrief"
+  | "updateScoringConfig"
+  | "resetScoringConfig"
   | "setWorkflowPhase"
   | "toggleCompareVersion"
   | "setActiveAnalysisLayers"
@@ -522,7 +540,11 @@ function createInitialState(): Omit<
         ? calculateQuantities(activeVersion, { levelId: activeLevel.id, scope: "level" })
         : undefined,
     complianceItems: activeVersion
-      ? checkCompliance(activeVersion, getCodeContext(initialProjectData.domain))
+      ? checkCompliance(
+          activeVersion,
+          getCodeContext(initialProjectData.domain),
+          getRulePack(initialProjectData.domain, initialProjectData.projectType)
+        )
       : [],
     activeSchedule: getActiveSchedule(initialProjectData.domain, activeVersion?.id),
     outlineStale: false,
@@ -673,6 +695,37 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
       produce<EvoProjectStore>((state) => {
         state.brief = brief;
         refreshDomainDraft(state);
+      })
+    ),
+  updateScoringConfig: (patch) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        state.project.domain.scoringConfig = normalizeScoringConfig(
+          {
+            ...state.project.domain.scoringConfig,
+            ...patch,
+            scoringThresholds: patch.scoringThresholds
+              ? { ...state.project.domain.scoringConfig?.scoringThresholds, ...patch.scoringThresholds }
+              : state.project.domain.scoringConfig?.scoringThresholds,
+            goalWeights: patch.goalWeights
+              ? { ...state.project.domain.scoringConfig?.goalWeights, ...patch.goalWeights }
+              : state.project.domain.scoringConfig?.goalWeights,
+            ruleThresholds: patch.ruleThresholds
+              ? { ...state.project.domain.scoringConfig?.ruleThresholds, ...patch.ruleThresholds }
+              : state.project.domain.scoringConfig?.ruleThresholds
+          },
+          state.project.projectType
+        );
+        rescoreProjectVersions(state);
+        refreshDerivedDraft(state);
+      })
+    ),
+  resetScoringConfig: () =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        state.project.domain.scoringConfig = createDefaultScoringConfig(state.project.projectType);
+        rescoreProjectVersions(state);
+        refreshDerivedDraft(state);
       })
     ),
   setWorkflowPhase: (phase) =>

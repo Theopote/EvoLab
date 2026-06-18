@@ -3,6 +3,7 @@ import { defaultHealthcareCodeContext } from "@/lib/building-domain";
 import type { FunctionZone, OpeningElement, PlanVersion, Point, Room, RoomType, Wall } from "@/lib/project-types";
 import { computeEgressPathMetrics, computeWetCorePathMetrics } from "@/lib/rules/path-metrics";
 import { resolveRulePack, ruleBasis, ruleThreshold } from "@/lib/rules/rule-pack";
+import type { RulePack } from "@/lib/rules/types";
 
 export interface QuantityRow {
   id: string;
@@ -336,8 +337,7 @@ export function calculateQuantitiesByLevel(version: PlanVersion): Record<string,
   }, {});
 }
 
-function checkComplianceForLevel(version: PlanVersion, levelId: string, codeContext: CodeContext): ComplianceItem[] {
-  const rulePack = resolveRulePack({ codeContext });
+function checkComplianceForLevel(version: PlanVersion, levelId: string, rulePack: RulePack): ComplianceItem[] {
   const level = activeLevel(version, levelId);
   const rooms = level?.rooms ?? [];
   const openings = level?.openings ?? [];
@@ -453,13 +453,17 @@ function checkComplianceForLevel(version: PlanVersion, levelId: string, codeCont
   ];
 }
 
-export function checkCompliance(version: PlanVersion, codeContext: CodeContext = defaultHealthcareCodeContext): ComplianceItem[] {
+export function checkCompliance(
+  version: PlanVersion,
+  codeContext: CodeContext = defaultHealthcareCodeContext,
+  rulePack: RulePack = resolveRulePack({ codeContext })
+): ComplianceItem[] {
   if (version.levels.length <= 1) {
     const levelId = version.levels[0]?.id ?? "level-01";
-    return checkComplianceForLevel(version, levelId, codeContext);
+    return checkComplianceForLevel(version, levelId, rulePack);
   }
 
-  const perLevel = version.levels.flatMap((level) => checkComplianceForLevel(version, level.id, codeContext));
+  const perLevel = version.levels.flatMap((level) => checkComplianceForLevel(version, level.id, rulePack));
   const rollup = new Map<string, ComplianceItem>();
 
   perLevel.forEach((item) => {

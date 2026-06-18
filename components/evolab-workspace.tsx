@@ -286,6 +286,7 @@ export function EvoLabWorkspace() {
             versions={project.versions}
             activeVersionId={project.activeVersionId}
             compareLevelId={compareLevelId}
+            domain={project.domain}
             program={project.domain.program}
             projectType={project.projectType}
             orientationDeg={project.domain.site.orientationDeg}

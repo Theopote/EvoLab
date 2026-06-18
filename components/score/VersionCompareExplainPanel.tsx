@@ -3,12 +3,15 @@
 import type { PlanVersion } from "@/lib/project-types";
 import type { ProgramModel } from "@/lib/building-domain";
 import { compareVersionScores, computeTotalScore } from "@/lib/rules/version-total-score";
-import { resolveProgramGoals } from "@/lib/rules/program-goals";
+import { resolveProgramGoalsFromContext } from "@/lib/rules/program-goals";
+import type { ProgramGoals } from "@/lib/rules/types";
 
 interface VersionCompareExplainPanelProps {
   left: PlanVersion;
   right: PlanVersion;
   program?: ProgramModel;
+  projectType?: string;
+  programGoals?: ProgramGoals;
   leftLabel?: string;
   rightLabel?: string;
 }
@@ -25,10 +28,12 @@ export function VersionCompareExplainPanel({
   left,
   right,
   program,
+  projectType,
+  programGoals,
   leftLabel,
   rightLabel
 }: VersionCompareExplainPanelProps) {
-  const goals = resolveProgramGoals(program);
+  const goals = programGoals ?? resolveProgramGoalsFromContext({ program, projectType });
   const leftScores = left.scores ?? emptyScores;
   const rightScores = right.scores ?? emptyScores;
   const leftTotal = computeTotalScore(leftScores, goals);

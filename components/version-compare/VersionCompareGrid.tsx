@@ -5,10 +5,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { FloorPlan } from "@/components/floor-plan";
 import { VersionCompareExplainPanel } from "@/components/score/VersionCompareExplainPanel";
 import { listComparableLevelGroups, listComparableLevels } from "@/lib/multi-floor";
-import type { ProgramModel } from "@/lib/building-domain";
+import type { ProgramModel, ProjectDomain } from "@/lib/building-domain";
+import { getProgramGoals } from "@/lib/project-domain";
 import { calculateQuantities } from "@/lib/quantity-engine";
 import type { PlanVersion } from "@/lib/project-types";
-import { ensureVersionScores } from "@/lib/rules/resolve-version-scoring";
+import { ensureVersionScores, scoringInputFromDomain } from "@/lib/rules/resolve-version-scoring";
 import {
   compareVersionsAtLevel,
   compareVersionsAtLevelIndex,
@@ -25,6 +26,7 @@ interface VersionCompareGridProps {
   versions: PlanVersion[];
   activeVersionId: string;
   compareLevelId?: string;
+  domain?: ProjectDomain;
   program?: ProgramModel;
   projectType?: string;
   orientationDeg?: number;
@@ -129,6 +131,7 @@ export function VersionCompareGrid({
   versions,
   activeVersionId,
   compareLevelId,
+  domain,
   program,
   projectType,
   orientationDeg,
@@ -165,12 +168,15 @@ export function VersionCompareGrid({
     comparedVersions.length >= 2
   );
   const scoringInput = useMemo(
-    () => ({
-      program,
-      projectType,
-      orientationDeg
-    }),
-    [orientationDeg, program, projectType]
+    () =>
+      domain
+        ? scoringInputFromDomain(domain, projectType)
+        : {
+            program,
+            projectType,
+            orientationDeg
+          },
+    [domain, orientationDeg, program, projectType]
   );
   const scoredComparedVersions = useMemo(
     () => comparedVersions.map((version) => ensureVersionScores(version, scoringInput)),
@@ -353,6 +359,8 @@ export function VersionCompareGrid({
                 left={scoredComparedVersions[0]!}
                 right={scoredComparedVersions[1]!}
                 program={program}
+                projectType={projectType}
+                programGoals={domain ? getProgramGoals(domain, projectType) : undefined}
               />
             ) : null}
 

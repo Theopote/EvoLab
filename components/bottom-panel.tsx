@@ -3,11 +3,14 @@
 import { AlertTriangle, CheckCircle2, FileStack, Layers3, Ruler, ScrollText } from "lucide-react";
 import { useMemo, useState } from "react";
 import { ScoreBreakdownPanel } from "@/components/score/ScoreBreakdownPanel";
+import { ScoringConfigPanel } from "@/components/score/ScoringConfigPanel";
+import { useEvoProject } from "@/lib/project-store";
 import type { ComplianceItem, QuantityResult } from "@/lib/quantity-engine";
 import type { PlanVersion, ProjectData } from "@/lib/project-types";
-import { ensureVersionScores, scoringInputFromDomain } from "@/lib/rules/resolve-version-scoring";
+import { scoringInputFromDomain } from "@/lib/rules/resolve-version-scoring";
 
 type BottomPanelTab = "tasks" | "versions" | "scores" | "quantities" | "warnings" | "sheets";
+type ScoresSubTab = "breakdown" | "configure";
 
 interface BottomPanelProps {
   project: ProjectData;
@@ -34,12 +37,12 @@ export function BottomPanel({
   onSelectVersion
 }: BottomPanelProps) {
   const [activeTab, setActiveTab] = useState<BottomPanelTab>("tasks");
+  const [scoresSubTab, setScoresSubTab] = useState<ScoresSubTab>("breakdown");
+  const updateScoringConfig = useEvoProject((state) => state.updateScoringConfig);
+  const resetScoringConfig = useEvoProject((state) => state.resetScoringConfig);
   const warningCount = complianceItems.filter((item) => item.status === "warning").length;
   const scoringInput = useMemo(() => scoringInputFromDomain(project.domain, project.projectType), [project.domain, project.projectType]);
-  const scoredActiveVersion = useMemo(
-    () => (activeVersion ? ensureVersionScores(activeVersion, scoringInput) : undefined),
-    [activeVersion, scoringInput]
-  );
+  const scoredActiveVersion = useMemo(() => activeVersion, [activeVersion, scoringInput]);
   const taskRows = useMemo(
     () => [
       {
@@ -98,7 +101,7 @@ export function BottomPanel({
         </div>
       </div>
 
-      <div className={`overflow-auto p-3 ${activeTab === "scores" ? "h-72" : "h-44"}`}>
+      <div className={`overflow-auto p-3 ${activeTab === "scores" ? "h-[22rem]" : "h-44"}`}>
         {activeTab === "tasks" ? (
           <div className="grid gap-2 lg:grid-cols-5">
             {taskRows.map((task) => (
@@ -152,13 +155,48 @@ export function BottomPanel({
         ) : null}
 
         {activeTab === "scores" ? (
-          scoredActiveVersion ? (
-            <ScoreBreakdownPanel version={scoredActiveVersion} program={project.domain.program} />
-          ) : (
-            <div className="rounded border border-line bg-panel/70 p-3 text-sm text-muted">
-              Select an active version to inspect score evidence.
+          <div className="space-y-3">
+            <div className="flex items-center gap-1">
+              {[
+                { id: "breakdown" as const, label: "Breakdown" },
+                { id: "configure" as const, label: "Rules & weights" }
+              ].map((tab) => (
+                <button
+                  className={`h-7 rounded px-3 text-xs ${
+                    scoresSubTab === tab.id
+                      ? "border border-accent/40 bg-accent/10 text-accent"
+                      : "border border-transparent text-muted hover:text-slate-100"
+                  }`}
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setScoresSubTab(tab.id)}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
-          )
+
+            {scoresSubTab === "breakdown" ? (
+              scoredActiveVersion ? (
+                <ScoreBreakdownPanel
+                  version={scoredActiveVersion}
+                  program={project.domain.program}
+                  projectType={project.projectType}
+                />
+              ) : (
+                <div className="rounded border border-line bg-panel/70 p-3 text-sm text-muted">
+                  Select an active version to inspect score evidence.
+                </div>
+              )
+            ) : (
+              <ScoringConfigPanel
+                domain={project.domain}
+                projectType={project.projectType}
+                onChange={updateScoringConfig}
+                onReset={resetScoringConfig}
+              />
+            )}
+          </div>
         ) : null}
 
         {activeTab === "quantities" ? (

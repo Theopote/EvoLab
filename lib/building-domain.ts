@@ -41,6 +41,40 @@ export interface CodeContext {
   rules: CodeRule[];
 }
 
+export type RulePackPresetId = "healthcare" | "office" | "residential";
+export type ProgramGoalsPresetId = "healthcare" | "office" | "residential" | "balanced";
+
+export interface ScoringConfigThresholds {
+  circulationTargetRatio?: number;
+  circulationTolerance?: number;
+  plumbingMaxDistanceM?: number;
+  egressMaxDistanceM?: number;
+  daylightMaxDepthM?: number;
+  areaEfficiencyFactor?: number;
+}
+
+export interface ScoringConfigGoalWeights {
+  areaEfficiency?: number;
+  circulation?: number;
+  daylight?: number;
+  wetCore?: number;
+  egress?: number;
+  structureFit?: number;
+  riskPenalty?: number;
+}
+
+export interface ScoringConfig {
+  rulePackPreset?: RulePackPresetId;
+  programGoalsPreset?: ProgramGoalsPresetId;
+  scoringThresholds?: ScoringConfigThresholds;
+  goalWeights?: ScoringConfigGoalWeights;
+  ruleThresholds?: {
+    "corridor-width"?: number;
+    "egress-distance"?: number;
+    "stair-count"?: number;
+  };
+}
+
 export interface ProgramAdjacencyRule {
   spaceId: string;
   targetSpaceId?: string;
@@ -278,6 +312,7 @@ export interface ProjectDomain {
   site: SiteModel;
   program: ProgramModel;
   codeContext: CodeContext;
+  scoringConfig?: ScoringConfig;
   storeyStack?: StoreyStack;
   structuralSystem?: StructuralSystem;
   facadeEnvelope?: FacadeEnvelope;

@@ -8,6 +8,7 @@ import {
 import { createSetbackBoundary } from "@/lib/polygon-offset";
 import { computeWetCorePathMetrics } from "@/lib/rules/path-metrics";
 import { resolveRulePack } from "@/lib/rules/rule-pack";
+import type { RulePack } from "@/lib/rules/types";
 import { extractWallsFromRooms } from "@/lib/wall-extractor";
 
 export type PlanValidationSeverity = "warning" | "error";
@@ -28,6 +29,7 @@ export interface PlanValidationOptions {
   setbackDistance?: number;
   codeContext?: CodeContext;
   projectType?: string;
+  rulePack?: RulePack;
 }
 
 export function distance(a: Point, b: Point) {
@@ -171,7 +173,7 @@ export function validatePlanVersion(
       }
     });
 
-  const rulePack = resolveRulePack({ codeContext: options.codeContext, projectType: options.projectType });
+  const rulePack = options.rulePack ?? resolveRulePack({ codeContext: options.codeContext, projectType: options.projectType });
   const plumbingMaxDistance = rulePack.scoring.plumbingMaxDistanceM;
   const wetCoreMetrics = computeWetCorePathMetrics(version);
   const farWetRooms = wetCoreMetrics.perRoom.filter((item) => item.distance > plumbingMaxDistance);
