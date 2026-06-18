@@ -129,9 +129,15 @@ export const ModifyPlanToolInputSchema = z.object({
   findings: z.array(CopilotFindingSchema).default([])
 });
 
+export const RefinePlanGeometryToolInputSchema = z.object({
+  version: PlanVersionDraftSchema,
+  refinementSummary: z.string().optional()
+});
+
 export type GeneratePlanToolInput = z.infer<typeof GeneratePlanToolInputSchema>;
 export type GeneratePlanTopologyToolInput = z.infer<typeof GeneratePlanTopologyToolInputSchema>;
 export type PlanTopologyVersion = z.infer<typeof PlanTopologyVersionSchema>;
 export type TopologyRoom = z.infer<typeof TopologyRoomSchema>;
 export type AnalyzePlanToolInput = z.infer<typeof AnalyzePlanToolInputSchema>;
 export type ModifyPlanToolInput = z.infer<typeof ModifyPlanToolInputSchema>;
+export type RefinePlanGeometryToolInput = z.infer<typeof RefinePlanGeometryToolInputSchema>;

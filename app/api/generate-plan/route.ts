@@ -1,89 +1,57 @@
 import { NextResponse } from "next/server";
-import { requestAnthropicTool } from "@/lib/anthropic-tool";
+import { runGeneratePlanPipeline } from "@/lib/generate-plan-pipeline";
 import { createMockPlanVersions } from "@/lib/mock-api";
-import { validatePlanVersion } from "@/lib/plan-validation";
-import { generatePlanTopologyPrompt } from "@/lib/prompts/generatePlanTopologyPrompt";
-import { GeneratePlanToolInputSchema, GeneratePlanTopologyToolInputSchema } from "@/lib/schemas/plan-version-schema";
-import { topologiesToPlanVersions } from "@/lib/topology-geometry";
-import type { PlanVersion, Point } from "@/lib/project-types";
-
-interface GeneratePlanRequest {
-  outline?: Point[];
-  brief?: string;
-  projectType?: string;
-}
+import { GeneratePlanRequestSchema } from "@/lib/schemas/generate-plan-request-schema";
+import type { PlanVersion } from "@/lib/project-types";
 
 interface GeneratePlanResponse {
   versions: PlanVersion[];
-}
-
-function versionErrorSummary(versions: PlanVersion[]) {
-  return versions.flatMap((version) =>
-    validatePlanVersion(version).issues
-      .filter((issue) => issue.severity === "error")
-      .map((issue) => ({
-        versionId: version.id,
-        issue: issue.id,
-        message: issue.message,
-        roomIds: issue.roomIds
-      }))
-  );
-}
-
-async function requestTopologyPlan(body: GeneratePlanRequest, correction?: unknown) {
-  return requestAnthropicTool({
-    system: generatePlanTopologyPrompt,
-    input: {
-      outline: body.outline,
-      brief: body.brief,
-      projectType: body.projectType,
-      correction
-    },
-    toolName: "generate_plan_topology",
-    toolDescription: "Return EvoLab architectural room topology, target areas, and adjacency graph without final geometry.",
-    schema: GeneratePlanTopologyToolInputSchema,
-    maxTokens: 8192,
-    maxValidationRetries: 1
-  });
+  pipeline?: {
+    phases: {
+      topology: boolean;
+      geometry: boolean;
+      refinement: boolean;
+    };
+    refinedCount: number;
+    warnings: string[];
+  };
+  fallback?: boolean;
+  warning?: string;
 }
 
 export async function POST(request: Request) {
-  const body = (await request.json().catch(() => ({}))) as GeneratePlanRequest;
+  const rawBody = await request.json().catch(() => ({}));
+  const parsedRequest = GeneratePlanRequestSchema.safeParse(rawBody);
+
+  if (!parsedRequest.success) {
+    return NextResponse.json(
+      {
+        error: "Invalid generate-plan request.",
+        details: parsedRequest.error.message
+      },
+      { status: 400 }
+    );
+  }
+
+  const body = parsedRequest.data;
   const fallback: GeneratePlanResponse = {
     versions: createMockPlanVersions(body.outline, body.projectType)
   };
 
   try {
-    let topologyData = await requestTopologyPlan(body);
-    let versions = topologiesToPlanVersions(topologyData.versions, body.outline);
-    let geometryErrors = versionErrorSummary(versions);
+    const result = await runGeneratePlanPipeline(body);
 
-    if (geometryErrors.length > 0) {
-      topologyData = await requestTopologyPlan(body, {
-        reason: "The deterministic geometry generated from the previous topology failed spatial validation.",
-        errors: geometryErrors,
-        instruction: "Return corrected topology only. Prefer fewer rooms, connected corridors, and compact core/service adjacency."
-      });
-      versions = topologiesToPlanVersions(topologyData.versions, body.outline);
-      geometryErrors = versionErrorSummary(versions);
-    }
-
-    if (versions.length === 0 || geometryErrors.length > 0) {
-      return NextResponse.json(fallback);
-    }
-
-    const parsed = GeneratePlanToolInputSchema.safeParse({ versions });
-
-    if (!parsed.success) {
+    if (result.versions.length === 0) {
       return NextResponse.json({
         ...fallback,
         fallback: true,
-        warning: parsed.error.message
+        warning: result.meta.warnings.join(" ") || "Pipeline produced no valid plan versions."
       });
     }
 
     return NextResponse.json({
-      versions
+      versions: result.versions,
+      pipeline: result.meta
     });
   } catch (error) {
     return NextResponse.json({

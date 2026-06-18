@@ -13,9 +13,10 @@ Planning responsibility:
 - Keep wet rooms, shafts, and equipment rooms near each other.
 
 The server will:
-1. Fit the topology into the outline using deterministic geometry.
-2. Validate all geometry with Zod and spatial validation.
-3. Ask for a corrected topology if validation fails.
+1. Fit the topology into the outline using deterministic treemap layout and spring-force adjacency nudging.
+2. Run AI geometry refinement to fix qualitative spatial issues.
+3. Validate all geometry with Zod and spatial validation.
+4. Ask for a corrected topology if deterministic geometry still fails.
 
 Return three distinct options when possible. Do not include chain-of-thought, markdown, or explanatory text outside tool input.
 `;
