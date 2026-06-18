@@ -24,6 +24,8 @@ import type {
   Wall,
   WorkspaceTab
 } from "@/lib/project-types";
+import type { WorkflowPhase } from "@/lib/workflow-phases";
+import { phaseForTab, resolvePhaseTab } from "@/lib/workflow-phases";
 
 const defaultOutline: Point[] = [
   [0, 0],
@@ -69,6 +71,8 @@ interface EvoProjectStore {
   showSiteContextLayer: boolean;
   showEnvironmentOverlay: boolean;
   brief: DesignBrief;
+  workflowPhase: WorkflowPhase;
+  compareVersionIds: string[];
   activeTab: WorkspaceTab;
   activeAnalysisLayers: AnalysisLayerId[];
   activeMepLayers: MepLayerId[];
@@ -87,6 +91,8 @@ interface EvoProjectStore {
   setShowEnvironmentOverlay: (visible: boolean) => void;
   refreshEnvironmentSurrogate: () => void;
   updateBrief: (brief: DesignBrief) => void;
+  setWorkflowPhase: (phase: WorkflowPhase) => void;
+  toggleCompareVersion: (versionId: string) => void;
   setActiveAnalysisLayers: (layers: AnalysisLayerId[]) => void;
   setActiveMepLayers: (layers: MepLayerId[]) => void;
   setActiveLevel: (levelId: string) => void;
@@ -276,6 +282,8 @@ function createInitialState(): Omit<
   | "setShowEnvironmentOverlay"
   | "refreshEnvironmentSurrogate"
   | "updateBrief"
+  | "setWorkflowPhase"
+  | "toggleCompareVersion"
   | "setActiveAnalysisLayers"
   | "setActiveMepLayers"
   | "setActiveLevel"
@@ -324,6 +332,8 @@ function createInitialState(): Omit<
     showSiteContextLayer: true,
     showEnvironmentOverlay: true,
     brief: defaultBrief,
+    workflowPhase: "brief_site",
+    compareVersionIds: [],
     activeTab: "Plan",
     activeAnalysisLayers: ["function_zones", "patient_flow", "egress_path", "daylight"],
     activeMepLayers: ["hvac", "plumbing_supply", "plumbing_drain", "electrical", "shafts", "equipment_rooms"],
@@ -340,6 +350,15 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
     set(
       produce<EvoProjectStore>((state) => {
         state.activeTab = tab;
+
+        if (tab === "Plan") {
+          if (state.workflowPhase !== "brief_site" && state.workflowPhase !== "scheme") {
+            state.workflowPhase = "brief_site";
+          }
+          return;
+        }
+
+        state.workflowPhase = phaseForTab(tab);
       })
     ),
   setOutline: (outline) =>
@@ -460,6 +479,24 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
     set(
       produce<EvoProjectStore>((state) => {
         state.brief = brief;
+      })
+    ),
+  setWorkflowPhase: (phase) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        state.workflowPhase = phase;
+        state.activeTab = resolvePhaseTab(phase, state.activeTab);
+      })
+    ),
+  toggleCompareVersion: (versionId) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        if (state.compareVersionIds.includes(versionId)) {
+          state.compareVersionIds = state.compareVersionIds.filter((id) => id !== versionId);
+          return;
+        }
+
+        state.compareVersionIds = [...state.compareVersionIds, versionId].slice(-2);
       })
     ),
   setActiveAnalysisLayers: (layers) =>

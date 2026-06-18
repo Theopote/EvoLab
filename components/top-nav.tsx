@@ -1,25 +1,14 @@
 import { Cloud, Share2, Sparkles } from "lucide-react";
-import { workspaceTabs, type ProjectData, type WorkspaceTab } from "@/lib/project-types";
-
-export const workspaceTabLabels: Record<WorkspaceTab, string> = {
-  Plan: "Plan",
-  Massing: "Massing",
-  Model: "Model",
-  Analysis: "Analysis",
-  Systems: "Systems",
-  Quantity: "Quantity",
-  Render: "Render",
-  Sheets: "Sheets",
-  Export: "Export"
-};
+import { workflowPhaseDefinitions, type WorkflowPhase } from "@/lib/workflow-phases";
+import type { ProjectData } from "@/lib/project-types";
 
 interface TopNavProps {
   project: ProjectData;
-  activeTab?: WorkspaceTab;
-  onTabChange?: (tab: WorkspaceTab) => void;
+  workflowPhase: WorkflowPhase;
+  onPhaseChange: (phase: WorkflowPhase) => void;
 }
 
-export function TopNav({ project, activeTab = "Plan", onTabChange }: TopNavProps) {
+export function TopNav({ project, workflowPhase, onPhaseChange }: TopNavProps) {
   return (
     <header className="flex h-14 items-center border-b border-line bg-[#0b1118] px-4">
       <div className="mr-6 flex items-center gap-2">
@@ -28,24 +17,23 @@ export function TopNav({ project, activeTab = "Plan", onTabChange }: TopNavProps
         </div>
         <div>
           <div className="text-sm font-semibold leading-none text-white">EvoLab</div>
-          <div className="mt-1 text-[10px] uppercase tracking-[0.2em] text-muted">
-            AI BIM Workspace
-          </div>
+          <div className="mt-1 text-[10px] uppercase tracking-[0.2em] text-muted">Workflow Workspace</div>
         </div>
       </div>
       <nav className="flex h-full items-center gap-1">
-        {workspaceTabs.map((tab) => (
+        {workflowPhaseDefinitions.map((phase) => (
           <button
             className={`h-9 rounded px-3 text-sm transition ${
-              activeTab === tab
+              workflowPhase === phase.id
                 ? "bg-accent/15 text-accent"
                 : "text-slate-300 hover:bg-white/[0.04] hover:text-white"
             }`}
-            key={tab}
+            key={phase.id}
+            title={phase.description}
             type="button"
-            onClick={() => onTabChange?.(tab)}
+            onClick={() => onPhaseChange(phase.id)}
           >
-            {workspaceTabLabels[tab]}
+            {phase.label}
           </button>
         ))}
       </nav>

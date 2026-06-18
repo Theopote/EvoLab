@@ -1,0 +1,63 @@
+"use client";
+
+import { Boxes, DraftingCompass, MousePointer2, Upload, Waypoints } from "lucide-react";
+import type { ActiveTool } from "@/lib/interaction-store";
+import { useInteractionStore } from "@/lib/interaction-store";
+import type { WorkflowPhase } from "@/lib/workflow-phases";
+
+const tools: {
+  label: string;
+  title: string;
+  icon: typeof MousePointer2;
+  tool: ActiveTool;
+  phases: WorkflowPhase[];
+}[] = [
+  { label: "Select", title: "Select", icon: MousePointer2, tool: "select", phases: ["brief_site", "scheme", "analyze"] },
+  { label: "Outline", title: "Draw outline", icon: DraftingCompass, tool: "outline", phases: ["brief_site", "scheme"] },
+  { label: "Upload", title: "Upload drawing", icon: Upload, tool: "upload", phases: ["brief_site", "scheme"] },
+  { label: "Flow", title: "Analysis flows", icon: Waypoints, tool: "flow", phases: ["analyze"] },
+  { label: "Model", title: "3D model", icon: Boxes, tool: "model", phases: ["scheme"] }
+];
+
+interface WorkflowQuickToolsProps {
+  phase: WorkflowPhase;
+}
+
+export function WorkflowQuickTools({ phase }: WorkflowQuickToolsProps) {
+  const activeTool = useInteractionStore((state) => state.activeTool);
+  const setActiveTool = useInteractionStore((state) => state.setActiveTool);
+  const visibleTools = tools.filter((tool) => tool.phases.includes(phase));
+
+  if (visibleTools.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="space-y-2">
+      <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Quick Tools</h2>
+      <div className="grid grid-cols-4 gap-2">
+        {visibleTools.map((tool) => {
+          const Icon = tool.icon;
+          const isActive = activeTool === tool.tool;
+
+          return (
+            <button
+              className={`grid h-10 place-items-center rounded border ${
+                isActive
+                  ? "border-accent/60 bg-accent/12 text-accent"
+                  : "border-line text-muted hover:border-accent/50 hover:text-accent"
+              }`}
+              key={tool.label}
+              type="button"
+              title={tool.title}
+              aria-label={tool.label}
+              onClick={() => setActiveTool(tool.tool)}
+            >
+              <Icon className="h-4 w-4" />
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

@@ -18,11 +18,15 @@ import { PlanResultGrid } from "@/components/plan-editor/PlanResultGrid";
 import { ComplianceChecklist } from "@/components/quantity/ComplianceChecklist";
 import { QuantityTable } from "@/components/quantity/QuantityTable";
 import { RenderPanel } from "@/components/render-panel";
-import { ToolPalette } from "@/components/tool-palette";
 import { TopNav } from "@/components/top-nav";
 import { PresentationWorkspace } from "@/components/presentation/PresentationWorkspace";
 import { VersionCompareGrid } from "@/components/version-compare/VersionCompareGrid";
+import { PhaseSubNav } from "@/components/workflow/PhaseSubNav";
+import { VersionSplitCompare } from "@/components/workflow/VersionSplitCompare";
+import { ViewportKpiHud } from "@/components/workflow/ViewportKpiHud";
+import { WorkflowLeftSidebar } from "@/components/workflow/WorkflowLeftSidebar";
 import { Scene } from "@/components/viewer-3d/Scene";
+import { tabForDeliverSubview } from "@/lib/workflow-phases";
 import { useEvoProject } from "@/lib/project-store";
 
 export function EvoLabWorkspace() {
@@ -35,6 +39,8 @@ export function EvoLabWorkspace() {
     brief,
     zoning,
     activeTab,
+    workflowPhase,
+    compareVersionIds,
     activeAnalysisLayers,
     activeMepLayers,
     isGeneratingMep,
@@ -42,6 +48,8 @@ export function EvoLabWorkspace() {
     quantities,
     complianceItems,
     setActiveTab,
+    setWorkflowPhase,
+    toggleCompareVersion,
     setActiveLevel,
     setOutline,
     setOutlineClosed,
@@ -65,6 +73,8 @@ export function EvoLabWorkspace() {
       brief: state.brief,
       zoning: state.zoning,
       activeTab: state.activeTab,
+      workflowPhase: state.workflowPhase,
+      compareVersionIds: state.compareVersionIds,
       activeAnalysisLayers: state.activeAnalysisLayers,
       activeMepLayers: state.activeMepLayers,
       isGeneratingMep: state.isGeneratingMep,
@@ -72,6 +82,8 @@ export function EvoLabWorkspace() {
       quantities: state.quantities,
       complianceItems: state.complianceItems,
       setActiveTab: state.setActiveTab,
+      setWorkflowPhase: state.setWorkflowPhase,
+      toggleCompareVersion: state.toggleCompareVersion,
       setActiveLevel: state.setActiveLevel,
       setOutline: state.setOutline,
       setOutlineClosed: state.setOutlineClosed,
@@ -90,73 +102,29 @@ export function EvoLabWorkspace() {
 
   return (
     <main className="flex min-h-screen flex-col bg-canvas text-slate-100">
-      <TopNav project={project} activeTab={activeTab} onTabChange={setActiveTab} />
+      <TopNav project={project} workflowPhase={workflowPhase} onPhaseChange={setWorkflowPhase} />
+      <PhaseSubNav phase={workflowPhase} activeTab={activeTab} onTabChange={setActiveTab} />
       <section className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_218px] overflow-hidden">
-        <div className="grid min-h-0 grid-cols-[72px_minmax(0,1fr)_380px] overflow-hidden">
-          <ToolPalette activeTab={activeTab} onTabChange={setActiveTab} />
+        <div className="grid min-h-0 grid-cols-[260px_minmax(0,1fr)_380px] overflow-hidden">
+          <WorkflowLeftSidebar
+            phase={workflowPhase}
+            versions={project.versions}
+            activeVersionId={project.activeVersionId}
+            compareVersionIds={compareVersionIds}
+            onSelectVersion={setActiveVersion}
+            onToggleCompare={toggleCompareVersion}
+            onOpenSheets={() => {
+              setWorkflowPhase("deliver");
+              setActiveTab(tabForDeliverSubview("sheets"));
+            }}
+          />
 
-          <section className="cad-grid min-h-0 overflow-auto p-4">
-            {activeTab === "Model" ? (
-              <ModelWorkspace />
-            ) : activeTab === "Massing" ? (
-              <MassingPanel activeVersion={activeVersion} onOpenModel={() => setActiveTab("Model")} />
-            ) : activeTab === "Analysis" ? (
-              <section className="grid min-h-full grid-cols-[320px_minmax(0,1fr)] gap-4">
-                <DiagramLayerList activeLayers={activeAnalysisLayers} onChange={setActiveAnalysisLayers} />
-                <DiagramCanvas activeLayers={activeAnalysisLayers} version={activeVersion} />
-              </section>
-            ) : activeTab === "Systems" ? (
-              <section className="grid min-h-full grid-cols-[320px_minmax(0,1fr)] gap-4">
-                <div>
-                  <MepLayerList
-                    activeLayers={activeMepLayers}
-                    canGenerate={Boolean(activeVersion)}
-                    isGenerating={isGeneratingMep}
-                    onChange={setActiveMepLayers}
-                    onGenerate={generateMep}
-                  />
-                  {mepError ? (
-                    <div className="mt-3 rounded border border-warning/40 bg-warning/10 p-2 text-xs leading-5 text-warning">
-                      {mepError}
-                    </div>
-                  ) : null}
-                </div>
-                <MepCanvas activeLayers={activeMepLayers} version={activeVersion} />
-              </section>
-            ) : activeTab === "Quantity" ? (
-              <section className="grid min-h-full grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)] gap-4">
-                {quantities ? (
-                  <QuantityTable quantities={quantities} />
-                ) : (
-                  <div className="grid min-h-[520px] place-items-center rounded border border-dashed border-line bg-panel/60 text-sm text-muted">
-                    Select or generate a plan version to calculate quantities.
-                  </div>
-                )}
-                <ComplianceChecklist items={complianceItems} />
-              </section>
-            ) : activeTab === "Render" ? (
-              <RenderPanel activeVersion={activeVersion} />
-            ) : activeTab === "Sheets" ? (
-              <section className="grid min-h-full grid-rows-[auto_minmax(0,1fr)] gap-4">
-                <PresentationWorkspace />
-                <VersionCompareGrid
-                  versions={project.versions}
-                  activeVersionId={project.activeVersionId}
-                  onSelectVersion={setActiveVersion}
-                  onGenerateModel={openModelForVersion}
-                  onRefineVersion={refineVersion}
-                />
-              </section>
-            ) : activeTab === "Export" ? (
-              <ExportPanel
-                project={project}
-                activeVersion={activeVersion}
-                quantities={quantities}
-                complianceItems={complianceItems}
-              />
-            ) : (
-              <PlanWorkspace />
-            )}
+          <section className="relative min-h-0 overflow-hidden">
+            <ViewportKpiHud />
+            <div className="cad-grid h-full overflow-auto p-4">
+              <VersionSplitCompare versions={project.versions} compareVersionIds={compareVersionIds} />
+              {renderMainViewport()}
+            </div>
           </section>
 
           <aside className="min-h-0 overflow-auto border-l border-line bg-[#0d141d] p-4">
@@ -170,7 +138,7 @@ export function EvoLabWorkspace() {
               onRegeneratePlan={returnToPlanGeneration}
             />
 
-            {activeTab === "Plan" ? (
+            {workflowPhase === "brief_site" && activeTab === "Plan" ? (
               <div className="mt-4 space-y-4">
                 <SiteContextPanel />
                 <BriefForm value={brief} onChange={updateBrief} />
@@ -192,6 +160,94 @@ export function EvoLabWorkspace() {
       </section>
     </main>
   );
+
+  function renderMainViewport() {
+    if (activeTab === "Model") {
+      return <ModelWorkspace />;
+    }
+
+    if (activeTab === "Massing") {
+      return <MassingPanel activeVersion={activeVersion} onOpenModel={() => setActiveTab("Model")} />;
+    }
+
+    if (activeTab === "Analysis") {
+      return (
+        <section className="grid min-h-full grid-cols-[320px_minmax(0,1fr)] gap-4">
+          <DiagramLayerList activeLayers={activeAnalysisLayers} onChange={setActiveAnalysisLayers} />
+          <DiagramCanvas activeLayers={activeAnalysisLayers} version={activeVersion} />
+        </section>
+      );
+    }
+
+    if (activeTab === "Systems") {
+      return (
+        <section className="grid min-h-full grid-cols-[320px_minmax(0,1fr)] gap-4">
+          <div>
+            <MepLayerList
+              activeLayers={activeMepLayers}
+              canGenerate={Boolean(activeVersion)}
+              isGenerating={isGeneratingMep}
+              onChange={setActiveMepLayers}
+              onGenerate={generateMep}
+            />
+            {mepError ? (
+              <div className="mt-3 rounded border border-warning/40 bg-warning/10 p-2 text-xs leading-5 text-warning">
+                {mepError}
+              </div>
+            ) : null}
+          </div>
+          <MepCanvas activeLayers={activeMepLayers} version={activeVersion} />
+        </section>
+      );
+    }
+
+    if (activeTab === "Quantity") {
+      return (
+        <section className="grid min-h-full grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)] gap-4">
+          {quantities ? (
+            <QuantityTable quantities={quantities} />
+          ) : (
+            <div className="grid min-h-[520px] place-items-center rounded border border-dashed border-line bg-panel/60 text-sm text-muted">
+              Select or generate a plan version to calculate quantities.
+            </div>
+          )}
+          <ComplianceChecklist items={complianceItems} />
+        </section>
+      );
+    }
+
+    if (activeTab === "Render") {
+      return <RenderPanel activeVersion={activeVersion} />;
+    }
+
+    if (activeTab === "Sheets") {
+      return (
+        <section className="grid min-h-full grid-rows-[auto_minmax(0,1fr)] gap-4">
+          <PresentationWorkspace />
+          <VersionCompareGrid
+            versions={project.versions}
+            activeVersionId={project.activeVersionId}
+            onSelectVersion={setActiveVersion}
+            onGenerateModel={openModelForVersion}
+            onRefineVersion={refineVersion}
+          />
+        </section>
+      );
+    }
+
+    if (activeTab === "Export") {
+      return (
+        <ExportPanel
+          project={project}
+          activeVersion={activeVersion}
+          quantities={quantities}
+          complianceItems={complianceItems}
+        />
+      );
+    }
+
+    return <PlanWorkspace />;
+  }
 
   function ModelWorkspace() {
     return (

@@ -12,6 +12,7 @@ import { buildPresentationDeck } from "@/lib/presentation/storyboard";
 import { presentationTemplates } from "@/lib/presentation/templates";
 import type { PresentationDeck, PresentationTemplateId } from "@/lib/presentation/types";
 import { usePresentationCaptureStore } from "@/lib/presentation-capture-store";
+import { usePresentationUiStore } from "@/lib/presentation-ui-store";
 import { useEvoProject } from "@/lib/project-store";
 
 export function PresentationWorkspace() {
@@ -33,6 +34,8 @@ export function PresentationWorkspace() {
   const captureError = usePresentationCaptureStore((state) => state.error);
   const requestCapture = usePresentationCaptureStore((state) => state.requestCapture);
   const resetCapture = usePresentationCaptureStore((state) => state.resetCapture);
+  const consumeFocusSlide = usePresentationUiStore((state) => state.consumeFocusSlide);
+  const focusSlideId = usePresentationUiStore((state) => state.focusSlideId);
 
   const [deck, setDeck] = useState<PresentationDeck | undefined>(undefined);
   const [templateId, setTemplateId] = useState<PresentationTemplateId>("classic");
@@ -61,6 +64,20 @@ export function PresentationWorkspace() {
   const currentDeck = deck ?? localDeck;
   const exportDeck = currentDeck ? { ...currentDeck, templateId } : undefined;
   const slide = currentDeck?.slides[activeSlide];
+
+  useEffect(() => {
+    if (!focusSlideId || !currentDeck) {
+      return;
+    }
+
+    const index = currentDeck.slides.findIndex((item) => item.id === focusSlideId);
+
+    if (index >= 0) {
+      setActiveSlide(index);
+    }
+
+    consumeFocusSlide();
+  }, [consumeFocusSlide, currentDeck, focusSlideId]);
 
   useEffect(() => {
     if (captureStatus !== "done" || captureImages.length === 0) {
