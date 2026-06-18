@@ -9,7 +9,8 @@ import { MODEL_SLIDE_ID, extractModelCaptures } from "@/lib/presentation/model-s
 import { downloadPresentationHtml, renderPresentationHtml } from "@/lib/presentation/render-html";
 import { downloadPresentationPptx, prepareDeckForPptx } from "@/lib/presentation/render-pptx";
 import { buildPresentationDeck } from "@/lib/presentation/storyboard";
-import type { PresentationDeck } from "@/lib/presentation/types";
+import { presentationTemplates } from "@/lib/presentation/templates";
+import type { PresentationDeck, PresentationTemplateId } from "@/lib/presentation/types";
 import { usePresentationCaptureStore } from "@/lib/presentation-capture-store";
 import { useEvoProject } from "@/lib/project-store";
 
@@ -34,6 +35,7 @@ export function PresentationWorkspace() {
   const resetCapture = usePresentationCaptureStore((state) => state.resetCapture);
 
   const [deck, setDeck] = useState<PresentationDeck | undefined>(undefined);
+  const [templateId, setTemplateId] = useState<PresentationTemplateId>("classic");
   const [activeSlide, setActiveSlide] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isBuildingFullDeck, setIsBuildingFullDeck] = useState(false);
@@ -57,6 +59,7 @@ export function PresentationWorkspace() {
   }, [activeVersion, brief, buildableEnvelope, environmentSurrogate, outline, project, siteContext]);
 
   const currentDeck = deck ?? localDeck;
+  const exportDeck = currentDeck ? { ...currentDeck, templateId } : undefined;
   const slide = currentDeck?.slides[activeSlide];
 
   useEffect(() => {
@@ -130,7 +133,10 @@ export function PresentationWorkspace() {
     }
 
     const preservedCaptures = extractModelCaptures(deck ?? localDeck);
-    const mergedDeck = preservedCaptures.length ? attachModelCaptures(data.deck, preservedCaptures) : data.deck;
+    const mergedDeck = {
+      ...(preservedCaptures.length ? attachModelCaptures(data.deck, preservedCaptures) : data.deck),
+      templateId
+    };
 
     setDeck(mergedDeck);
     setActiveSlide(0);
@@ -189,15 +195,15 @@ export function PresentationWorkspace() {
   }
 
   function exportHtml() {
-    if (!currentDeck) {
+    if (!exportDeck) {
       return;
     }
 
-    downloadPresentationHtml(currentDeck);
+    downloadPresentationHtml(exportDeck);
   }
 
   function printPdf() {
-    if (!currentDeck) {
+    if (!exportDeck) {
       return;
     }
 
@@ -208,14 +214,14 @@ export function PresentationWorkspace() {
       return;
     }
 
-    popup.document.write(renderPresentationHtml(currentDeck));
+    popup.document.write(renderPresentationHtml(exportDeck));
     popup.document.close();
     popup.focus();
     popup.print();
   }
 
   async function exportPptx() {
-    if (!currentDeck) {
+    if (!exportDeck) {
       return;
     }
 
@@ -223,7 +229,7 @@ export function PresentationWorkspace() {
     setNotice(null);
 
     try {
-      const prepared = await prepareDeckForPptx(currentDeck);
+      const prepared = await prepareDeckForPptx(exportDeck);
       await downloadPresentationPptx(prepared);
       setNotice("PowerPoint deck exported.");
     } catch (error) {
@@ -259,8 +265,25 @@ export function PresentationWorkspace() {
           <div>
             <h2 className="text-base font-semibold text-white">Automated Presentation</h2>
             <p className="mt-1 text-xs text-muted">
-              Storyboard, isometric / exploded diagrams, flow overlays, 3D captures, quantities, and AI design narrative.
+              Storyboard, evolution narrative, diagrams, cost ROM, 3D captures, and AI per-slide copy.
             </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-[11px] text-muted" htmlFor="presentation-template">
+              Template
+            </label>
+            <select
+              className="h-9 rounded border border-line bg-[#0b1118] px-2 text-xs text-slate-100"
+              id="presentation-template"
+              value={templateId}
+              onChange={(event) => setTemplateId(event.target.value as PresentationTemplateId)}
+            >
+              {Object.values(presentationTemplates).map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.label}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="flex flex-wrap gap-2">
             <button
@@ -325,6 +348,11 @@ export function PresentationWorkspace() {
         </div>
 
         {notice ? <div className="mb-3 rounded border border-warning/40 bg-warning/10 p-2 text-xs text-warning">{notice}</div> : null}
+        {currentDeck?.storyArc?.length ? (
+          <div className="mb-3 rounded border border-line bg-[#0b1118] p-2 text-xs text-slate-300">
+            <span className="text-muted">Story arc:</span> {currentDeck.storyArc.join(" → ")}
+          </div>
+        ) : null}
 
         <div className="grid gap-3 lg:grid-cols-[220px_minmax(0,1fr)]">
           <aside className="space-y-2">
@@ -372,7 +400,11 @@ export function PresentationWorkspace() {
                 ) : null}
                 {slide.svg ? (
                   <div
-                    className="mt-4 overflow-hidden rounded border border-line bg-[#081018] [&_svg]:h-[320px] [&_svg]:w-full"
+                    className={`mt-4 overflow-hidden rounded border border-line bg-[#081018] [&_svg]:w-full ${
+                      slide.kind === "evolution"
+                        ? "presentation-evolution-preview [&_svg]:h-[360px]"
+                        : "[&_svg]:h-[320px]"
+                    }`}
                     dangerouslySetInnerHTML={{ __html: slide.svg }}
                   />
                 ) : null}
@@ -407,6 +439,16 @@ export function PresentationWorkspace() {
           </article>
         </div>
       </section>
+      <style>{`
+        .presentation-evolution-preview svg > g:nth-child(2) { animation: evolab-panel 4.5s ease-in-out infinite; }
+        .presentation-evolution-preview svg > g:nth-child(3) { animation: evolab-panel 4.5s ease-in-out infinite 1.5s; }
+        .presentation-evolution-preview svg > g:nth-child(4) { animation: evolab-panel 4.5s ease-in-out infinite 3s; }
+        @keyframes evolab-panel {
+          0%, 18% { opacity: 0.3; }
+          28%, 72% { opacity: 1; }
+          82%, 100% { opacity: 0.3; }
+        }
+      `}</style>
     </>
   );
 }

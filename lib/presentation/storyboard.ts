@@ -1,7 +1,9 @@
+import { formatCost, calculateCostEstimate } from "@/lib/cost-engine";
 import { createPlanSvg } from "@/lib/export-utils";
 import { calculateQuantities } from "@/lib/quantity-engine";
 import {
   renderEnvironmentDiagram,
+  renderEvolutionDiagram,
   renderExplodedDiagram,
   renderFlowDiagram,
   renderIsometricDiagram,
@@ -9,6 +11,7 @@ import {
 } from "@/lib/presentation/diagrams";
 import { createModelSlidePlaceholder } from "@/lib/presentation/model-slide";
 import type { PresentationDeck, PresentationSlide, StoryboardRequest } from "@/lib/presentation/types";
+import { summarizeVersionEvolution } from "@/lib/presentation/version-evolution";
 import type { DesignBrief, PlanVersion, Point, ProjectData } from "@/lib/project-types";
 import type { BuildableEnvelope, EnvironmentSurrogate, SiteContext } from "@/lib/site-types";
 
@@ -31,6 +34,8 @@ export function buildPresentationDeck(input: {
   outline?: Point[];
 }): PresentationDeck {
   const quantities = calculateQuantities(input.version);
+  const cost = calculateCostEstimate(input.version, input.project.projectType);
+  const evolution = summarizeVersionEvolution(input.project, input.version);
   const slides: PresentationSlide[] = [
     {
       id: "slide-cover",
@@ -56,6 +61,26 @@ export function buildPresentationDeck(input: {
               : "Zoning envelope not applied."
           ]
         : ["Draw or fetch site context before presentation export for richer site storytelling."]
+    },
+    {
+      id: "slide-evolution",
+      kind: "evolution",
+      title: "Design Evolution",
+      subtitle: `${evolution.versionCount} options · active ${evolution.activeLabel}`,
+      bullets: evolution.evolutionNarrative,
+      svg: renderEvolutionDiagram(input.version),
+      table:
+        evolution.rows.length > 1
+          ? {
+              headers: ["Version", "Rooms", "Gross sqm", "Score"],
+              rows: evolution.rows.map((row) => [
+                row.isActive ? `${row.label} *` : row.label,
+                String(row.rooms),
+                String(row.grossArea),
+                String(row.totalScore)
+              ])
+            }
+          : undefined
     },
     {
       id: "slide-massing",
@@ -148,6 +173,30 @@ export function buildPresentationDeck(input: {
           .slice(0, 12)
           .map((room) => [room.name, room.type, room.zone, String(room.areaSqm)])
       }
+    },
+    {
+      id: "slide-cost",
+      kind: "cost",
+      title: "Cost Estimate",
+      subtitle: `${cost.summary} · indicative ROM`,
+      bullets: [
+        "Indicative ROM based on gross/net area, envelope, and opening counts.",
+        `Shell + MEP + fit-out + facade + doors for ${input.project.projectType}.`,
+        "Replace with local QS benchmarks before client issue."
+      ],
+      table: {
+        headers: ["Category", "Qty", "Unit", "Unit cost", "Subtotal"],
+        rows: [
+          ...cost.lineItems.map((item) => [
+            item.category,
+            String(item.quantity),
+            item.unit,
+            formatCost(item.unitCost, cost.currency),
+            formatCost(item.subtotal, cost.currency)
+          ]),
+          ["Total ROM", "", "", "", formatCost(cost.totalCost, cost.currency)]
+        ]
+      }
     }
   ];
 
@@ -183,8 +232,13 @@ export function toStoryboardRequest(input: {
   brief?: DesignBrief;
   siteContext?: SiteContext;
   envelope?: BuildableEnvelope;
+  environmentSurrogate?: EnvironmentSurrogate;
+  outline?: Point[];
 }): StoryboardRequest {
   const quantities = calculateQuantities(input.version);
+  const cost = calculateCostEstimate(input.version, input.project.projectType);
+  const evolution = summarizeVersionEvolution(input.project, input.version);
+  const deck = buildPresentationDeck(input);
 
   return {
     projectName: input.project.projectName,
@@ -196,6 +250,14 @@ export function toStoryboardRequest(input: {
       ? `${input.envelope.maxFloorAreaSqm} sqm / ${input.envelope.maxHeightMeters}m envelope`
       : undefined,
     quantitySummary: `${quantities.summary.grossArea} sqm gross · ${input.version.rooms.length} rooms`,
-    scoreSummary: scoreLine(input.version)
+    costSummary: cost.summary,
+    scoreSummary: scoreLine(input.version),
+    evolutionSummary: evolution.evolutionNarrative.join(" "),
+    slideCatalog: deck.slides.map((slide) => ({
+      slideId: slide.id,
+      kind: slide.kind,
+      title: slide.title,
+      subtitle: slide.subtitle
+    }))
   };
 }

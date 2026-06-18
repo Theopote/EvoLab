@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
-import { requestAnthropicTool } from "@/lib/anthropic-tool";
+import { applySlideCopy } from "@/lib/presentation/apply-slide-copy";
 import { appendNarrativeSlide, buildPresentationDeck, toStoryboardRequest } from "@/lib/presentation/storyboard";
 import { presentationNarrativePrompt } from "@/lib/prompts/presentationNarrativePrompt";
 import { GenerateStoryboardToolInputSchema } from "@/lib/schemas/presentation-schema";
 import type { DesignBrief, PlanVersion, ProjectData } from "@/lib/project-types";
 import type { BuildableEnvelope, EnvironmentSurrogate, SiteContext, ZoningConstraints } from "@/lib/site-types";
 import { computeBuildableEnvelope } from "@/lib/buildable-envelope";
+import { requestAnthropicTool } from "@/lib/anthropic-tool";
 
 interface GenerateStoryboardRequest {
   project?: ProjectData;
@@ -29,7 +30,7 @@ export async function POST(request: Request) {
       ? computeBuildableEnvelope(body.outline, body.zoning)
       : undefined;
 
-  let deck = buildPresentationDeck({
+  const deckInput = {
     project: body.project,
     version: body.version,
     brief: body.brief,
@@ -37,27 +38,30 @@ export async function POST(request: Request) {
     envelope: envelope?.valid ? envelope : undefined,
     environmentSurrogate: body.environmentSurrogate,
     outline: body.outline
-  });
+  };
+
+  let deck = buildPresentationDeck(deckInput);
 
   try {
-    const narrative = await requestAnthropicTool({
+    const storyboard = await requestAnthropicTool({
       system: presentationNarrativePrompt,
-      input: toStoryboardRequest({
-        project: body.project,
-        version: body.version,
-        brief: body.brief,
-        siteContext: body.siteContext,
-        envelope: envelope?.valid ? envelope : undefined
-      }),
+      input: toStoryboardRequest(deckInput),
       toolName: "generate_storyboard_narrative",
-      toolDescription: "Return a client-facing design narrative and story arc for an EvoLab presentation deck.",
+      toolDescription:
+        "Return story arc labels, per-slide presentation copy, and a closing design narrative for an EvoLab deck.",
       schema: GenerateStoryboardToolInputSchema,
-      maxTokens: 4096,
+      maxTokens: 6144,
       maxValidationRetries: 1
     });
 
-    deck = appendNarrativeSlide(deck, narrative.narrative);
-    return NextResponse.json({ deck, storyArc: narrative.storyArc });
+    deck = applySlideCopy(deck, storyboard.slideCopy);
+    deck = appendNarrativeSlide(deck, storyboard.narrative);
+    deck = {
+      ...deck,
+      storyArc: storyboard.storyArc
+    };
+
+    return NextResponse.json({ deck, storyArc: storyboard.storyArc });
   } catch (error) {
     return NextResponse.json({
       deck,

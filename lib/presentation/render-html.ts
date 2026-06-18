@@ -1,3 +1,4 @@
+import { resolvePresentationTemplate } from "@/lib/presentation/templates";
 import type { PresentationDeck } from "@/lib/presentation/types";
 
 function escapeHtml(value: string) {
@@ -18,8 +19,9 @@ function renderSlide(slide: PresentationDeck["slides"][number], index: number) {
           .join("")}</tbody>
       </table>`
     : "";
+  const diagramClass = slide.kind === "evolution" ? "diagram diagram-evolution" : "diagram";
   const diagram = slide.svg
-    ? `<div class="diagram">${slide.svg.replace("<svg", '<svg width="100%" height="100%" preserveAspectRatio="xMidYMid meet"')}</div>`
+    ? `<div class="${diagramClass}">${slide.svg.replace("<svg", '<svg width="100%" height="100%" preserveAspectRatio="xMidYMid meet"')}</div>`
     : "";
   const images = slide.images?.length
     ? `<div class="image-grid">${slide.images
@@ -43,7 +45,11 @@ function renderSlide(slide: PresentationDeck["slides"][number], index: number) {
 }
 
 export function renderPresentationHtml(deck: PresentationDeck) {
+  const template = resolvePresentationTemplate(deck.templateId);
   const slides = deck.slides.map((slide, index) => renderSlide(slide, index)).join("\n");
+  const storyArc = deck.storyArc?.length
+    ? `<p class="story-arc">${escapeHtml(deck.storyArc.join(" → "))}</p>`
+    : "";
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -51,13 +57,23 @@ export function renderPresentationHtml(deck: PresentationDeck) {
     <meta charset="utf-8" />
     <title>${escapeHtml(deck.projectName)} · Presentation</title>
     <style>
-      :root { color-scheme: light; }
+      :root {
+        color-scheme: ${deck.templateId === "studio" ? "dark" : "light"};
+        --body-bg: ${template.html.bodyBackground};
+        --slide-bg: ${template.html.slideBackground};
+        --slide-border: ${template.html.slideBorder};
+        --accent: ${template.html.accent};
+        --heading: ${template.html.heading};
+        --subheading: ${template.html.subheading};
+        --text: ${template.html.text};
+        --meta: ${template.html.meta};
+      }
       * { box-sizing: border-box; }
       body {
         margin: 0;
         font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-        background: #f4f7fb;
-        color: #0f172a;
+        background: var(--body-bg);
+        color: var(--heading);
       }
       .deck {
         max-width: 1120px;
@@ -65,8 +81,8 @@ export function renderPresentationHtml(deck: PresentationDeck) {
         padding: 24px;
       }
       .slide {
-        background: #ffffff;
-        border: 1px solid #dbe4ee;
+        background: var(--slide-bg);
+        border: 1px solid var(--slide-border);
         border-radius: 18px;
         padding: 32px 36px;
         margin: 0 0 24px;
@@ -79,33 +95,53 @@ export function renderPresentationHtml(deck: PresentationDeck) {
         font-size: 12px;
         letter-spacing: 0.08em;
         text-transform: uppercase;
-        color: #64748b;
+        color: var(--meta);
         margin-bottom: 12px;
+      }
+      .story-arc {
+        margin: 0 0 16px;
+        padding: 10px 12px;
+        border-left: 3px solid var(--accent);
+        color: var(--subheading);
+        font-size: 14px;
+        line-height: 1.5;
       }
       h1 {
         margin: 0 0 8px;
         font-size: 34px;
         line-height: 1.1;
+        color: var(--heading);
       }
       h2 {
         margin: 0 0 18px;
         font-size: 18px;
         font-weight: 500;
-        color: #475569;
+        color: var(--subheading);
       }
       ul {
         margin: 0 0 20px;
         padding-left: 20px;
         line-height: 1.6;
-        color: #334155;
+        color: var(--text);
       }
       .diagram {
         height: 360px;
-        border: 1px solid #e2e8f0;
+        border: 1px solid var(--slide-border);
         border-radius: 12px;
         overflow: hidden;
         background: #081018;
         margin-top: 12px;
+      }
+      .diagram-evolution {
+        height: 420px;
+      }
+      .diagram-evolution svg g:nth-child(2) { animation: reveal-panel 4.5s ease-in-out infinite; }
+      .diagram-evolution svg g:nth-child(3) { animation: reveal-panel 4.5s ease-in-out infinite 1.5s; }
+      .diagram-evolution svg g:nth-child(4) { animation: reveal-panel 4.5s ease-in-out infinite 3s; }
+      @keyframes reveal-panel {
+        0%, 18% { opacity: 0.25; }
+        28%, 72% { opacity: 1; }
+        82%, 100% { opacity: 0.25; }
       }
       .image-grid {
         display: grid;
@@ -115,7 +151,7 @@ export function renderPresentationHtml(deck: PresentationDeck) {
       }
       .image-grid figure {
         margin: 0;
-        border: 1px solid #e2e8f0;
+        border: 1px solid var(--slide-border);
         border-radius: 12px;
         overflow: hidden;
         background: #081018;
@@ -129,21 +165,25 @@ export function renderPresentationHtml(deck: PresentationDeck) {
       .image-grid figcaption {
         padding: 8px 10px;
         font-size: 12px;
-        color: #64748b;
-        background: #f8fafc;
+        color: var(--meta);
+        background: ${deck.templateId === "studio" ? "#0f172a" : "#f8fafc"};
       }
       table {
         width: 100%;
         border-collapse: collapse;
         margin-top: 16px;
         font-size: 14px;
+        color: var(--text);
       }
       th, td {
-        border: 1px solid #e2e8f0;
+        border: 1px solid var(--slide-border);
         padding: 8px 10px;
         text-align: left;
       }
-      th { background: #f8fafc; }
+      th {
+        background: ${deck.templateId === "studio" ? "#0f172a" : "#f8fafc"};
+        color: var(--heading);
+      }
       @media print {
         body { background: white; }
         .deck { padding: 0; max-width: none; }
@@ -154,18 +194,20 @@ export function renderPresentationHtml(deck: PresentationDeck) {
           box-shadow: none;
           min-height: auto;
         }
+        .diagram-evolution svg g { opacity: 1 !important; animation: none !important; }
       }
     </style>
   </head>
   <body>
     <main class="deck">
       <header class="slide">
-        <div class="slide-meta">EvoLab Presentation Export</div>
+        <div class="slide-meta">EvoLab Presentation Export · ${escapeHtml(template.label)}</div>
         <h1>${escapeHtml(deck.projectName)}</h1>
         <h2>${escapeHtml(deck.projectType)} · ${escapeHtml(deck.versionLabel)}</h2>
+        ${storyArc}
         <ul>
           <li>Generated ${escapeHtml(new Date(deck.generatedAt).toLocaleString())}</li>
-          <li>${deck.slides.length} slides with auto-diagrams and quantity tables</li>
+          <li>${deck.slides.length} slides with diagrams, cost schedule, and quantity tables</li>
         </ul>
       </header>
       ${slides}

@@ -1,8 +1,10 @@
+import { resolvePresentationTemplate } from "@/lib/presentation/templates";
 import type { PresentationDeck, PresentationSlide } from "@/lib/presentation/types";
 
 function addTitleSlide(pptx: import("pptxgenjs").default, deck: PresentationDeck) {
+  const template = resolvePresentationTemplate(deck.templateId);
   const slide = pptx.addSlide();
-  slide.background = { color: "0F172A" };
+  slide.background = { color: template.pptx.titleBackground };
   slide.addText(deck.projectName, {
     x: 0.6,
     y: 1.2,
@@ -10,7 +12,7 @@ function addTitleSlide(pptx: import("pptxgenjs").default, deck: PresentationDeck
     h: 1,
     fontSize: 34,
     bold: true,
-    color: "F8FAFC"
+    color: template.pptx.titleText
   });
   slide.addText(`${deck.projectType} · ${deck.versionLabel}`, {
     x: 0.6,
@@ -18,19 +20,34 @@ function addTitleSlide(pptx: import("pptxgenjs").default, deck: PresentationDeck
     w: 9,
     h: 0.6,
     fontSize: 16,
-    color: "94A3B8"
+    color: template.pptx.titleMuted
   });
+  if (deck.storyArc?.length) {
+    slide.addText(deck.storyArc.join(" → "), {
+      x: 0.6,
+      y: 3.1,
+      w: 8.8,
+      h: 0.8,
+      fontSize: 11,
+      color: template.pptx.titleMuted
+    });
+  }
   slide.addText(`Generated ${new Date(deck.generatedAt).toLocaleString()}`, {
     x: 0.6,
     y: 6.8,
     w: 9,
     h: 0.4,
     fontSize: 11,
-    color: "64748B"
+    color: template.pptx.muted
   });
 }
 
-function addImageGrid(page: import("pptxgenjs").default.Slide, images: NonNullable<PresentationSlide["images"]>, originY: number) {
+function addImageGrid(
+  page: import("pptxgenjs").default.Slide,
+  images: NonNullable<PresentationSlide["images"]>,
+  originY: number,
+  labelColor: string
+) {
   const columns = Math.min(3, images.length);
   const gap = 0.15;
   const gridWidth = 9;
@@ -56,17 +73,19 @@ function addImageGrid(page: import("pptxgenjs").default.Slide, images: NonNullab
       w: imageWidth,
       h: 0.2,
       fontSize: 9,
-      color: "64748B",
+      color: labelColor,
       align: "center"
     });
   });
 }
 
-function addContentSlide(pptx: import("pptxgenjs").default, slide: PresentationSlide) {
+function addContentSlide(pptx: import("pptxgenjs").default, slide: PresentationSlide, deck: PresentationDeck) {
+  const template = resolvePresentationTemplate(deck.templateId);
   const page = pptx.addSlide();
   const imageHeavy = Boolean(slide.images?.length && slide.images.length >= 2);
+  const tablePrimary = Boolean(slide.table && (slide.kind === "cost" || slide.kind === "quantities" || slide.kind === "evolution"));
 
-  page.background = { color: "FFFFFF" };
+  page.background = { color: template.pptx.contentBackground };
   page.addText(slide.title, {
     x: 0.5,
     y: 0.35,
@@ -74,7 +93,7 @@ function addContentSlide(pptx: import("pptxgenjs").default, slide: PresentationS
     h: 0.7,
     fontSize: 24,
     bold: true,
-    color: "0F172A"
+    color: template.pptx.heading
   });
 
   if (slide.subtitle) {
@@ -84,7 +103,7 @@ function addContentSlide(pptx: import("pptxgenjs").default, slide: PresentationS
       w: 9,
       h: 0.4,
       fontSize: 12,
-      color: "475569"
+      color: template.pptx.subheading
     });
   }
 
@@ -92,6 +111,37 @@ function addContentSlide(pptx: import("pptxgenjs").default, slide: PresentationS
     text: bullet,
     options: { bullet: true, breakLine: true }
   }));
+
+  if (tablePrimary && slide.table) {
+    page.addText(bulletText, {
+      x: 0.55,
+      y: 1.45,
+      w: 9,
+      h: 1.1,
+      fontSize: 11,
+      color: template.pptx.body,
+      valign: "top"
+    });
+    const rows = [slide.table.headers, ...slide.table.rows].map((row) => row.map((cell) => ({ text: cell })));
+    page.addTable(rows, {
+      x: 0.5,
+      y: slide.svg ? 2.55 : 2.35,
+      w: slide.svg ? 4.3 : 9,
+      fontSize: 9,
+      border: { type: "solid", color: "CBD5E1", pt: 0.5 },
+      fill: { color: deck.templateId === "studio" ? "111827" : "F8FAFC" }
+    });
+    if (slide.svg) {
+      page.addImage({
+        data: `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(slide.svg)))}`,
+        x: 5.0,
+        y: 2.35,
+        w: 4.7,
+        h: 2.8
+      });
+    }
+    return;
+  }
 
   if (slide.images?.length) {
     if (imageHeavy) {
@@ -101,10 +151,10 @@ function addContentSlide(pptx: import("pptxgenjs").default, slide: PresentationS
         w: 9,
         h: 0.8,
         fontSize: 11,
-        color: "334155",
+        color: template.pptx.body,
         valign: "top"
       });
-      addImageGrid(page, slide.images, 2.35);
+      addImageGrid(page, slide.images, 2.35, template.pptx.muted);
       return;
     }
 
@@ -114,10 +164,10 @@ function addContentSlide(pptx: import("pptxgenjs").default, slide: PresentationS
       w: 3.8,
       h: 3.6,
       fontSize: 12,
-      color: "334155",
+      color: template.pptx.body,
       valign: "top"
     });
-    addImageGrid(page, slide.images, 1.55);
+    addImageGrid(page, slide.images, 1.55, template.pptx.muted);
     return;
   }
 
@@ -127,7 +177,7 @@ function addContentSlide(pptx: import("pptxgenjs").default, slide: PresentationS
     w: 4.2,
     h: 4.8,
     fontSize: 12,
-    color: "334155",
+    color: template.pptx.body,
     valign: "top"
   });
 
@@ -164,7 +214,7 @@ export async function downloadPresentationPptx(deck: PresentationDeck) {
   pptx.title = deck.projectName;
 
   addTitleSlide(pptx, deck);
-  deck.slides.forEach((slide) => addContentSlide(pptx, slide));
+  deck.slides.forEach((slide) => addContentSlide(pptx, slide, deck));
 
   const fileName = `${deck.projectName.replace(/\s+/g, "-").toLowerCase()}-presentation.pptx`;
   await pptx.writeFile({ fileName });

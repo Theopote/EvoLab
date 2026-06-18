@@ -96,7 +96,8 @@ export function renderExplodedDiagram(version: PlanVersion) {
       <g>
         <polygon points="${polygonPoints(shifted)}" fill="${zoneColors[room.zone].top}" stroke="#e2e8f0" stroke-width="0.3" />
         <line x1="${cx}" y1="${cy}" x2="${labelX}" y2="${labelY - 2.4}" stroke="#4fb5c8" stroke-width="0.15" />
-        <text x="${labelX}" y="${labelY - 3}" fill="#e2e8f0" font-size="1.15" text-anchor="middle">${escapeXml(room.name)}</text>
+        <text x="${labelX}" y="${labelY - 3}" fill="#e2e8f0" font-size="1.05" text-anchor="middle">${escapeXml(room.name)}</text>
+        <text x="${labelX}" y="${labelY - 1.5}" fill="#94a3b8" font-size="0.85" text-anchor="middle">${escapeXml(room.zone)} · ${room.areaSqm.toFixed(0)} sqm</text>
       </g>`;
   });
 
@@ -226,5 +227,61 @@ export function renderEnvironmentDiagram(surrogate: EnvironmentSurrogate, outlin
     <polygon points="${polygonPoints(outline)}" fill="rgba(255,255,255,0.03)" stroke="#e2e8f0" stroke-width="0.35" />
     ${windCells}
     <text x="2" y="-4" fill="#94a3b8" font-size="1.3">Sun proxy (field) · Wind shelter (inset squares)</text>
+  </svg>`;
+}
+
+export function renderEvolutionDiagram(version: PlanVersion) {
+  const padding = 10;
+  const width = version.overallBounds.width;
+  const height = version.overallBounds.height;
+  const panelWidth = width + padding * 2;
+  const panelGap = 12;
+  const totalWidth = panelWidth * 3 + panelGap * 2;
+  const totalHeight = height + padding * 2 + 16;
+
+  const topologyRooms = version.rooms.map((room, index) => {
+    const bounds = roomBounds(room);
+    const cx = (bounds.minX + bounds.maxX) / 2;
+    const cy = (bounds.minY + bounds.maxY) / 2;
+    const radius = Math.max(1.2, Math.sqrt(room.areaSqm) * 0.22);
+    const offsetX = (index % 3) * 0.4;
+    return `<circle cx="${cx + offsetX}" cy="${cy}" r="${radius}" fill="${zoneColors[room.zone].top}" stroke="#94a3b8" stroke-width="0.2" />`;
+  });
+
+  const geometryRooms = version.rooms
+    .map(
+      (room) =>
+        `<polygon points="${polygonPoints(room.polygon)}" fill="${zoneColors[room.zone].side}" stroke="#cbd5e1" stroke-width="0.25" />`
+    )
+    .join("\n");
+
+  const refinedRooms = version.rooms
+    .map((room) => {
+      const bounds = roomBounds(room);
+      const cx = (bounds.minX + bounds.maxX) / 2;
+      const cy = (bounds.minY + bounds.maxY) / 2;
+      return `
+        <g>
+          <polygon points="${polygonPoints(room.polygon)}" fill="${zoneColors[room.zone].top}" stroke="#e2e8f0" stroke-width="0.28" />
+          <text x="${cx}" y="${cy}" fill="#f8fafc" font-size="0.95" text-anchor="middle">${escapeXml(room.name)}</text>
+        </g>`;
+    })
+    .join("\n");
+
+  function panel(offsetX: number, label: string, content: string) {
+    return `
+      <g transform="translate(${offsetX} 0)">
+        <rect x="${-padding}" y="${-padding - 8}" width="${panelWidth}" height="${totalHeight}" fill="rgba(15,23,42,0.35)" stroke="#334155" stroke-width="0.25" rx="1.5" />
+        <text x="0" y="${-padding - 2}" fill="#94a3b8" font-size="1.2">${label}</text>
+        <polygon points="${polygonPoints(version.outline)}" fill="rgba(255,255,255,0.02)" stroke="#475569" stroke-width="0.25" />
+        ${content}
+      </g>`;
+  }
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-padding} ${-padding - 10} ${totalWidth} ${totalHeight + 8}" role="img" class="evolution-diagram">
+    <rect width="100%" height="100%" fill="#081018" />
+    ${panel(0, "1 · Topology", topologyRooms.join("\n"))}
+    ${panel(panelWidth + panelGap, "2 · Geometry", geometryRooms)}
+    ${panel((panelWidth + panelGap) * 2, "3 · Refinement", refinedRooms)}
   </svg>`;
 }
