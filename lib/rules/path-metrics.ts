@@ -1,18 +1,32 @@
+import { buildPathGraph, findNearestExitPathGraph, findPathGraphRoute } from "@/lib/analysis/path-graph";
 import { buildRoomGraph, findNearestExitPath, findRoomPath } from "@/lib/analysis/graph";
+import type { PathGraphMethod } from "@/lib/analysis/path-graph";
 import type { PlanVersion, Point, Room } from "@/lib/project-types";
+
+export type EgressPathMethod = "opening-aware-path" | "door-aware-path" | "path" | "centroid-fallback";
 
 export interface EgressPathResult {
   maxDistance: number;
   worstRoomId?: string;
   worstRoomName?: string;
-  method: "door-aware-path" | "path" | "centroid-fallback";
-  perRoom: Array<{ roomId: string; roomName: string; distance: number; method: "door-aware-path" | "path" | "centroid-fallback" }>;
+  method: EgressPathMethod;
+  perRoom: Array<{ roomId: string; roomName: string; distance: number; method: EgressPathMethod }>;
+}
+
+export interface WetCoreVerticalMetrics {
+  stackGroups: number;
+  stackCoverage: number;
+  stackedShaftCount: number;
+  shaftAreaSqm: number;
+  wetDemandSqm: number;
+  shaftCapacityRatio: number;
 }
 
 export interface WetCorePathResult {
   averageDistance: number;
   perRoom: Array<{ roomId: string; roomName: string; distance: number; method: "path" | "centroid-fallback" }>;
   stackedShaftCount: number;
+  vertical: WetCoreVerticalMetrics;
 }
 
 function centroid(room: Room): Point {
@@ -46,20 +60,44 @@ function scopeVersion(version: PlanVersion, levelId?: string): PlanVersion {
   };
 }
 
+function egressMethodFromGraph(method: PathGraphMethod): EgressPathMethod {
+  if (method === "opening-aware") {
+    return "opening-aware-path";
+  }
+
+  if (method === "door-aware") {
+    return "door-aware-path";
+  }
+
+  return "path";
+}
+
 function shortestPathDistance(
-  graph: ReturnType<typeof buildRoomGraph>,
-  version: PlanVersion,
+  scoped: PlanVersion,
   startRoomId: string,
   targetRoomIds: string[]
 ): { distance: number; method: "path" | "centroid-fallback" } {
+  const pathGraph = buildPathGraph(scoped);
   let best = Infinity;
   let method: "path" | "centroid-fallback" = "centroid-fallback";
 
   targetRoomIds.forEach((targetId) => {
-    const route = findRoomPath(graph, startRoomId, targetId);
-    if (route && route.length >= 2) {
-      const pathDistance = route.slice(1).reduce((total, point, index) => {
-        const previous = route[index];
+    const route = findPathGraphRoute(pathGraph, startRoomId, targetId);
+
+    if (route) {
+      if (route.distance < best) {
+        best = route.distance;
+        method = "path";
+      }
+      return;
+    }
+
+    const roomGraph = buildRoomGraph(scoped);
+    const legacyRoute = findRoomPath(roomGraph, startRoomId, targetId);
+
+    if (legacyRoute && legacyRoute.length >= 2) {
+      const pathDistance = legacyRoute.slice(1).reduce((total, point, index) => {
+        const previous = legacyRoute[index];
         return total + distance(point, previous);
       }, 0);
 
@@ -70,8 +108,8 @@ function shortestPathDistance(
       return;
     }
 
-    const start = version.rooms.find((room) => room.id === startRoomId);
-    const target = version.rooms.find((room) => room.id === targetId);
+    const start = scoped.rooms.find((room) => room.id === startRoomId);
+    const target = scoped.rooms.find((room) => room.id === targetId);
     if (!start || !target) {
       return;
     }
@@ -91,8 +129,8 @@ function shortestPathDistance(
 
 export function computeEgressPathMetrics(version: PlanVersion, levelId?: string): EgressPathResult {
   const scoped = scopeVersion(version, levelId);
-  const graph = buildRoomGraph(scoped);
-  const pathMethod = graph.method === "door-aware" ? "door-aware-path" : "path";
+  const pathGraph = buildPathGraph(scoped);
+  const pathMethod = egressMethodFromGraph(pathGraph.method);
   const occupiableRooms = scoped.rooms.filter((room) => !["stair", "elevator", "shaft"].includes(room.type));
   const perRoom: EgressPathResult["perRoom"] = [];
   let maxDistance = 0;
@@ -101,7 +139,7 @@ export function computeEgressPathMetrics(version: PlanVersion, levelId?: string)
   let method: EgressPathResult["method"] = pathMethod;
 
   occupiableRooms.forEach((room) => {
-    const route = findNearestExitPath(graph, scoped, room.id);
+    const route = findNearestExitPathGraph(pathGraph, scoped, room.id);
 
     if (route) {
       perRoom.push({
@@ -113,6 +151,25 @@ export function computeEgressPathMetrics(version: PlanVersion, levelId?: string)
 
       if (route.distance > maxDistance) {
         maxDistance = route.distance;
+        worstRoomId = room.id;
+        worstRoomName = room.name;
+      }
+      return;
+    }
+
+    const roomGraph = buildRoomGraph(scoped);
+    const legacyRoute = findNearestExitPath(roomGraph, scoped, room.id);
+
+    if (legacyRoute) {
+      perRoom.push({
+        roomId: room.id,
+        roomName: room.name,
+        distance: legacyRoute.distance,
+        method: pathMethod === "opening-aware-path" ? "door-aware-path" : pathMethod
+      });
+
+      if (legacyRoute.distance > maxDistance) {
+        maxDistance = legacyRoute.distance;
         worstRoomId = room.id;
         worstRoomName = room.name;
       }
@@ -141,7 +198,7 @@ export function computeEgressPathMetrics(version: PlanVersion, levelId?: string)
     maxDistance,
     worstRoomId,
     worstRoomName,
-    method: perRoom.some((item) => item.method === "path") ? method : "centroid-fallback",
+    method: perRoom.some((item) => item.method !== "centroid-fallback") ? method : "centroid-fallback",
     perRoom
   };
 }
@@ -173,9 +230,68 @@ function countStackedShafts(version: PlanVersion, shaftRooms: Room[]) {
   return stacked;
 }
 
+function groupVerticalShaftStacks(version: PlanVersion) {
+  const tolerance = 2.5;
+  const shafts = version.rooms.filter((room) => room.type === "shaft" || room.type === "equipment_room");
+  const groups: Array<{ center: Point; levelIds: Set<string>; roomIds: string[] }> = [];
+
+  shafts.forEach((shaft) => {
+    const center = centroid(shaft);
+    const levelId = shaft.levelId ?? version.levels[0]?.id ?? "level-01";
+    const existing = groups.find((group) => distance(group.center, center) <= tolerance);
+
+    if (existing) {
+      existing.levelIds.add(levelId);
+      existing.roomIds.push(shaft.id);
+      return;
+    }
+
+    groups.push({
+      center,
+      levelIds: new Set([levelId]),
+      roomIds: [shaft.id]
+    });
+  });
+
+  return { groups, totalShafts: shafts.length };
+}
+
+function computeShaftCapacity(version: PlanVersion, levelId?: string) {
+  const scoped = scopeVersion(version, levelId);
+  const shaftRooms = scoped.rooms.filter((room) => room.type === "shaft" || room.type === "equipment_room");
+  const wetRooms = scoped.rooms.filter((room) => room.needsPlumbing);
+  const shaftAreaSqm = shaftRooms.reduce((total, room) => total + room.areaSqm, 0);
+  const wetAreaSqm = wetRooms.reduce((total, room) => total + room.areaSqm, 0);
+  const wetDemandSqm = wetAreaSqm * 0.08 + wetRooms.length * 2;
+  const shaftCapacityRatio = wetDemandSqm > 0 ? shaftAreaSqm / wetDemandSqm : shaftAreaSqm > 0 ? 1.5 : 0;
+
+  return {
+    shaftAreaSqm,
+    wetDemandSqm,
+    shaftCapacityRatio
+  };
+}
+
+export function computeWetCoreVerticalMetrics(version: PlanVersion, levelId?: string): WetCoreVerticalMetrics {
+  const scoped = scopeVersion(version, levelId);
+  const { groups, totalShafts } = groupVerticalShaftStacks(version);
+  const stackedShaftCount = countStackedShafts(version, scoped.rooms.filter((room) => room.type === "shaft" || room.type === "equipment_room"));
+  const multiFloorGroups = groups.filter((group) => group.levelIds.size > 1);
+  const stackCoverage = totalShafts > 0 ? multiFloorGroups.length / Math.max(1, groups.length) : 0;
+  const capacity = computeShaftCapacity(version, levelId);
+
+  return {
+    stackGroups: groups.length,
+    stackCoverage,
+    stackedShaftCount,
+    shaftAreaSqm: capacity.shaftAreaSqm,
+    wetDemandSqm: capacity.wetDemandSqm,
+    shaftCapacityRatio: capacity.shaftCapacityRatio
+  };
+}
+
 export function computeWetCorePathMetrics(version: PlanVersion, levelId?: string): WetCorePathResult {
   const scoped = scopeVersion(version, levelId);
-  const graph = buildRoomGraph(scoped);
   const shaftRooms = scoped.rooms.filter((room) => room.type === "shaft" || room.type === "equipment_room");
   const wetRooms = scoped.rooms.filter((room) => room.needsPlumbing);
   const targetIds = shaftRooms.map((room) => room.id);
@@ -192,7 +308,7 @@ export function computeWetCorePathMetrics(version: PlanVersion, levelId?: string
       return;
     }
 
-    const result = shortestPathDistance(graph, scoped, room.id, targetIds);
+    const result = shortestPathDistance(scoped, room.id, targetIds);
     perRoom.push({
       roomId: room.id,
       roomName: room.name,
@@ -207,6 +323,7 @@ export function computeWetCorePathMetrics(version: PlanVersion, levelId?: string
   return {
     averageDistance,
     perRoom,
-    stackedShaftCount: countStackedShafts(version, shaftRooms)
+    stackedShaftCount: countStackedShafts(version, shaftRooms),
+    vertical: computeWetCoreVerticalMetrics(version, levelId)
   };
 }

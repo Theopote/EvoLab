@@ -50,7 +50,11 @@ export const calculateVersionScores = (
   options: ScoreEngineOptions = {}
 ): { scores: VersionScores; breakdown: ScoreBreakdown } => {
   const rulePack = options.rulePack ?? resolveRulePack({ codeContext: options.codeContext, projectType: options.projectType ?? options.program?.projectType });
-  const programGoals = options.programGoals ?? resolveProgramGoals(options.program);
+  const programGoals =
+    options.programGoals ??
+    resolveProgramGoals(
+      options.program ?? (options.projectType ? ({ projectType: options.projectType } as ProgramModel) : undefined)
+    );
   const normalizedWeights = normalizeGoalWeights(programGoals.weights);
   const context: ScoringContext = {
     version,

@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { buildPathGraph } from "@/lib/analysis/path-graph";
 import { buildRoomGraph } from "@/lib/analysis/graph";
 import { initialProjectData } from "@/lib/evolab-data";
 import { defaultHealthcareCodeContext } from "@/lib/building-domain";
 import { validatePlanVersion } from "@/lib/plan-validation";
 import { checkCompliance } from "@/lib/quantity-engine";
-import { computeEgressPathMetrics } from "@/lib/rules/path-metrics";
+import { computeEgressPathMetrics, computeWetCorePathMetrics, computeWetCoreVerticalMetrics } from "@/lib/rules/path-metrics";
 import { resolveProgramGoals } from "@/lib/rules/program-goals";
 import { calculateVersionScores } from "@/lib/rules/score-engine";
 import { compareVersionScores, computeTotalScore } from "@/lib/rules/version-total-score";
@@ -22,9 +23,12 @@ describe("rules score engine", () => {
 
     expect(scores.areaEfficiency).toBeGreaterThan(0);
     expect(scores.egressScore).toBeGreaterThanOrEqual(0);
+    expect(scores.structureFitScore).toBeGreaterThan(0);
     expect(scores.breakdown?.metrics.length).toBeGreaterThan(0);
     expect(breakdown.comparisonHints.length).toBeGreaterThanOrEqual(0);
-    expect(breakdown.totalScore).toBe(computeTotalScore(scores, resolveProgramGoals()));
+    expect(breakdown.totalScore).toBe(
+      computeTotalScore(scores, resolveProgramGoals({ projectType: "healthcare" }))
+    );
   });
 
   it("uses graph egress distance in compliance checks", () => {
@@ -49,11 +53,33 @@ describe("rules score engine", () => {
     expect(comparison.explanations.length).toBeGreaterThan(0);
   });
 
-  it("prefers door-aware navigation graph when door data exists", () => {
-    const graph = buildRoomGraph(baseVersion);
+  it("prefers opening-aware navigation graph when door portals exist", () => {
+    const pathGraph = buildPathGraph(baseVersion);
+    const roomGraph = buildRoomGraph(baseVersion);
     const egress = computeEgressPathMetrics(baseVersion);
+    const portalNodes = [...pathGraph.nodes.values()].filter((node) => node.kind === "portal");
 
-    expect(["door-aware", "adjacency"]).toContain(graph.method);
-    expect(["door-aware-path", "path", "centroid-fallback"]).toContain(egress.method);
+    expect(portalNodes.length).toBeGreaterThan(0);
+    expect(["opening-aware", "door-aware", "adjacency"]).toContain(pathGraph.method);
+    expect(["opening-aware", "door-aware", "adjacency"]).toContain(roomGraph.method);
+    expect(["opening-aware-path", "door-aware-path", "path", "centroid-fallback"]).toContain(egress.method);
+  });
+
+  it("scores wet-core vertical alignment and shaft capacity", () => {
+    const wetCore = computeWetCorePathMetrics(baseVersion);
+    const vertical = computeWetCoreVerticalMetrics(baseVersion);
+
+    expect(wetCore.vertical.stackGroups).toBeGreaterThan(0);
+    expect(vertical.shaftAreaSqm).toBeGreaterThan(0);
+    expect(vertical.wetDemandSqm).toBeGreaterThan(0);
+    expect(vertical.shaftCapacityRatio).toBeGreaterThan(0);
+  });
+
+  it("includes structure-fit evidence from structural grid", () => {
+    const { breakdown } = calculateVersionScores(baseVersion, { projectType: "healthcare" });
+    const structureMetric = breakdown.metrics.find((metric) => metric.id === "structure_fit");
+
+    expect(structureMetric).toBeDefined();
+    expect(structureMetric?.evidence.some((item) => item.label.includes("Grid") || item.label.includes("Core"))).toBe(true);
   });
 });

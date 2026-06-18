@@ -1,10 +1,21 @@
+import {
+  buildPathGraph,
+  findNearestExitPathGraph,
+  findPathGraphRoute,
+  pathLength,
+  type PathGraph,
+  type PathGraphMethod
+} from "@/lib/analysis/path-graph";
 import type { PlanVersion, Point, Room } from "@/lib/project-types";
 import { polygonEdges } from "@/lib/wall-extractor";
+
+export type RoomGraphMethod = PathGraphMethod;
 
 export interface RoomGraph {
   adjacency: Map<string, Set<string>>;
   positions: Map<string, Point>;
-  method: "door-aware" | "adjacency";
+  method: RoomGraphMethod;
+  pathGraph?: PathGraph;
 }
 
 function centroid(room: Room): Point {
@@ -27,6 +38,36 @@ function connect(graph: Map<string, Set<string>>, from: string, to: string) {
 
   graph.get(from)!.add(to);
   graph.get(to)!.add(from);
+}
+
+function collapsePathGraph(pathGraph: PathGraph, rooms: Room[]): RoomGraph {
+  const adjacency = new Map<string, Set<string>>();
+  const positions = new Map<string, Point>();
+
+  rooms.forEach((room) => {
+    positions.set(room.id, centroid(room));
+    adjacency.set(room.id, new Set());
+  });
+
+  rooms.forEach((room) => {
+    rooms.forEach((other) => {
+      if (room.id === other.id) {
+        return;
+      }
+
+      const route = findPathGraphRoute(pathGraph, room.id, other.id);
+      if (route) {
+        connect(adjacency, room.id, other.id);
+      }
+    });
+  });
+
+  return {
+    adjacency,
+    positions,
+    method: pathGraph.method,
+    pathGraph
+  };
 }
 
 function inferSharedEdgeAdjacency(rooms: Room[], graph: Map<string, Set<string>>) {
@@ -96,7 +137,7 @@ function inferCirculationPortalAdjacency(version: PlanVersion, graph: Map<string
   });
 }
 
-export function buildRoomGraph(version: PlanVersion): RoomGraph {
+function buildLegacyRoomGraph(version: PlanVersion): RoomGraph {
   const adjacency = new Map<string, Set<string>>();
   const positions = new Map<string, Point>();
 
@@ -126,12 +167,12 @@ export function buildRoomGraph(version: PlanVersion): RoomGraph {
           return;
         }
 
-        const distance = Math.hypot(
+        const span = Math.hypot(
           positions.get(corridor.id)![0] - positions.get(room.id)![0],
           positions.get(corridor.id)![1] - positions.get(room.id)![1]
         );
 
-        if (distance < Math.max(8, Math.sqrt(room.areaSqm) * 1.4) && (room.doors.length > 0 || room.type === "corridor")) {
+        if (span < Math.max(8, Math.sqrt(room.areaSqm) * 1.4) && (room.doors.length > 0 || room.type === "corridor")) {
           connect(adjacency, corridor.id, room.id);
         }
       });
@@ -145,6 +186,17 @@ export function buildRoomGraph(version: PlanVersion): RoomGraph {
   };
 }
 
+export function buildRoomGraph(version: PlanVersion): RoomGraph {
+  const pathGraph = buildPathGraph(version);
+  const collapsed = collapsePathGraph(pathGraph, version.rooms);
+
+  if (collapsed.adjacency.size === 0 || [...collapsed.adjacency.values()].every((neighbors) => neighbors.size === 0)) {
+    return buildLegacyRoomGraph(version);
+  }
+
+  return collapsed;
+}
+
 function heuristic(from: Point, to: Point) {
   return Math.hypot(from[0] - to[0], from[1] - to[1]);
 }
@@ -154,6 +206,11 @@ function edgeCost(from: Point, to: Point) {
 }
 
 export function findRoomPath(graph: RoomGraph, startId: string, goalId: string): Point[] | undefined {
+  if (graph.pathGraph) {
+    const route = findPathGraphRoute(graph.pathGraph, startId, goalId);
+    return route?.path;
+  }
+
   if (startId === goalId) {
     return [graph.positions.get(startId)!];
   }
@@ -204,6 +261,13 @@ export function findNearestExitPath(
   version: PlanVersion,
   startRoomId: string
 ): { path: Point[]; distance: number; exitId: string } | undefined {
+  if (graph.pathGraph) {
+    const route = findNearestExitPathGraph(graph.pathGraph, version, startRoomId);
+    if (route) {
+      return route;
+    }
+  }
+
   const exits = version.rooms.filter((room) => room.type === "stair" || room.type === "elevator");
 
   if (exits.length === 0) {
@@ -219,22 +283,14 @@ export function findNearestExitPath(
       return;
     }
 
-    const distance = path.slice(1).reduce((total, point, index) => {
-      const previous = path[index];
-      return total + Math.hypot(point[0] - previous[0], point[1] - previous[1]);
-    }, 0);
+    const routeDistance = pathLength(path);
 
-    if (!best || distance < best.distance) {
-      best = { path, distance, exitId: exit.id };
+    if (!best || routeDistance < best.distance) {
+      best = { path, distance: routeDistance, exitId: exit.id };
     }
   });
 
   return best;
 }
 
-export function pathLength(points: Point[]) {
-  return points.slice(1).reduce((total, point, index) => {
-    const previous = points[index];
-    return total + Math.hypot(point[0] - previous[0], point[1] - previous[1]);
-  }, 0);
-}
+export { pathLength };

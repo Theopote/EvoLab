@@ -38,7 +38,9 @@ export function scoreVersionWithContext(
     ...input,
     issues: resolvedIssues,
     rulePack: resolveRulePack({ codeContext: input.codeContext, projectType: input.projectType }),
-    programGoals: resolveProgramGoals(input.program)
+    programGoals: resolveProgramGoals(
+      input.program ?? (input.projectType ? ({ projectType: input.projectType } as ProgramModel) : undefined)
+    )
   });
 }
 
