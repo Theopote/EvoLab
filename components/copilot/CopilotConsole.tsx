@@ -17,7 +17,7 @@ import type {
 } from "@/lib/project-types";
 import { useCopilotTimelineStore } from "@/lib/copilot-timeline-store";
 import { useCopilotUploadStore } from "@/lib/copilot-upload-store";
-import { readCopilotUpload, type CopilotPinnedFile } from "@/lib/copilot-upload";
+import { isImagePinnedFile, readCopilotUpload, type CopilotPinnedFile } from "@/lib/copilot-upload";
 import { useShallow } from "zustand/react/shallow";
 
 interface CopilotConsoleProps {
@@ -137,7 +137,7 @@ export function CopilotConsole({
         {
           id: `assistant-upload-${Date.now()}`,
           role: "assistant",
-          content: `Pinned ${file.name}. Add a prompt to align the active scheme, or send without text to recognize a new plan from the drawing.`
+          content: `Pinned ${file.name} (${pinned.sourceType.toUpperCase()}). Add a prompt to align the active scheme, or send without text to import the drawing.`
         }
       ]);
     } catch (error) {
@@ -178,8 +178,9 @@ export function CopilotConsole({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          imageBase64: file.base64,
-          fileName: file.fileName
+          fileBase64: file.base64,
+          fileName: file.fileName,
+          sourceType: file.sourceType
         })
       });
 
@@ -191,6 +192,8 @@ export function CopilotConsole({
         version?: PlanVersion;
         warnings?: string[];
         confidence?: number;
+        importPath?: "vision" | "structured";
+        sourceType?: string;
       };
 
       if (!data.version?.rooms) {
@@ -205,7 +208,7 @@ export function CopilotConsole({
         {
           id: `assistant-analyze-${Date.now()}`,
           role: "assistant",
-          content: `Imported ${analyzedVersion.label} from ${file.fileName}${
+          content: `Imported ${analyzedVersion.label} from ${file.fileName} via ${data.importPath ?? "import"}${
             data.warnings?.length ? ` (${data.warnings.join(" ")})` : ""
           }.`
         }
@@ -252,11 +255,13 @@ export function CopilotConsole({
           currentVersion: baseVersion,
           userRequest: text,
           lockedElementIds,
-          referenceImages: files.map((file) => ({
-            base64: file.base64,
-            mediaType: file.mediaType,
-            fileName: file.fileName
-          }))
+          referenceImages: files
+            .filter(isImagePinnedFile)
+            .map((file) => ({
+              base64: file.base64,
+              mediaType: file.mediaType!,
+              fileName: file.fileName
+            }))
         })
       });
 
@@ -515,7 +520,7 @@ export function CopilotConsole({
               <label className="grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded border border-line text-muted hover:border-accent/50 hover:text-accent">
                 <input
                   ref={fileInputRef}
-                  accept="image/png,image/jpeg,image/gif,image/webp"
+                  accept="image/png,image/jpeg,image/gif,image/webp,.pdf,.dxf,application/pdf"
                   className="hidden"
                   type="file"
                   onChange={(event) => void handleFileSelection(event.target.files)}

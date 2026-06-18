@@ -1,21 +1,13 @@
 import { NextResponse } from "next/server";
-import { requestAnthropicTool } from "@/lib/anthropic-tool";
-import { normalizeImageInput } from "@/lib/image-input";
 import { createMockAnalyzedVersion } from "@/lib/mock-api";
-import { postProcessPlanVersion } from "@/lib/plan-postprocess";
-import { analyzePlanPrompt } from "@/lib/prompts/analyzePlanPrompt";
-import { AnalyzePlanToolInputSchema } from "@/lib/schemas/plan-version-schema";
-import type { PlanVersion } from "@/lib/project-types";
+import { importPlan } from "@/lib/plan-import";
+import type { PlanImportSource } from "@/lib/plan-import/types";
 
 interface AnalyzePlanRequest {
+  fileBase64?: string;
   imageBase64?: string;
   fileName?: string;
-}
-
-interface AnalyzePlanResponse {
-  version: PlanVersion;
-  confidence: number;
-  warnings: string[];
+  sourceType?: PlanImportSource;
 }
 
 export async function POST(request: Request) {
@@ -23,47 +15,31 @@ export async function POST(request: Request) {
   const fallback = createMockAnalyzedVersion();
 
   try {
-    const image = normalizeImageInput(body.imageBase64, body.fileName);
-
-    if (!image) {
-      return NextResponse.json(
-        { error: "imageBase64 is required for analyze-plan." },
-        { status: 400 }
-      );
-    }
-
-    const data = await requestAnthropicTool({
-      system: analyzePlanPrompt,
-      input: {
-        fileName: body.fileName,
-        image: {
-          mediaType: image.mediaType,
-          byteLength: image.byteLength
-        }
-      },
-      images: [{ base64: image.base64, mediaType: image.mediaType }],
-      toolName: "analyze_plan",
-      toolDescription: "Return recognized EvoLab architectural plan data, confidence, and recognition warnings.",
-      schema: AnalyzePlanToolInputSchema,
-      maxTokens: 8192
+    const result = await importPlan({
+      fileBase64: body.fileBase64 ?? body.imageBase64,
+      imageBase64: body.imageBase64,
+      fileName: body.fileName,
+      sourceType: body.sourceType
     });
-
-    if (!data.version?.rooms || !Array.isArray(data.warnings)) {
-      return NextResponse.json(fallback);
-    }
 
     return NextResponse.json({
-      ...data,
-      version: postProcessPlanVersion(data.version)
+      version: result.version,
+      confidence: result.confidence,
+      warnings: result.warnings,
+      sourceType: result.sourceType,
+      importPath: result.importPath
     });
   } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to analyze plan.";
+
+    if (/required|valid base64|too large|Unsupported/i.test(message)) {
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+
     return NextResponse.json({
       ...fallback,
       fallback: true,
-      warnings: [
-        ...fallback.warnings,
-        error instanceof Error ? error.message : "Failed to analyze plan."
-      ]
+      warnings: [...fallback.warnings, message]
     });
   }
 }
