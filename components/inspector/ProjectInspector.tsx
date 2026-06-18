@@ -1,9 +1,17 @@
 "use client";
 
+import { useShallow } from "zustand/react/shallow";
 import { useEvoProject } from "@/lib/project-store";
 
 export function ProjectInspector() {
-  const { project, activeVersion, quantities, complianceItems } = useEvoProject();
+  const { project, activeVersion, quantities, complianceItems } = useEvoProject(
+    useShallow((state) => ({
+      project: state.project,
+      activeVersion: state.activeVersion,
+      quantities: state.quantities,
+      complianceItems: state.complianceItems
+    }))
+  );
 
   return (
     <section className="rounded border border-line bg-panel/90 p-3">

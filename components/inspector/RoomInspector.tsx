@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import type { FunctionZone, RoomType } from "@/lib/project-types";
 import { useEvoProject } from "@/lib/project-store";
 
@@ -24,7 +25,12 @@ const roomTypes: RoomType[] = [
 const zones: FunctionZone[] = ["public", "semi_public", "private", "service", "circulation"];
 
 export function RoomInspector() {
-  const { selectedRoom, updateRoom } = useEvoProject();
+  const { selectedRoom, updateRoom } = useEvoProject(
+    useShallow((state) => ({
+      selectedRoom: state.selectedRoom,
+      updateRoom: state.updateRoom
+    }))
+  );
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const idleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastCommittedRef = useRef<string>("");

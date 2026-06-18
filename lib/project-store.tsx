@@ -45,6 +45,7 @@ interface EvoProjectStore {
   activeVersion?: PlanVersion;
   activeLevelId?: string;
   activeLevel?: Level;
+  geometryRevision: number;
   selectedRoomId?: string;
   selectedWallId?: string;
   selectedOpeningId?: string;
@@ -74,6 +75,7 @@ interface EvoProjectStore {
   selectOpening: (openingId: string) => void;
   clearSelection: () => void;
   updateRoom: (roomId: string, patch: Partial<Room>) => void;
+  updateRoomGeometry: (roomId: string, patch: Partial<Room>) => void;
   updateWall: (wallId: string, patch: Partial<Wall>) => void;
   updateOpening: (openingId: string, patch: Partial<OpeningElement>) => void;
   replaceVersions: (versions: PlanVersion[], projectType?: string) => void;
@@ -156,7 +158,57 @@ function refreshDerivedDraft(state: EvoProjectStore) {
   validateSelectionDraft(state);
 }
 
-function commitNormalizedVersionDraft(state: EvoProjectStore, normalizedVersion: PlanVersion, resetSelection = false) {
+function bumpGeometryRevision(state: EvoProjectStore) {
+  state.geometryRevision += 1;
+}
+
+const ROOM_GEOMETRY_KEYS = new Set(["polygon", "doors", "windows"]);
+const WALL_GEOMETRY_KEYS = new Set(["start", "end", "thickness", "height"]);
+const OPENING_GEOMETRY_KEYS = new Set(["center", "width", "height", "sillHeight", "wallId"]);
+
+function patchTouchesGeometry<T extends object>(patch: Partial<T>, geometryKeys: Set<string>) {
+  return Object.keys(patch).some((key) => geometryKeys.has(key));
+}
+
+function refreshQuantitiesDraft(state: EvoProjectStore) {
+  state.quantities = state.activeVersion ? calculateQuantities(state.activeVersion) : undefined;
+  state.complianceItems = state.activeVersion ? checkCompliance(state.activeVersion) : [];
+}
+
+function applyRoomPatchToVersion(
+  version: PlanVersion,
+  levelId: string | undefined,
+  roomId: string,
+  patch: Partial<Room>
+): PlanVersion | undefined {
+  const level = getLevel(version, levelId);
+
+  if (!level?.rooms.some((room) => room.id === roomId)) {
+    return undefined;
+  }
+
+  const nextLevels = version.levels.map((item) => ({
+    ...item,
+    rooms: item.rooms.map((room) => (room.id === roomId ? { ...room, ...patch, id: room.id } : room))
+  }));
+
+  return {
+    ...version,
+    rooms: nextLevels.flatMap((item) => item.rooms),
+    levels: nextLevels,
+    building: {
+      ...version.building,
+      levels: nextLevels
+    }
+  };
+}
+
+function commitNormalizedVersionDraft(
+  state: EvoProjectStore,
+  normalizedVersion: PlanVersion,
+  resetSelection = false,
+  bumpGeometry = true
+) {
   state.project.versions = state.project.versions.some((item) => item.id === normalizedVersion.id)
     ? state.project.versions.map((item) => (item.id === normalizedVersion.id ? normalizedVersion : item))
     : [...state.project.versions, normalizedVersion];
@@ -166,7 +218,20 @@ function commitNormalizedVersionDraft(state: EvoProjectStore, normalizedVersion:
     clearSelectionDraft(state);
   }
 
+  if (bumpGeometry) {
+    bumpGeometryRevision(state);
+  }
+
   refreshDerivedDraft(state);
+}
+
+function commitRoomMetadataDraft(state: EvoProjectStore, nextVersion: PlanVersion) {
+  state.project.versions = state.project.versions.map((item) =>
+    item.id === nextVersion.id ? nextVersion : item
+  );
+  state.activeVersion = nextVersion;
+  state.selectedRoom = nextVersion.rooms.find((room) => room.id === state.selectedRoomId);
+  refreshQuantitiesDraft(state);
 }
 
 function createInitialState(): Omit<
@@ -183,6 +248,7 @@ function createInitialState(): Omit<
   | "selectOpening"
   | "clearSelection"
   | "updateRoom"
+  | "updateRoomGeometry"
   | "updateWall"
   | "updateOpening"
   | "replaceVersions"
@@ -201,6 +267,7 @@ function createInitialState(): Omit<
     activeVersion,
     activeLevelId: activeLevel?.id,
     activeLevel,
+    geometryRevision: 0,
     selectedRoomId: undefined,
     selectedWallId: undefined,
     selectedOpeningId: undefined,
@@ -313,31 +380,42 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
           return;
         }
 
-        const normalized = normalizePlanVersion(state.activeVersion);
-        const level = getLevel(normalized, state.activeLevelId);
+        if (patchTouchesGeometry(patch, ROOM_GEOMETRY_KEYS)) {
+          const normalized = normalizePlanVersion(state.activeVersion);
+          const nextVersion = applyRoomPatchToVersion(normalized, state.activeLevelId, roomId, patch);
 
-        if (!level?.rooms.some((room) => room.id === roomId)) {
+          if (!nextVersion) {
+            return;
+          }
+
+          commitNormalizedVersionDraft(state, normalizePlanVersion(nextVersion));
           return;
         }
 
-        const nextLevels = normalized.levels.map((item) =>
-          item.id === level.id
-            ? {
-                ...item,
-                rooms: item.rooms.map((room) => (room.id === roomId ? { ...room, ...patch, id: room.id } : room))
-              }
-            : item
-        );
+        const nextVersion = applyRoomPatchToVersion(state.activeVersion, state.activeLevelId, roomId, patch);
 
-        commitNormalizedVersionDraft(state, {
-          ...normalized,
-          rooms: nextLevels.flatMap((item) => item.rooms),
-          levels: nextLevels,
-          building: {
-            ...normalized.building,
-            levels: nextLevels
-          }
-        });
+        if (!nextVersion) {
+          return;
+        }
+
+        commitRoomMetadataDraft(state, nextVersion);
+      })
+    ),
+  updateRoomGeometry: (roomId, patch) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        if (!state.activeVersion) {
+          return;
+        }
+
+        const normalized = normalizePlanVersion(state.activeVersion);
+        const nextVersion = applyRoomPatchToVersion(normalized, state.activeLevelId, roomId, patch);
+
+        if (!nextVersion) {
+          return;
+        }
+
+        commitNormalizedVersionDraft(state, normalizePlanVersion(nextVersion));
       })
     ),
   updateWall: (wallId, patch) =>
@@ -362,15 +440,24 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
               }
             : item
         );
-
-        commitNormalizedVersionDraft(state, {
+        const nextVersion = {
           ...normalized,
           levels: nextLevels,
           building: {
             ...normalized.building,
             levels: nextLevels
           }
-        });
+        };
+
+        if (patchTouchesGeometry(patch, WALL_GEOMETRY_KEYS)) {
+          commitNormalizedVersionDraft(state, normalizePlanVersion(nextVersion));
+          return;
+        }
+
+        commitNormalizedVersionDraft(state, nextVersion, false, false);
+        state.selectedWall = nextLevels
+          .flatMap((item) => item.walls)
+          .find((wall) => wall.id === state.selectedWallId);
       })
     ),
   updateOpening: (openingId, patch) =>
@@ -397,15 +484,24 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
               }
             : item
         );
-
-        commitNormalizedVersionDraft(state, {
+        const nextVersion = {
           ...normalized,
           levels: nextLevels,
           building: {
             ...normalized.building,
             levels: nextLevels
           }
-        });
+        };
+
+        if (patchTouchesGeometry(patch, OPENING_GEOMETRY_KEYS)) {
+          commitNormalizedVersionDraft(state, normalizePlanVersion(nextVersion));
+          return;
+        }
+
+        commitNormalizedVersionDraft(state, nextVersion, false, false);
+        state.selectedOpening = nextLevels
+          .flatMap((item) => item.openings)
+          .find((opening) => opening.id === state.selectedOpeningId);
       })
     ),
   replaceVersions: (versions, projectType = get().brief.projectType) =>
@@ -417,6 +513,7 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
         state.project.versions = normalizedVersions;
         state.project.activeVersionId = normalizedVersions[0]?.id ?? state.project.activeVersionId;
         clearSelectionDraft(state);
+        bumpGeometryRevision(state);
         refreshDerivedDraft(state);
       })
     ),

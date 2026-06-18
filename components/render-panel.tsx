@@ -108,7 +108,7 @@ export function RenderPanel({ activeVersion }: RenderPanelProps) {
             </span>
           </div>
         </div>
-        <Scene version={activeVersion} />
+        <Scene />
       </section>
     </section>
   );

@@ -201,7 +201,7 @@ export function EvoLabWorkspace() {
             </span>
           </div>
         </div>
-        <Scene version={activeVersion} />
+        <Scene />
       </section>
     );
   }

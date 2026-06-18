@@ -4,12 +4,13 @@ import * as THREE from "three";
 import { Text } from "@react-three/drei";
 import { useLayoutEffect, useMemo, useRef } from "react";
 import type { OpeningElement, PlanVersion, Room, Wall } from "@/lib/project-types";
+import {
+  getGridColumnPositions,
+  shouldRenderRoomLabels
+} from "@/lib/viewer-3d/building-model-utils";
+import { useBuildingModelSource } from "@/lib/viewer-3d/use-building-model-source";
 import { getRoomMaterialSpec, type RoomMaterialSpec, modelPalette } from "@/components/viewer-3d/materials";
 import { getPolygonBounds, getPolygonCenter } from "@/components/viewer-3d/wallGeometry";
-
-interface BuildingModelProps {
-  version: PlanVersion;
-}
 
 function createRoomShape(room: Room) {
   const shape = new THREE.Shape();
@@ -34,12 +35,24 @@ const wallMaterialSpec: Record<Wall["type"], { color: string; opacity: number }>
   core: { color: "#a87534", opacity: 0.78 }
 };
 
-export function BuildingModel({ version }: BuildingModelProps) {
+export function BuildingModel() {
+  const source = useBuildingModelSource();
+
+  if (!source) {
+    return null;
+  }
+
+  return <BuildingModelContent key={source.geometryRevision} version={source.version} />;
+}
+
+function BuildingModelContent({ version }: { version: PlanVersion }) {
   const outlineShape = useMemo(() => createRoomShape({ polygon: version.outline } as Room), [version.outline]);
   const outlineBounds = useMemo(() => getPolygonBounds(version.outline), [version.outline]);
   const level = version.levels[0];
   const offsetX = -(outlineBounds.minX + outlineBounds.maxX) / 2;
   const offsetZ = -(outlineBounds.minY + outlineBounds.maxY) / 2;
+  const showLabels = shouldRenderRoomLabels(version.rooms.length);
+  const columnPositions = useMemo(() => getGridColumnPositions(version), [version]);
 
   return (
     <group position={[offsetX, 0, offsetZ]} rotation={[-Math.PI / 2, 0, 0]}>
@@ -49,10 +62,12 @@ export function BuildingModel({ version }: BuildingModelProps) {
       </mesh>
 
       <RoomMassMeshes rooms={version.rooms} />
-      <RoomLabels rooms={version.rooms} />
+      {showLabels ? <RoomLabels rooms={version.rooms} /> : null}
+      {!showLabels ? <RoomCountLabel count={version.rooms.length} bounds={outlineBounds} /> : null}
 
       <InstancedWalls walls={level?.walls ?? []} />
       <InstancedOpenings openings={level?.openings ?? []} />
+      <InstancedGridColumns positions={columnPositions} levelHeight={level?.height ?? 3.2} />
     </group>
   );
 }
@@ -118,6 +133,23 @@ function RoomLabels({ rooms }: { rooms: Room[] }) {
   );
 }
 
+function RoomCountLabel({
+  count,
+  bounds
+}: {
+  count: number;
+  bounds: ReturnType<typeof getPolygonBounds>;
+}) {
+  const centerX = (bounds.minX + bounds.maxX) / 2;
+  const centerY = (bounds.minY + bounds.maxY) / 2;
+
+  return (
+    <Text color="#94a3b8" fontSize={1.6} anchorX="center" anchorY="middle" position={[centerX, centerY, -4.5]}>
+      {`${count} rooms (labels hidden for performance)`}
+    </Text>
+  );
+}
+
 function InstancedWalls({ walls }: { walls: Wall[] }) {
   const groupedWalls = useMemo(
     () =>
@@ -131,9 +163,7 @@ function InstancedWalls({ walls }: { walls: Wall[] }) {
   return (
     <>
       {groupedWalls.map(({ type, walls: typedWalls }) =>
-        typedWalls.length ? (
-          <InstancedWallGroup key={type} type={type} walls={typedWalls} />
-        ) : null
+        typedWalls.length ? <InstancedWallGroup key={type} type={type} walls={typedWalls} /> : null
       )}
     </>
   );
@@ -156,11 +186,7 @@ function InstancedWallGroup({ type, walls }: { type: Wall["type"]; walls: Wall[]
       const length = Math.max(0.01, Math.hypot(dx, dy));
       const angle = Math.atan2(dy, dx);
 
-      object.position.set(
-        (wall.start[0] + wall.end[0]) / 2,
-        wall.height / 2,
-        -(wall.start[1] + wall.end[1]) / 2
-      );
+      object.position.set((wall.start[0] + wall.end[0]) / 2, wall.height / 2, -(wall.start[1] + wall.end[1]) / 2);
       object.rotation.set(0, 0, angle);
       object.scale.set(length, wall.thickness, wall.height);
       object.updateMatrix();
@@ -191,9 +217,7 @@ function InstancedOpenings({ openings }: { openings: OpeningElement[] }) {
   return (
     <>
       {groupedOpenings.map(({ type, openings: typedOpenings }) =>
-        typedOpenings.length ? (
-          <InstancedOpeningGroup key={type} openings={typedOpenings} type={type} />
-        ) : null
+        typedOpenings.length ? <InstancedOpeningGroup key={type} openings={typedOpenings} type={type} /> : null
       )}
     </>
   );
@@ -217,7 +241,7 @@ function InstancedOpeningGroup({
     const object = new THREE.Object3D();
 
     openings.forEach((opening, index) => {
-      const y = opening.type === "window" ? opening.sillHeight ?? 0.9 : 0.08;
+      const y = opening.type === "window" ? (opening.sillHeight ?? 0.9) : 0.08;
 
       object.position.set(opening.center[0], y, -opening.center[1]);
       object.rotation.set(0, 0, 0);
@@ -233,6 +257,46 @@ function InstancedOpeningGroup({
     <instancedMesh ref={ref} args={[undefined, undefined, openings.length]}>
       <boxGeometry args={[1, 1, 1]} />
       <meshStandardMaterial color={color} opacity={0.8} transparent />
+    </instancedMesh>
+  );
+}
+
+function InstancedGridColumns({
+  positions,
+  levelHeight
+}: {
+  positions: Array<[number, number]>;
+  levelHeight: number;
+}) {
+  const ref = useRef<THREE.InstancedMesh>(null);
+
+  useLayoutEffect(() => {
+    if (!ref.current || positions.length === 0) {
+      return;
+    }
+
+    const object = new THREE.Object3D();
+    const columnSize = 0.45;
+
+    positions.forEach(([x, y], index) => {
+      object.position.set(x, levelHeight / 2, -y);
+      object.rotation.set(0, 0, 0);
+      object.scale.set(columnSize, levelHeight, columnSize);
+      object.updateMatrix();
+      ref.current?.setMatrixAt(index, object.matrix);
+    });
+
+    ref.current.instanceMatrix.needsUpdate = true;
+  }, [levelHeight, positions]);
+
+  if (positions.length === 0) {
+    return null;
+  }
+
+  return (
+    <instancedMesh ref={ref} args={[undefined, undefined, positions.length]} castShadow>
+      <boxGeometry args={[1, 1, 1]} />
+      <meshStandardMaterial color="#64748b" opacity={0.55} transparent />
     </instancedMesh>
   );
 }

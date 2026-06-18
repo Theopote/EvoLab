@@ -2,20 +2,17 @@
 
 import { Bvh, Environment, Grid, OrbitControls } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
-import type { PlanVersion } from "@/lib/project-types";
 import { BuildingModel } from "@/components/viewer-3d/BuildingModel";
+import { useHasBuildingModel } from "@/lib/viewer-3d/use-building-model-source";
 import { useInteractionStore } from "@/lib/interaction-store";
 
-interface SceneProps {
-  version?: PlanVersion;
-}
-
-export function Scene({ version }: SceneProps) {
+export function Scene() {
+  const hasVersion = useHasBuildingModel();
   const view3d = useInteractionStore((state) => state.view3d);
 
   return (
     <div className="h-full min-h-[560px] overflow-hidden rounded border border-line bg-[#081018]">
-      {version ? (
+      {hasVersion ? (
         <Canvas
           frameloop={view3d.frameloop}
           shadows
@@ -27,10 +24,10 @@ export function Scene({ version }: SceneProps) {
           <directionalLight castShadow position={[24, 40, 16]} intensity={1.6} shadow-mapSize={[2048, 2048]} />
           {view3d.bvhEnabled ? (
             <Bvh firstHitOnly>
-              <BuildingModel version={version} />
+              <BuildingModel />
             </Bvh>
           ) : (
-            <BuildingModel version={version} />
+            <BuildingModel />
           )}
           <Grid
             args={[160, 160]}

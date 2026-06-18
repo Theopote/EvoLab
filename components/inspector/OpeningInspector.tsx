@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useEvoProject } from "@/lib/project-store";
 
 export function OpeningInspector() {
-  const { selectedOpening } = useEvoProject();
+  const selectedOpening = useEvoProject((state) => state.selectedOpening);
   const [copied, setCopied] = useState<string | null>(null);
 
   if (!selectedOpening) {

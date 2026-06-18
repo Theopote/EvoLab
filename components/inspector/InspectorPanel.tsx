@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { OpeningInspector } from "@/components/inspector/OpeningInspector";
 import { ProjectInspector } from "@/components/inspector/ProjectInspector";
 import { RoomInspector } from "@/components/inspector/RoomInspector";
@@ -8,7 +9,15 @@ import { WallInspector } from "@/components/inspector/WallInspector";
 import { useEvoProject } from "@/lib/project-store";
 
 export function InspectorPanel() {
-  const { selectionType, selectedRoom, selectedWall, selectedOpening, clearSelection } = useEvoProject();
+  const { selectionType, selectedRoom, selectedWall, selectedOpening, clearSelection } = useEvoProject(
+    useShallow((state) => ({
+      selectionType: state.selectionType,
+      selectedRoom: state.selectedRoom,
+      selectedWall: state.selectedWall,
+      selectedOpening: state.selectedOpening,
+      clearSelection: state.clearSelection
+    }))
+  );
 
   const selectionLabel =
     selectionType === "room"
