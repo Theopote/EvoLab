@@ -6,6 +6,10 @@ import { create } from "zustand";
 import { normalizePlanVersion, normalizeProjectVersions } from "@/lib/architecture-model";
 import { initialProjectData } from "@/lib/evolab-data";
 import { calculateQuantities, checkCompliance, type ComplianceItem, type QuantityResult } from "@/lib/quantity-engine";
+import { computeBuildableEnvelope } from "@/lib/buildable-envelope";
+import type { BuildableEnvelope, EnvironmentSurrogate, SiteContext, ZoningConstraints } from "@/lib/site-types";
+import { computeEnvironmentSurrogate } from "@/lib/environment-surrogate";
+import { defaultZoningConstraints } from "@/lib/site-types";
 import type {
   AnalysisLayerId,
   DesignBrief,
@@ -55,6 +59,15 @@ interface EvoProjectStore {
   selectedOpening?: OpeningElement;
   outline: Point[];
   outlineClosed: boolean;
+  siteContext?: SiteContext;
+  siteAddressQuery: string;
+  isFetchingSite: boolean;
+  siteError: string | null;
+  zoning: ZoningConstraints;
+  buildableEnvelope?: BuildableEnvelope;
+  environmentSurrogate?: EnvironmentSurrogate;
+  showSiteContextLayer: boolean;
+  showEnvironmentOverlay: boolean;
   brief: DesignBrief;
   activeTab: WorkspaceTab;
   activeAnalysisLayers: AnalysisLayerId[];
@@ -66,6 +79,13 @@ interface EvoProjectStore {
   setActiveTab: (tab: WorkspaceTab) => void;
   setOutline: (outline: Point[]) => void;
   setOutlineClosed: (closed: boolean) => void;
+  setZoning: (zoning: ZoningConstraints) => void;
+  setSiteAddressQuery: (query: string) => void;
+  fetchSiteContext: (address?: string) => Promise<void>;
+  applySuggestedSiteOutline: () => void;
+  setShowSiteContextLayer: (visible: boolean) => void;
+  setShowEnvironmentOverlay: (visible: boolean) => void;
+  refreshEnvironmentSurrogate: () => void;
   updateBrief: (brief: DesignBrief) => void;
   setActiveAnalysisLayers: (layers: AnalysisLayerId[]) => void;
   setActiveMepLayers: (layers: MepLayerId[]) => void;
@@ -138,6 +158,14 @@ function validateSelectionDraft(state: EvoProjectStore) {
   if (!state.selectedOpeningId || !level?.openings.some((opening) => opening.id === state.selectedOpeningId)) {
     clearSelectionDraft(state);
   }
+}
+
+function refreshSiteDerivedDraft(state: EvoProjectStore) {
+  state.buildableEnvelope = computeBuildableEnvelope(state.outline, state.zoning);
+  state.environmentSurrogate = computeEnvironmentSurrogate({
+    outline: state.outline,
+    buildings: state.siteContext?.buildings ?? []
+  });
 }
 
 function refreshDerivedDraft(state: EvoProjectStore) {
@@ -239,6 +267,13 @@ function createInitialState(): Omit<
   | "setActiveTab"
   | "setOutline"
   | "setOutlineClosed"
+  | "setZoning"
+  | "setSiteAddressQuery"
+  | "fetchSiteContext"
+  | "applySuggestedSiteOutline"
+  | "setShowSiteContextLayer"
+  | "setShowEnvironmentOverlay"
+  | "refreshEnvironmentSurrogate"
   | "updateBrief"
   | "setActiveAnalysisLayers"
   | "setActiveMepLayers"
@@ -277,6 +312,15 @@ function createInitialState(): Omit<
     selectedOpening: undefined,
     outline: defaultOutline,
     outlineClosed: true,
+    siteContext: undefined,
+    siteAddressQuery: "",
+    isFetchingSite: false,
+    siteError: null,
+    zoning: defaultZoningConstraints,
+    buildableEnvelope: computeBuildableEnvelope(defaultOutline, defaultZoningConstraints),
+    environmentSurrogate: computeEnvironmentSurrogate({ outline: defaultOutline, buildings: [] }),
+    showSiteContextLayer: true,
+    showEnvironmentOverlay: true,
     brief: defaultBrief,
     activeTab: "Plan",
     activeAnalysisLayers: ["function_zones", "patient_flow", "egress_path", "daylight"],
@@ -300,12 +344,114 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
     set(
       produce<EvoProjectStore>((state) => {
         state.outline = outline;
+        refreshSiteDerivedDraft(state);
       })
     ),
   setOutlineClosed: (closed) =>
     set(
       produce<EvoProjectStore>((state) => {
         state.outlineClosed = closed;
+      })
+    ),
+  setZoning: (zoning) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        state.zoning = zoning;
+        refreshSiteDerivedDraft(state);
+      })
+    ),
+  setSiteAddressQuery: (query) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        state.siteAddressQuery = query;
+      })
+    ),
+  fetchSiteContext: async (address) => {
+    const query = (address ?? get().siteAddressQuery).trim();
+
+    if (!query) {
+      set(
+        produce<EvoProjectStore>((state) => {
+          state.siteError = "Enter a project address first.";
+        })
+      );
+      return;
+    }
+
+    set(
+      produce<EvoProjectStore>((state) => {
+        state.isFetchingSite = true;
+        state.siteError = null;
+        state.siteAddressQuery = query;
+      })
+    );
+
+    try {
+      const response = await fetch("/api/fetch-site-context", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ address: query })
+      });
+
+      if (!response.ok) {
+        throw new Error(`fetch-site-context failed with ${response.status}`);
+      }
+
+      const data = (await response.json()) as { context?: SiteContext; warning?: string };
+
+      if (!data.context) {
+        throw new Error("Site context response was empty.");
+      }
+
+      set(
+        produce<EvoProjectStore>((state) => {
+          state.siteContext = data.context;
+          state.siteError = data.warning ?? null;
+          refreshSiteDerivedDraft(state);
+        })
+      );
+    } catch (error) {
+      set(
+        produce<EvoProjectStore>((state) => {
+          state.siteError = error instanceof Error ? error.message : "Failed to fetch site context.";
+        })
+      );
+    } finally {
+      set(
+        produce<EvoProjectStore>((state) => {
+          state.isFetchingSite = false;
+        })
+      );
+    }
+  },
+  applySuggestedSiteOutline: () =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        if (!state.siteContext?.suggestedOutline.length) {
+          return;
+        }
+
+        state.outline = state.siteContext.suggestedOutline;
+        state.outlineClosed = true;
+        refreshSiteDerivedDraft(state);
+      })
+    ),
+  setShowSiteContextLayer: (visible) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        state.showSiteContextLayer = visible;
+      })
+    ),
+  setShowEnvironmentOverlay: (visible) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        state.showEnvironmentOverlay = visible;
+      })
+    ),
+  refreshEnvironmentSurrogate: () =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        refreshSiteDerivedDraft(state);
       })
     ),
   updateBrief: (brief) =>

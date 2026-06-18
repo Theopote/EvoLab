@@ -1,7 +1,10 @@
 "use client";
 
 import { ArrowUpRight, Boxes, Layers3 } from "lucide-react";
+import { useShallow } from "zustand/react/shallow";
+import { EnvironmentOverlay } from "@/components/site/EnvironmentOverlay";
 import type { PlanVersion, Room } from "@/lib/project-types";
+import { useEvoProject } from "@/lib/project-store";
 import { calculateQuantities } from "@/lib/quantity-engine";
 
 interface MassingPanelProps {
@@ -45,6 +48,22 @@ function prismPath(x: number, y: number, width: number, height: number, lift: nu
 }
 
 export function MassingPanel({ activeVersion, onOpenModel }: MassingPanelProps) {
+  const {
+    siteContext,
+    buildableEnvelope,
+    environmentSurrogate,
+    showSiteContextLayer,
+    showEnvironmentOverlay
+  } = useEvoProject(
+    useShallow((state) => ({
+      siteContext: state.siteContext,
+      buildableEnvelope: state.buildableEnvelope,
+      environmentSurrogate: state.environmentSurrogate,
+      showSiteContextLayer: state.showSiteContextLayer,
+      showEnvironmentOverlay: state.showEnvironmentOverlay
+    }))
+  );
+
   if (!activeVersion) {
     return (
       <div className="grid min-h-[560px] place-items-center rounded border border-dashed border-line bg-panel/60 text-sm text-muted">
@@ -55,7 +74,9 @@ export function MassingPanel({ activeVersion, onOpenModel }: MassingPanelProps) 
 
   const quantities = calculateQuantities(activeVersion);
   const padding = 10;
-  const viewBox = `${-padding} ${-padding - 12} ${activeVersion.overallBounds.width + padding * 2 + 20} ${
+  const minX = -padding;
+  const minY = -padding - 12;
+  const viewBox = `${minX} ${minY} ${activeVersion.overallBounds.width + padding * 2 + 20} ${
     activeVersion.overallBounds.height + padding * 2 + 20
   }`;
   const serviceArea = quantities.areaByZone.service;
@@ -80,7 +101,11 @@ export function MassingPanel({ activeVersion, onOpenModel }: MassingPanelProps) 
           <Metric label="Service ratio" value={`${Math.round((serviceArea / total) * 100)}%`} />
           <Metric label="Public ratio" value={`${Math.round((publicArea / total) * 100)}%`} />
           <Metric label="Circulation ratio" value={`${Math.round((circulationArea / total) * 100)}%`} />
-          <Metric label="Core / shaft rooms" value={String(activeVersion.rooms.filter((room) => ["stair", "elevator", "shaft"].includes(room.type)).length)} />
+          <Metric
+            label="Envelope volume"
+            value={buildableEnvelope?.valid ? `${buildableEnvelope.volumeCubicMeters} m³` : "n/a"}
+          />
+          <Metric label="Context buildings" value={String(siteContext?.buildings.length ?? 0)} />
         </div>
 
         <button
@@ -97,7 +122,9 @@ export function MassingPanel({ activeVersion, onOpenModel }: MassingPanelProps) 
         <div className="mb-3 flex items-center justify-between">
           <div>
             <h2 className="text-base font-semibold text-white">2.5D Massing Canvas</h2>
-            <p className="mt-1 text-xs text-muted">Simplified volume blocks. Height is derived from room type and ceiling height.</p>
+            <p className="mt-1 text-xs text-muted">
+              Instant sunlight and wind surrogate overlays plus zoning buildable envelope.
+            </p>
           </div>
           <span className="rounded border border-accent/40 px-2 py-1 text-xs text-accent">{activeVersion.label}</span>
         </div>
@@ -105,6 +132,61 @@ export function MassingPanel({ activeVersion, onOpenModel }: MassingPanelProps) 
         <div className="relative overflow-hidden rounded border border-line bg-[#081018] shadow-insetGrid">
           <div className="pointer-events-none absolute inset-0 cad-grid opacity-70" />
           <svg className="relative h-full min-h-[560px] w-full" viewBox={viewBox} role="img">
+            {showEnvironmentOverlay ? (
+              <>
+                <EnvironmentOverlay
+                  surrogate={environmentSurrogate}
+                  width={activeVersion.overallBounds.width}
+                  height={activeVersion.overallBounds.height}
+                  minX={0}
+                  minY={0}
+                  mode="sun"
+                />
+                <EnvironmentOverlay
+                  surrogate={environmentSurrogate}
+                  width={activeVersion.overallBounds.width}
+                  height={activeVersion.overallBounds.height}
+                  minX={0}
+                  minY={0}
+                  mode="wind"
+                />
+              </>
+            ) : null}
+
+            {showSiteContextLayer && siteContext
+              ? siteContext.roads.map((road) => (
+                  <polyline
+                    key={road.id}
+                    points={road.points.map(([x, y]) => `${x},${y}`).join(" ")}
+                    fill="none"
+                    stroke="rgba(148,163,184,0.45)"
+                    strokeWidth="0.5"
+                  />
+                ))
+              : null}
+
+            {showSiteContextLayer && siteContext
+              ? siteContext.buildings.map((building) => (
+                  <polygon
+                    key={building.id}
+                    points={building.polygon.map(([x, y]) => `${x},${y}`).join(" ")}
+                    fill="rgba(100,116,139,0.16)"
+                    stroke="rgba(148,163,184,0.5)"
+                    strokeWidth="0.25"
+                  />
+                ))
+              : null}
+
+            {buildableEnvelope?.valid ? (
+              <polygon
+                points={buildableEnvelope.footprint.map(([x, y]) => `${x},${y}`).join(" ")}
+                fill="rgba(79,181,200,0.08)"
+                stroke="#4fb5c8"
+                strokeDasharray="1.2 0.8"
+                strokeWidth="0.35"
+              />
+            ) : null}
+
             <polygon
               points={activeVersion.outline.map(([x, y]) => `${x},${y}`).join(" ")}
               fill="rgba(255,255,255,0.018)"

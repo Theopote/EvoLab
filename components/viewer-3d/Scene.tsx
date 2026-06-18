@@ -3,6 +3,7 @@
 import { Bvh, Environment, Grid, OrbitControls } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
 import { BuildingModel } from "@/components/viewer-3d/BuildingModel";
+import { SiteContextBuildings, SiteEnvelopeMesh } from "@/components/viewer-3d/SiteContextScene";
 import { useHasBuildingModel } from "@/lib/viewer-3d/use-building-model-source";
 import { useInteractionStore } from "@/lib/interaction-store";
 
@@ -24,10 +25,16 @@ export function Scene() {
           <directionalLight castShadow position={[24, 40, 16]} intensity={1.6} shadow-mapSize={[2048, 2048]} />
           {view3d.bvhEnabled ? (
             <Bvh firstHitOnly>
+              <SiteEnvelopeMesh />
+              <SiteContextBuildings />
               <BuildingModel />
             </Bvh>
           ) : (
-            <BuildingModel />
+            <>
+              <SiteEnvelopeMesh />
+              <SiteContextBuildings />
+              <BuildingModel />
+            </>
           )}
           <Grid
             args={[160, 160]}

@@ -11,6 +11,7 @@ import { InspectorPanel } from "@/components/inspector/InspectorPanel";
 import { MassingPanel } from "@/components/massing-panel";
 import { MepCanvas } from "@/components/mep/MepCanvas";
 import { MepLayerList } from "@/components/mep/MepLayerList";
+import { SiteContextPanel } from "@/components/site/SiteContextPanel";
 import { BriefForm } from "@/components/plan-editor/BriefForm";
 import { OutlineCanvas } from "@/components/plan-editor/OutlineCanvas";
 import { PlanResultGrid } from "@/components/plan-editor/PlanResultGrid";
@@ -164,7 +165,8 @@ export function EvoLabWorkspace() {
             />
 
             {activeTab === "Plan" ? (
-              <div className="mt-4">
+              <div className="mt-4 space-y-4">
+                <SiteContextPanel />
                 <BriefForm value={brief} onChange={updateBrief} />
               </div>
             ) : null}
