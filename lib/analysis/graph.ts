@@ -4,6 +4,7 @@ import { polygonEdges } from "@/lib/wall-extractor";
 export interface RoomGraph {
   adjacency: Map<string, Set<string>>;
   positions: Map<string, Point>;
+  method: "door-aware" | "adjacency";
 }
 
 function centroid(room: Room): Point {
@@ -52,13 +53,56 @@ function inferSharedEdgeAdjacency(rooms: Room[], graph: Map<string, Set<string>>
   });
 }
 
+function inferDoorOpeningAdjacency(version: PlanVersion, graph: Map<string, Set<string>>) {
+  const openings = version.levels.flatMap((level) => level.openings ?? []);
+  let linked = false;
+
+  openings
+    .filter((opening) => opening.type === "door")
+    .forEach((opening) => {
+      const roomIds = opening.roomIds ?? [];
+      for (let index = 0; index < roomIds.length; index += 1) {
+        for (let other = index + 1; other < roomIds.length; other += 1) {
+          connect(graph, roomIds[index], roomIds[other]);
+          linked = true;
+        }
+      }
+    });
+
+  version.rooms.forEach((room) => {
+    if (room.doors.length === 0) {
+      return;
+    }
+
+    room.adjacents?.forEach((adjacentId) => {
+      connect(graph, room.id, adjacentId);
+      linked = true;
+    });
+  });
+
+  return linked;
+}
+
+function inferCirculationPortalAdjacency(version: PlanVersion, graph: Map<string, Set<string>>) {
+  const corridors = version.rooms.filter((room) => room.type === "corridor");
+  const cores = version.rooms.filter((room) => ["stair", "elevator"].includes(room.type));
+
+  corridors.forEach((corridor) => {
+    cores.forEach((core) => {
+      if (corridor.adjacents?.includes(core.id) || core.adjacents?.includes(corridor.id)) {
+        connect(graph, corridor.id, core.id);
+      }
+    });
+  });
+}
+
 export function buildRoomGraph(version: PlanVersion): RoomGraph {
   const adjacency = new Map<string, Set<string>>();
   const positions = new Map<string, Point>();
 
   version.rooms.forEach((room) => {
     positions.set(room.id, centroid(room));
-    adjacency.set(room.id, new Set(room.adjacents ?? []));
+    adjacency.set(room.id, new Set());
   });
 
   version.rooms.forEach((room) => {
@@ -66,31 +110,39 @@ export function buildRoomGraph(version: PlanVersion): RoomGraph {
   });
 
   inferSharedEdgeAdjacency(version.rooms, adjacency);
+  const hasDoorLinks = inferDoorOpeningAdjacency(version, adjacency);
+  inferCirculationPortalAdjacency(version, adjacency);
 
-  const corridors = version.rooms.filter((room) => room.type === "corridor");
-  corridors.forEach((corridor) => {
-    version.rooms.forEach((room) => {
-      if (room.id === corridor.id) {
-        return;
-      }
+  if (!hasDoorLinks) {
+    const corridors = version.rooms.filter((room) => room.type === "corridor");
+    corridors.forEach((corridor) => {
+      version.rooms.forEach((room) => {
+        if (room.id === corridor.id) {
+          return;
+        }
 
-      const corridorSet = adjacency.get(corridor.id);
-      if (corridorSet?.has(room.id)) {
-        return;
-      }
+        const corridorSet = adjacency.get(corridor.id);
+        if (corridorSet?.has(room.id)) {
+          return;
+        }
 
-      const distance = Math.hypot(
-        positions.get(corridor.id)![0] - positions.get(room.id)![0],
-        positions.get(corridor.id)![1] - positions.get(room.id)![1]
-      );
+        const distance = Math.hypot(
+          positions.get(corridor.id)![0] - positions.get(room.id)![0],
+          positions.get(corridor.id)![1] - positions.get(room.id)![1]
+        );
 
-      if (distance < Math.max(8, Math.sqrt(room.areaSqm) * 1.4)) {
-        connect(adjacency, corridor.id, room.id);
-      }
+        if (distance < Math.max(8, Math.sqrt(room.areaSqm) * 1.4) && (room.doors.length > 0 || room.type === "corridor")) {
+          connect(adjacency, corridor.id, room.id);
+        }
+      });
     });
-  });
+  }
 
-  return { adjacency, positions };
+  return {
+    adjacency,
+    positions,
+    method: hasDoorLinks ? "door-aware" : "adjacency"
+  };
 }
 
 function heuristic(from: Point, to: Point) {

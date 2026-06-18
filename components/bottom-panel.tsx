@@ -2,10 +2,12 @@
 
 import { AlertTriangle, CheckCircle2, FileStack, Layers3, Ruler, ScrollText } from "lucide-react";
 import { useMemo, useState } from "react";
+import { ScoreBreakdownPanel } from "@/components/score/ScoreBreakdownPanel";
 import type { ComplianceItem, QuantityResult } from "@/lib/quantity-engine";
 import type { PlanVersion, ProjectData } from "@/lib/project-types";
+import { ensureVersionScores, scoringInputFromDomain } from "@/lib/rules/resolve-version-scoring";
 
-type BottomPanelTab = "tasks" | "versions" | "quantities" | "warnings" | "sheets";
+type BottomPanelTab = "tasks" | "versions" | "scores" | "quantities" | "warnings" | "sheets";
 
 interface BottomPanelProps {
   project: ProjectData;
@@ -18,6 +20,7 @@ interface BottomPanelProps {
 const tabs: { id: BottomPanelTab; label: string }[] = [
   { id: "tasks", label: "AI Tasks" },
   { id: "versions", label: "Versions" },
+  { id: "scores", label: "Scores" },
   { id: "quantities", label: "Quantities" },
   { id: "warnings", label: "Warnings" },
   { id: "sheets", label: "Sheets" }
@@ -32,6 +35,11 @@ export function BottomPanel({
 }: BottomPanelProps) {
   const [activeTab, setActiveTab] = useState<BottomPanelTab>("tasks");
   const warningCount = complianceItems.filter((item) => item.status === "warning").length;
+  const scoringInput = useMemo(() => scoringInputFromDomain(project.domain, project.projectType), [project.domain, project.projectType]);
+  const scoredActiveVersion = useMemo(
+    () => (activeVersion ? ensureVersionScores(activeVersion, scoringInput) : undefined),
+    [activeVersion, scoringInput]
+  );
   const taskRows = useMemo(
     () => [
       {
@@ -90,7 +98,7 @@ export function BottomPanel({
         </div>
       </div>
 
-      <div className="h-44 overflow-auto p-3">
+      <div className={`overflow-auto p-3 ${activeTab === "scores" ? "h-72" : "h-44"}`}>
         {activeTab === "tasks" ? (
           <div className="grid gap-2 lg:grid-cols-5">
             {taskRows.map((task) => (
@@ -141,6 +149,16 @@ export function BottomPanel({
               </button>
             ))}
           </div>
+        ) : null}
+
+        {activeTab === "scores" ? (
+          scoredActiveVersion ? (
+            <ScoreBreakdownPanel version={scoredActiveVersion} program={project.domain.program} />
+          ) : (
+            <div className="rounded border border-line bg-panel/70 p-3 text-sm text-muted">
+              Select an active version to inspect score evidence.
+            </div>
+          )
         ) : null}
 
         {activeTab === "quantities" ? (

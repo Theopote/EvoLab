@@ -5,7 +5,7 @@ import {
   resolveGeneratePlanConstraints,
   type GeneratePlanConstraints
 } from "@/lib/generate-plan-constraints";
-import { postProcessPlanVersion } from "@/lib/plan-postprocess";
+import { postProcessPlanVersion, type PostProcessOptions } from "@/lib/plan-postprocess";
 import { validatePlanVersion, type PlanValidationIssue } from "@/lib/plan-validation";
 import { generatePlanTopologyPrompt } from "@/lib/prompts/generatePlanTopologyPrompt";
 import { refinePlanGeometryPrompt } from "@/lib/prompts/refinePlanGeometryPrompt";
@@ -74,6 +74,31 @@ function summarizeValidationIssues(issues: PlanValidationIssue[]) {
     message: issue.message,
     roomIds: issue.roomIds
   }));
+}
+
+function resolveOrientationDeg(body: GeneratePlanRequest) {
+  const preference = body.designBrief?.orientationPreference?.toLowerCase() ?? "";
+  if (preference.includes("south")) {
+    return 180;
+  }
+  if (preference.includes("north")) {
+    return 0;
+  }
+  if (preference.includes("east")) {
+    return 90;
+  }
+  if (preference.includes("west")) {
+    return 270;
+  }
+  return undefined;
+}
+
+function postProcessOptions(body: GeneratePlanRequest, program: ReturnType<typeof resolveProgramForGeneration>): PostProcessOptions {
+  return {
+    program,
+    projectType: body.projectType,
+    orientationDeg: resolveOrientationDeg(body)
+  };
 }
 
 function topologyLayoutOptions(constraints: GeneratePlanConstraints): TopologyLayoutOptions {
@@ -191,7 +216,8 @@ async function refineVersionPair(
   pair: TopologyGeometryPair,
   constraints: GeneratePlanConstraints,
   program: ReturnType<typeof resolveProgramForGeneration>,
-  warnings: string[]
+  warnings: string[],
+  scoringOptions: PostProcessOptions
 ): Promise<PlanVersion | null> {
   let current = pair.version;
   let issues = validatePlanVersion(current).issues;
@@ -219,7 +245,7 @@ async function refineVersionPair(
           : undefined
       );
 
-      current = postProcessPlanVersion(refined.version);
+      current = postProcessPlanVersion(refined.version, scoringOptions);
       issues = validatePlanVersion(current).issues;
       programIssues = validateVersionAgainstProgram(current, program).issues;
       envelopeIssues = constraints.envelope
@@ -261,6 +287,7 @@ export async function runGeneratePlanPipeline(body: GeneratePlanRequest): Promis
   const warnings: string[] = [];
   const constraints = resolveGeneratePlanConstraints(body);
   const program = resolveProgramForGeneration(body);
+  const scoringOptions = postProcessOptions(body, program);
   const layoutOptions = topologyLayoutOptions(constraints);
   const meta: GeneratePlanPipelineMeta = {
     phases: { topology: false, geometry: false, refinement: false },
@@ -340,7 +367,7 @@ export async function runGeneratePlanPipeline(body: GeneratePlanRequest): Promis
   const refinedVersions: PlanVersion[] = [];
 
   for (const pair of pairs) {
-    const refined = await refineVersionPair(pair, constraints, program, warnings);
+    const refined = await refineVersionPair(pair, constraints, program, warnings, scoringOptions);
     if (refined) {
       refinedVersions.push(refined);
       meta.refinedCount += 1;

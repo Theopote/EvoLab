@@ -286,6 +286,9 @@ export function EvoLabWorkspace() {
             versions={project.versions}
             activeVersionId={project.activeVersionId}
             compareLevelId={compareLevelId}
+            program={project.domain.program}
+            projectType={project.projectType}
+            orientationDeg={project.domain.site.orientationDeg}
             onCompareLevelChange={setCompareLevel}
             onSelectVersion={setActiveVersion}
             onGenerateModel={openModelForVersion}

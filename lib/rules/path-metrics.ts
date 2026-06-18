@@ -5,8 +5,8 @@ export interface EgressPathResult {
   maxDistance: number;
   worstRoomId?: string;
   worstRoomName?: string;
-  method: "path" | "centroid-fallback";
-  perRoom: Array<{ roomId: string; roomName: string; distance: number; method: "path" | "centroid-fallback" }>;
+  method: "door-aware-path" | "path" | "centroid-fallback";
+  perRoom: Array<{ roomId: string; roomName: string; distance: number; method: "door-aware-path" | "path" | "centroid-fallback" }>;
 }
 
 export interface WetCorePathResult {
@@ -92,12 +92,13 @@ function shortestPathDistance(
 export function computeEgressPathMetrics(version: PlanVersion, levelId?: string): EgressPathResult {
   const scoped = scopeVersion(version, levelId);
   const graph = buildRoomGraph(scoped);
+  const pathMethod = graph.method === "door-aware" ? "door-aware-path" : "path";
   const occupiableRooms = scoped.rooms.filter((room) => !["stair", "elevator", "shaft"].includes(room.type));
   const perRoom: EgressPathResult["perRoom"] = [];
   let maxDistance = 0;
   let worstRoomId: string | undefined;
   let worstRoomName: string | undefined;
-  let method: EgressPathResult["method"] = "path";
+  let method: EgressPathResult["method"] = pathMethod;
 
   occupiableRooms.forEach((room) => {
     const route = findNearestExitPath(graph, scoped, room.id);
@@ -107,7 +108,7 @@ export function computeEgressPathMetrics(version: PlanVersion, levelId?: string)
         roomId: room.id,
         roomName: room.name,
         distance: route.distance,
-        method: "path"
+        method: pathMethod
       });
 
       if (route.distance > maxDistance) {

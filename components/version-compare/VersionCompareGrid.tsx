@@ -3,9 +3,12 @@
 import { Boxes, Check, GitCompare, Loader2, Sparkles, Wand2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FloorPlan } from "@/components/floor-plan";
+import { VersionCompareExplainPanel } from "@/components/score/VersionCompareExplainPanel";
 import { listComparableLevelGroups, listComparableLevels } from "@/lib/multi-floor";
+import type { ProgramModel } from "@/lib/building-domain";
 import { calculateQuantities } from "@/lib/quantity-engine";
 import type { PlanVersion } from "@/lib/project-types";
+import { ensureVersionScores } from "@/lib/rules/resolve-version-scoring";
 import {
   compareVersionsAtLevel,
   compareVersionsAtLevelIndex,
@@ -22,6 +25,9 @@ interface VersionCompareGridProps {
   versions: PlanVersion[];
   activeVersionId: string;
   compareLevelId?: string;
+  program?: ProgramModel;
+  projectType?: string;
+  orientationDeg?: number;
   onCompareLevelChange?: (levelId: string) => void;
   onSelectVersion: (version: PlanVersion) => void;
   onGenerateModel: (version: PlanVersion) => void;
@@ -123,6 +129,9 @@ export function VersionCompareGrid({
   versions,
   activeVersionId,
   compareLevelId,
+  program,
+  projectType,
+  orientationDeg,
   onCompareLevelChange,
   onSelectVersion,
   onGenerateModel,
@@ -154,6 +163,18 @@ export function VersionCompareGrid({
     compareLevelIndices,
     compareScope,
     comparedVersions.length >= 2
+  );
+  const scoringInput = useMemo(
+    () => ({
+      program,
+      projectType,
+      orientationDeg
+    }),
+    [orientationDeg, program, projectType]
+  );
+  const scoredComparedVersions = useMemo(
+    () => comparedVersions.map((version) => ensureVersionScores(version, scoringInput)),
+    [comparedVersions, scoringInput]
   );
   const recommendedId = useMemo(
     () => [...versions].sort((a, b) => scoreVersion(b) - scoreVersion(a))[0]?.id,
@@ -326,7 +347,16 @@ export function VersionCompareGrid({
         </div>
 
         {comparedVersions.length ? (
-          <section className="mt-4 rounded border border-line bg-panel/90 p-3">
+          <section className="mt-4 space-y-3">
+            {scoredComparedVersions.length === 2 ? (
+              <VersionCompareExplainPanel
+                left={scoredComparedVersions[0]!}
+                right={scoredComparedVersions[1]!}
+                program={program}
+              />
+            ) : null}
+
+            <div className="rounded border border-line bg-panel/90 p-3">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-white">Pinned comparison</h2>
               <div className="flex items-center gap-2 text-xs text-muted">
@@ -376,6 +406,7 @@ export function VersionCompareGrid({
                 ))}
               </div>
             )}
+            </div>
           </section>
         ) : null}
       </div>

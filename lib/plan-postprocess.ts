@@ -1,4 +1,5 @@
 import { normalizePlanVersion, type PlanVersionDraft } from "@/lib/architecture-model";
+import type { CodeContext, ProgramModel } from "@/lib/building-domain";
 import type { PlanVersion, Point, Room } from "@/lib/project-types";
 import { calculateScores } from "@/lib/plan-scoring";
 import { polygonArea, validatePlanVersion } from "@/lib/plan-validation";
@@ -90,14 +91,27 @@ export function repairPlanVersion(version: PlanVersion) {
   };
 }
 
-export function postProcessPlanVersion(draft: PlanVersionDraft): PlanVersion {
+export interface PostProcessOptions {
+  codeContext?: CodeContext;
+  program?: ProgramModel;
+  projectType?: string;
+  orientationDeg?: number;
+}
+
+export function postProcessPlanVersion(draft: PlanVersionDraft, options: PostProcessOptions = {}): PlanVersion {
   const firstPass = normalizePlanVersion(draft);
-  const initialValidation = validatePlanVersion(firstPass);
+  const initialValidation = validatePlanVersion(firstPass, {
+    codeContext: options.codeContext,
+    projectType: options.projectType
+  });
   const repaired = repairPlanVersion(firstPass);
   const normalized = normalizePlanVersion(repaired.version);
-  const finalValidation = validatePlanVersion(normalized);
+  const finalValidation = validatePlanVersion(normalized, {
+    codeContext: options.codeContext,
+    projectType: options.projectType
+  });
   const allIssues = [...initialValidation.issues, ...finalValidation.issues];
-  const scores = calculateScores(normalized, finalValidation.issues);
+  const scores = calculateScores(normalized, allIssues, options);
   const validationWarnings = Array.from(new Set(allIssues.map((issue) => issue.message)));
   const repairs = Array.from(new Set(repaired.repairs));
 
@@ -112,6 +126,6 @@ export function postProcessPlanVersion(draft: PlanVersionDraft): PlanVersion {
   };
 }
 
-export function postProcessPlanVersions(drafts: PlanVersionDraft[]) {
-  return drafts.map((draft) => postProcessPlanVersion(draft));
+export function postProcessPlanVersions(drafts: PlanVersionDraft[], options: PostProcessOptions = {}) {
+  return drafts.map((draft) => postProcessPlanVersion(draft, options));
 }
