@@ -1,8 +1,9 @@
 "use client";
 
-import { Bvh, Environment, Grid, OrbitControls } from "@react-three/drei";
+import { Bvh, Grid, OrbitControls } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
 import { BuildingModel } from "@/components/viewer-3d/BuildingModel";
+import { SceneEnvironment } from "@/components/viewer-3d/SceneEnvironment";
 import { SiteContextBuildings, SiteEnvelopeMesh } from "@/components/viewer-3d/SiteContextScene";
 import { useHasBuildingModel } from "@/lib/viewer-3d/use-building-model-source";
 import { useInteractionStore } from "@/lib/interaction-store";
@@ -46,7 +47,7 @@ export function Scene() {
             sectionColor="#355163"
             sectionSize={16}
           />
-          <Environment preset="city" />
+          <SceneEnvironment />
           <OrbitControls makeDefault enableDamping target={[0, 0, 0]} />
         </Canvas>
       ) : (

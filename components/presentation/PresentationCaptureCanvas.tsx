@@ -1,9 +1,9 @@
 "use client";
 
-import { Environment } from "@react-three/drei";
 import { Canvas, useThree } from "@react-three/fiber";
 import { useEffect, useRef } from "react";
 import { PresentationCaptureBuilding } from "@/components/presentation/PresentationCaptureBuilding";
+import { SceneEnvironment } from "@/components/viewer-3d/SceneEnvironment";
 import { SiteContextBuildings, SiteEnvelopeMesh } from "@/components/viewer-3d/SiteContextScene";
 import { buildCaptureViews } from "@/lib/presentation/capture-views";
 import type { PresentationCaptureImage } from "@/lib/presentation-capture-store";
@@ -108,7 +108,7 @@ export function PresentationCaptureCanvas() {
         <SiteEnvelopeMesh />
         <SiteContextBuildings />
         <PresentationCaptureBuilding version={activeVersion} />
-        <Environment preset="city" />
+        <SceneEnvironment />
         <CaptureRig spanMeters={span} />
       </Canvas>
     </div>
