@@ -4,7 +4,18 @@ import { produce } from "immer";
 import { type ReactNode } from "react";
 import { create } from "zustand";
 import { normalizePlanVersion, normalizeProjectVersions } from "@/lib/architecture-model";
+import type { ScheduleBundle } from "@/lib/building-domain";
 import { initialProjectData } from "@/lib/evolab-data";
+import {
+  appendChangeSet,
+  approveChangeSetInDomain,
+  createChangeSet,
+  getActiveSchedule,
+  getCodeContext,
+  pendingChangeSets,
+  rejectChangeSetInDomain,
+  syncProjectDomain
+} from "@/lib/project-domain";
 import { calculateQuantities, checkCompliance, type ComplianceItem, type QuantityResult } from "@/lib/quantity-engine";
 import { computeBuildableEnvelope } from "@/lib/buildable-envelope";
 import type { BuildableEnvelope, EnvironmentSurrogate, SiteContext, ZoningConstraints } from "@/lib/site-types";
@@ -82,11 +93,13 @@ interface EvoProjectStore {
   mepError: string | null;
   quantities?: QuantityResult;
   levelQuantities?: QuantityResult;
+  activeSchedule?: ScheduleBundle;
   complianceItems: ComplianceItem[];
   outlineStale: boolean;
   isRelayouting: boolean;
   relayoutError: string | null;
   compareLevelId?: string;
+  selectedChangeSetId?: string;
   setActiveTab: (tab: WorkspaceTab) => void;
   setOutline: (outline: Point[]) => void;
   setOutlineClosed: (closed: boolean) => void;
@@ -114,9 +127,16 @@ interface EvoProjectStore {
   replaceVersions: (versions: PlanVersion[], projectType?: string) => void;
   appendGeneratedVersions: (versions: PlanVersion[], projectType?: string) => void;
   setActiveVersion: (version: PlanVersion) => void;
-  updateActiveVersion: (version: PlanVersion) => void;
+  updateActiveVersion: (
+    version: PlanVersion,
+    options?: { summary?: string; source?: "ai" | "user" | "import" | "system" }
+  ) => void;
   relayoutActiveVersion: () => Promise<void>;
   setCompareLevel: (levelId: string) => void;
+  selectChangeSet: (changeSetId?: string) => void;
+  approveChangeSet: (changeSetId: string, lockChangedElements?: boolean) => void;
+  rejectChangeSet: (changeSetId: string) => void;
+  toggleElementLock: (elementId: string) => void;
   generateMep: () => Promise<void>;
   openModelForVersion: (version: PlanVersion) => void;
   refineVersion: (version: PlanVersion) => void;
@@ -214,9 +234,57 @@ function syncOutlineFromVersionDraft(state: EvoProjectStore, version: PlanVersio
   refreshOutlineSyncDraft(state);
 }
 
+function buildDomainSyncInput(state: EvoProjectStore) {
+  return {
+    projectType: state.project.projectType,
+    brief: state.brief,
+    outline: state.outline,
+    zoning: state.zoning,
+    siteContext: state.siteContext,
+    activeVersion: state.activeVersion
+  };
+}
+
+function refreshDomainDraft(state: EvoProjectStore) {
+  state.project.domain = syncProjectDomain(state.project.domain, buildDomainSyncInput(state));
+  state.activeSchedule = getActiveSchedule(state.project.domain, state.activeVersion?.id);
+
+  const pending = pendingChangeSets(state.project.domain);
+  const selectedExists = state.selectedChangeSetId
+    ? state.project.domain.changeSets.some((item) => item.id === state.selectedChangeSetId)
+    : false;
+
+  if (!selectedExists) {
+    state.selectedChangeSetId = pending[0]?.id ?? state.project.domain.changeSets[0]?.id;
+  }
+}
+
+function recordVersionChangeSet(
+  state: EvoProjectStore,
+  source: "ai" | "user" | "import" | "system",
+  summary: string,
+  baseVersion: PlanVersion,
+  targetVersion: PlanVersion
+) {
+  state.project.domain = appendChangeSet(
+    state.project.domain,
+    createChangeSet({
+      source,
+      summary,
+      baseVersion,
+      targetVersion
+    })
+  );
+}
+
+function isElementLocked(state: EvoProjectStore, elementId: string) {
+  return state.project.domain.lockedElementIds.includes(elementId);
+}
+
 function refreshDerivedDraft(state: EvoProjectStore) {
   const activeVersion = getActiveVersion(state.project);
   const activeLevel = getLevel(activeVersion, state.activeLevelId);
+  const codeContext = getCodeContext(state.project.domain);
 
   state.activeVersion = activeVersion;
   state.activeLevelId = activeLevel?.id;
@@ -226,7 +294,7 @@ function refreshDerivedDraft(state: EvoProjectStore) {
     activeVersion && activeLevel
       ? calculateQuantities(activeVersion, { levelId: activeLevel.id, scope: "level" })
       : undefined;
-  state.complianceItems = activeVersion ? checkCompliance(activeVersion) : [];
+  state.complianceItems = activeVersion ? checkCompliance(activeVersion, codeContext) : [];
   state.selectedRoom = (activeLevel?.rooms.length ? activeLevel.rooms : activeVersion?.rooms)?.find(
     (room) => room.id === state.selectedRoomId
   );
@@ -236,6 +304,7 @@ function refreshDerivedDraft(state: EvoProjectStore) {
   validateSelectionDraft(state);
   refreshOutlineSyncDraft(state);
   refreshCompareLevelDraft(state);
+  refreshDomainDraft(state);
 }
 
 function bumpGeometryRevision(state: EvoProjectStore) {
@@ -252,6 +321,8 @@ function patchTouchesGeometry<T extends object>(patch: Partial<T>, geometryKeys:
 
 function refreshQuantitiesDraft(state: EvoProjectStore) {
   const activeLevel = getLevel(state.activeVersion, state.activeLevelId);
+  const codeContext = getCodeContext(state.project.domain);
+
   state.quantities = state.activeVersion
     ? calculateQuantities(state.activeVersion, { scope: "building" })
     : undefined;
@@ -259,7 +330,8 @@ function refreshQuantitiesDraft(state: EvoProjectStore) {
     state.activeVersion && activeLevel
       ? calculateQuantities(state.activeVersion, { levelId: activeLevel.id, scope: "level" })
       : undefined;
-  state.complianceItems = state.activeVersion ? checkCompliance(state.activeVersion) : [];
+  state.complianceItems = state.activeVersion ? checkCompliance(state.activeVersion, codeContext) : [];
+  refreshDomainDraft(state);
 }
 
 function applyRoomPatchToVersion(
@@ -306,12 +378,20 @@ function commitNormalizedVersionDraft(
   state: EvoProjectStore,
   normalizedVersion: PlanVersion,
   resetSelection = false,
-  bumpGeometry = true
+  bumpGeometry = true,
+  changeSummary?: string,
+  changeSource: "ai" | "user" | "import" | "system" = "user"
 ) {
+  const previousVersion = state.project.versions.find((item) => item.id === normalizedVersion.id);
+
   state.project.versions = state.project.versions.some((item) => item.id === normalizedVersion.id)
     ? state.project.versions.map((item) => (item.id === normalizedVersion.id ? normalizedVersion : item))
     : [...state.project.versions, normalizedVersion];
   state.project.activeVersionId = normalizedVersion.id;
+
+  if (previousVersion && changeSummary) {
+    recordVersionChangeSet(state, changeSource, changeSummary, previousVersion, normalizedVersion);
+  }
 
   if (resetSelection) {
     clearSelectionDraft(state);
@@ -366,6 +446,10 @@ function createInitialState(): Omit<
   | "updateActiveVersion"
   | "relayoutActiveVersion"
   | "setCompareLevel"
+  | "selectChangeSet"
+  | "approveChangeSet"
+  | "rejectChangeSet"
+  | "toggleElementLock"
   | "generateMep"
   | "openModelForVersion"
   | "refineVersion"
@@ -411,11 +495,15 @@ function createInitialState(): Omit<
       activeVersion && activeLevel
         ? calculateQuantities(activeVersion, { levelId: activeLevel.id, scope: "level" })
         : undefined,
-    complianceItems: activeVersion ? checkCompliance(activeVersion) : [],
+    complianceItems: activeVersion
+      ? checkCompliance(activeVersion, getCodeContext(initialProjectData.domain))
+      : [],
+    activeSchedule: getActiveSchedule(initialProjectData.domain, activeVersion?.id),
     outlineStale: false,
     isRelayouting: false,
     relayoutError: null,
-    compareLevelId: activeLevel?.id
+    compareLevelId: activeLevel?.id,
+    selectedChangeSetId: initialProjectData.domain.changeSets[0]?.id
   };
 }
 
@@ -442,6 +530,7 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
         state.outline = outline;
         refreshSiteDerivedDraft(state);
         refreshOutlineSyncDraft(state);
+        refreshDomainDraft(state);
       })
     ),
   setOutlineClosed: (closed) =>
@@ -455,6 +544,7 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
       produce<EvoProjectStore>((state) => {
         state.zoning = zoning;
         refreshSiteDerivedDraft(state);
+        refreshDomainDraft(state);
       })
     ),
   setSiteAddressQuery: (query) =>
@@ -503,6 +593,7 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
       set(
         produce<EvoProjectStore>((state) => {
           state.siteContext = data.context;
+          refreshDomainDraft(state);
           state.siteError = data.warning ?? null;
           refreshSiteDerivedDraft(state);
         })
@@ -555,6 +646,7 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
     set(
       produce<EvoProjectStore>((state) => {
         state.brief = brief;
+        refreshDomainDraft(state);
       })
     ),
   setWorkflowPhase: (phase) =>
@@ -609,6 +701,41 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
         state.compareLevelId = levelId;
       })
     ),
+  toggleElementLock: (elementId) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        const locked = state.project.domain.lockedElementIds;
+        state.project.domain.lockedElementIds = locked.includes(elementId)
+          ? locked.filter((id) => id !== elementId)
+          : [...locked, elementId];
+      })
+    ),
+  selectChangeSet: (changeSetId) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        state.selectedChangeSetId = changeSetId;
+      })
+    ),
+  approveChangeSet: (changeSetId, lockChangedElements = true) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        state.project.domain = approveChangeSetInDomain(state.project.domain, changeSetId, {
+          lockChangedElements
+        });
+      })
+    ),
+  rejectChangeSet: (changeSetId) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        const result = rejectChangeSetInDomain(state.project.domain, changeSetId, state.project.versions);
+        state.project.domain = result.domain;
+        state.project.versions = result.versions;
+        state.project.activeVersionId = result.activeVersionId;
+        clearSelectionDraft(state);
+        bumpGeometryRevision(state);
+        refreshDerivedDraft(state);
+      })
+    ),
   selectRoom: (roomId) =>
     set(
       produce<EvoProjectStore>((state) => {
@@ -652,6 +779,10 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
           return;
         }
 
+        if (isElementLocked(state, roomId)) {
+          return;
+        }
+
         if (patchTouchesGeometry(patch, ROOM_GEOMETRY_KEYS)) {
           const normalized = normalizePlanVersion(state.activeVersion);
           const nextVersion = applyRoomPatchToVersion(normalized, state.activeLevelId, roomId, patch);
@@ -660,7 +791,14 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
             return;
           }
 
-          commitNormalizedVersionDraft(state, normalizePlanVersion(nextVersion));
+          commitNormalizedVersionDraft(
+            state,
+            normalizePlanVersion(nextVersion),
+            false,
+            true,
+            `Updated room geometry for ${roomId}`,
+            "user"
+          );
           return;
         }
 
@@ -680,6 +818,10 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
           return;
         }
 
+        if (isElementLocked(state, roomId)) {
+          return;
+        }
+
         const normalized = normalizePlanVersion(state.activeVersion);
         const nextVersion = applyRoomPatchToVersion(normalized, state.activeLevelId, roomId, patch);
 
@@ -687,7 +829,14 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
           return;
         }
 
-        commitNormalizedVersionDraft(state, normalizePlanVersion(nextVersion));
+        commitNormalizedVersionDraft(
+          state,
+          normalizePlanVersion(nextVersion),
+          false,
+          true,
+          `Updated room geometry for ${roomId}`,
+          "user"
+        );
       })
     ),
   updateWall: (wallId, patch) =>
@@ -798,11 +947,24 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
           parentVersionId: version.parentVersionId ?? parentVersionId
         }));
 
+        const parentVersion = state.project.versions.find((version) => version.id === parentVersionId);
+
         state.project.projectType = projectType;
         state.project.versions = [...state.project.versions, ...normalizedVersions];
         state.project.activeVersionId = normalizedVersions[0]?.id ?? state.project.activeVersionId;
         clearSelectionDraft(state);
         bumpGeometryRevision(state);
+
+        if (parentVersion && normalizedVersions[0]) {
+          recordVersionChangeSet(
+            state,
+            "ai",
+            `Generated ${normalizedVersions.length} new scheme(s)`,
+            parentVersion,
+            normalizedVersions[0]
+          );
+        }
+
         refreshDerivedDraft(state);
 
         const nextActiveVersion = getActiveVersion(state.project);
@@ -817,10 +979,17 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
         commitNormalizedVersionDraft(state, normalizePlanVersion(version), true);
       })
     ),
-  updateActiveVersion: (version) =>
+  updateActiveVersion: (version, options) =>
     set(
       produce<EvoProjectStore>((state) => {
-        commitNormalizedVersionDraft(state, normalizePlanVersion(version));
+        commitNormalizedVersionDraft(
+          state,
+          normalizePlanVersion(version),
+          false,
+          true,
+          options?.summary,
+          options?.source ?? "user"
+        );
       })
     ),
   relayoutActiveVersion: async () => {
@@ -861,7 +1030,14 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
 
       set(
         produce<EvoProjectStore>((state) => {
-          commitNormalizedVersionDraft(state, normalizePlanVersion(data.version!), true);
+          commitNormalizedVersionDraft(
+            state,
+            normalizePlanVersion(data.version!),
+            true,
+            true,
+            "Relayout active version from topology graph",
+            "ai"
+          );
           state.relayoutError = null;
         })
       );

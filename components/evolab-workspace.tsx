@@ -17,6 +17,7 @@ import { BriefForm } from "@/components/plan-editor/BriefForm";
 import { OutlineCanvas } from "@/components/plan-editor/OutlineCanvas";
 import { PlanResultGrid } from "@/components/plan-editor/PlanResultGrid";
 import { ComplianceChecklist } from "@/components/quantity/ComplianceChecklist";
+import { ChangeSetApprovalPanel } from "@/components/quantity/ChangeSetApprovalPanel";
 import { QuantityTable } from "@/components/quantity/QuantityTable";
 import { RenderPanel } from "@/components/render-panel";
 import { TopNav } from "@/components/top-nav";
@@ -50,11 +51,13 @@ export function EvoLabWorkspace() {
     isGeneratingMep,
     mepError,
     quantities,
+    activeSchedule,
     complianceItems,
     outlineStale,
     isRelayouting,
     relayoutError,
     compareLevelId,
+    selectedChangeSetId,
     setActiveTab,
     setWorkflowPhase,
     toggleCompareVersion,
@@ -69,6 +72,10 @@ export function EvoLabWorkspace() {
     updateActiveVersion,
     relayoutActiveVersion,
     setCompareLevel,
+    selectChangeSet,
+    approveChangeSet,
+    rejectChangeSet,
+    toggleElementLock,
     generateMep,
     openModelForVersion,
     refineVersion,
@@ -90,11 +97,13 @@ export function EvoLabWorkspace() {
       isGeneratingMep: state.isGeneratingMep,
       mepError: state.mepError,
       quantities: state.quantities,
+      activeSchedule: state.activeSchedule,
       complianceItems: state.complianceItems,
       outlineStale: state.outlineStale,
       isRelayouting: state.isRelayouting,
       relayoutError: state.relayoutError,
       compareLevelId: state.compareLevelId,
+      selectedChangeSetId: state.selectedChangeSetId,
       setActiveTab: state.setActiveTab,
       setWorkflowPhase: state.setWorkflowPhase,
       toggleCompareVersion: state.toggleCompareVersion,
@@ -109,6 +118,10 @@ export function EvoLabWorkspace() {
       updateActiveVersion: state.updateActiveVersion,
       relayoutActiveVersion: state.relayoutActiveVersion,
       setCompareLevel: state.setCompareLevel,
+      selectChangeSet: state.selectChangeSet,
+      approveChangeSet: state.approveChangeSet,
+      rejectChangeSet: state.rejectChangeSet,
+      toggleElementLock: state.toggleElementLock,
       generateMep: state.generateMep,
       openModelForVersion: state.openModelForVersion,
       refineVersion: state.refineVersion,
@@ -226,15 +239,27 @@ export function EvoLabWorkspace() {
 
     if (activeTab === "Quantity") {
       return (
-        <section className="grid min-h-full grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)] gap-4">
+        <section className="grid min-h-full grid-cols-[minmax(0,1.15fr)_minmax(380px,0.85fr)] gap-4">
           {quantities ? (
-            <QuantityTable quantities={quantities} />
+            <QuantityTable quantities={quantities} activeSchedule={activeSchedule} />
           ) : (
             <div className="grid min-h-[520px] place-items-center rounded border border-dashed border-line bg-panel/60 text-sm text-muted">
               Select or generate a plan version to calculate quantities.
             </div>
           )}
-          <ComplianceChecklist items={complianceItems} />
+          <div className="grid min-h-0 grid-rows-[minmax(0,1.2fr)_auto] gap-4">
+            <ChangeSetApprovalPanel
+              changeSets={project.domain.changeSets}
+              versions={project.versions}
+              selectedChangeSetId={selectedChangeSetId}
+              lockedElementIds={project.domain.lockedElementIds}
+              onSelectChangeSet={selectChangeSet}
+              onApprove={approveChangeSet}
+              onReject={rejectChangeSet}
+              onToggleElementLock={toggleElementLock}
+            />
+            <ComplianceChecklist items={complianceItems} />
+          </div>
         </section>
       );
     }
@@ -319,7 +344,7 @@ export function EvoLabWorkspace() {
     prompt: string
   ) {
     if (!activeVersion) {
-      updateActiveVersion(version);
+      updateActiveVersion(version, { summary: prompt, source: "ai" });
       return;
     }
 
@@ -331,7 +356,7 @@ export function EvoLabWorkspace() {
     prompt: string,
     parentVersion: NonNullable<typeof activeVersion>
   ) {
-    updateActiveVersion(version);
+    updateActiveVersion(version, { summary: prompt, source: "ai" });
     useCopilotTimelineStore.getState().addEntry({
       prompt,
       parentVersionId: parentVersion.id,

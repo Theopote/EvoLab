@@ -1,9 +1,12 @@
+import type { ProjectDomain } from "@/lib/building-domain";
+
 export interface ProjectData {
   projectId: string;
   projectName: string;
   projectType: string;
   versions: PlanVersion[];
   activeVersionId: string;
+  domain: ProjectDomain;
 }
 
 export const workspaceTabs = [

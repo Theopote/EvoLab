@@ -1,7 +1,8 @@
 import { normalizeProjectVersions } from "@/lib/architecture-model";
+import { normalizeProjectData } from "@/lib/project-domain";
 import type { ProjectData } from "@/lib/project-types";
 
-export const initialProjectData: ProjectData = {
+const rawProjectData = {
   projectId: "evolab-demo-001",
   projectName: "EvoLab Healthcare Concept Study",
   projectType: "healthcare",
@@ -160,3 +161,5 @@ export const initialProjectData: ProjectData = {
     }
   ])
 };
+
+export const initialProjectData: ProjectData = normalizeProjectData(rawProjectData);

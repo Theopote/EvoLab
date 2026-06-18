@@ -1,3 +1,5 @@
+import type { CodeContext } from "@/lib/building-domain";
+import { defaultHealthcareCodeContext } from "@/lib/building-domain";
 import type { FunctionZone, OpeningElement, PlanVersion, Point, Room, RoomType, Wall } from "@/lib/project-types";
 
 export interface QuantityRow {
@@ -333,7 +335,15 @@ export function calculateQuantitiesByLevel(version: PlanVersion): Record<string,
   }, {});
 }
 
-function checkComplianceForLevel(version: PlanVersion, levelId: string): ComplianceItem[] {
+function ruleThreshold(codeContext: CodeContext, ruleId: string, fallback: number) {
+  return codeContext.rules.find((rule) => rule.id === ruleId)?.threshold ?? fallback;
+}
+
+function ruleBasis(codeContext: CodeContext, ruleId: string, fallback: string) {
+  return codeContext.rules.find((rule) => rule.id === ruleId)?.basis ?? fallback;
+}
+
+function checkComplianceForLevel(version: PlanVersion, levelId: string, codeContext: CodeContext): ComplianceItem[] {
   const level = activeLevel(version, levelId);
   const rooms = level?.rooms ?? [];
   const openings = level?.openings ?? [];
@@ -344,11 +354,14 @@ function checkComplianceForLevel(version: PlanVersion, levelId: string): Complia
   const roomsNeedingDaylight = rooms.filter((room) => room.needsDaylight);
   const roomsNeedingPlumbing = rooms.filter((room) => room.needsPlumbing);
   const maxEgressDistance = maxDistanceToCore(rooms, fallbackPoint);
+  const corridorMinWidth = ruleThreshold(codeContext, "corridor-width", 1.2);
+  const egressMaxDistance = ruleThreshold(codeContext, "egress-distance", 30);
+  const minCoreCount = ruleThreshold(codeContext, "stair-count", 1);
   const narrowCorridors = corridorRooms.filter((room) => {
     const xs = room.polygon.map(([x]) => x);
     const ys = room.polygon.map(([, y]) => y);
     const width = Math.min(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
-    return width < 1.2;
+    return width < corridorMinWidth;
   });
   const roomsWithoutDaylight = roomsNeedingDaylight.filter((room) => {
     const windowOpenings = openings.length ? roomOpenings(room, openings, "window") : [];
@@ -371,21 +384,21 @@ function checkComplianceForLevel(version: PlanVersion, levelId: string): Complia
       status: narrowCorridors.length === 0 ? "success" : "warning",
       message:
         narrowCorridors.length === 0
-          ? "No corridor room is narrower than 1.2m by bounding-box estimate."
-          : `${narrowCorridors.length} corridor room may be narrower than 1.2m.`,
-      basis: "Example rule: corridor clear width should not be less than 1.2m.",
+          ? `No corridor room is narrower than ${corridorMinWidth}m by bounding-box estimate.`
+          : `${narrowCorridors.length} corridor room may be narrower than ${corridorMinWidth}m.`,
+      basis: ruleBasis(codeContext, "corridor-width", "Corridor clear width should not be less than 1.2m."),
       levelId,
       levelName
     },
     {
       id: "egress-distance",
       title: "Egress travel distance",
-      status: maxEgressDistance <= 30 ? "success" : "warning",
+      status: maxEgressDistance <= egressMaxDistance ? "success" : "warning",
       message:
-        maxEgressDistance <= 30
+        maxEgressDistance <= egressMaxDistance
           ? `Maximum room-to-core distance is about ${round(maxEgressDistance)}m.`
-          : `Maximum room-to-core distance is about ${round(maxEgressDistance)}m, above 30m.`,
-      basis: "Example rule: egress travel distance should not exceed 30m.",
+          : `Maximum room-to-core distance is about ${round(maxEgressDistance)}m, above ${egressMaxDistance}m.`,
+      basis: ruleBasis(codeContext, "egress-distance", "Egress travel distance should not exceed 30m."),
       levelId,
       levelName
     },
@@ -416,12 +429,12 @@ function checkComplianceForLevel(version: PlanVersion, levelId: string): Complia
     {
       id: "stair-count",
       title: "Stair and vertical core count",
-      status: stairRooms.length >= 1 ? "success" : "warning",
+      status: stairRooms.length >= minCoreCount ? "success" : "warning",
       message:
-        stairRooms.length >= 1
+        stairRooms.length >= minCoreCount
           ? `${stairRooms.length} vertical core room is present.`
           : "No stair or elevator core room is present.",
-      basis: "Early-stage check: at least one stair/elevator core should exist.",
+      basis: ruleBasis(codeContext, "stair-count", "At least one stair/elevator core should exist."),
       levelId,
       levelName
     },
@@ -440,13 +453,13 @@ function checkComplianceForLevel(version: PlanVersion, levelId: string): Complia
   ];
 }
 
-export function checkCompliance(version: PlanVersion): ComplianceItem[] {
+export function checkCompliance(version: PlanVersion, codeContext: CodeContext = defaultHealthcareCodeContext): ComplianceItem[] {
   if (version.levels.length <= 1) {
     const levelId = version.levels[0]?.id ?? "level-01";
-    return checkComplianceForLevel(version, levelId);
+    return checkComplianceForLevel(version, levelId, codeContext);
   }
 
-  const perLevel = version.levels.flatMap((level) => checkComplianceForLevel(version, level.id));
+  const perLevel = version.levels.flatMap((level) => checkComplianceForLevel(version, level.id, codeContext));
   const rollup = new Map<string, ComplianceItem>();
 
   perLevel.forEach((item) => {
