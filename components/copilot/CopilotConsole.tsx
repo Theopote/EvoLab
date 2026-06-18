@@ -1,0 +1,342 @@
+"use client";
+
+import { AlertTriangle, Bot, CheckCircle2, ChevronDown, ChevronUp, Info, Loader2, Send, Sparkles } from "lucide-react";
+import { useMemo, useState } from "react";
+import { AiTimelinePanel } from "@/components/copilot/AiTimelinePanel";
+import type {
+  CopilotAction,
+  CopilotFinding,
+  CopilotMessage,
+  PlanVersion,
+  Point,
+  WorkspaceTab
+} from "@/lib/project-types";
+import { useCopilotTimelineStore } from "@/lib/copilot-timeline-store";
+
+interface CopilotConsoleProps {
+  projectVersions: PlanVersion[];
+  activeVersion?: PlanVersion;
+  activeTab: WorkspaceTab;
+  outline: Point[];
+  projectType: string;
+  onCopilotRevision: (version: PlanVersion, prompt: string, parentVersion: PlanVersion) => void;
+  onSelectVersion: (version: PlanVersion) => void;
+  onTabChange: (tab: WorkspaceTab) => void;
+  onRegeneratePlan: () => void;
+}
+
+const promptChips = [
+  "Move the core to the north side",
+  "Optimize egress distance",
+  "Improve daylight for consultation rooms",
+  "Merge southwest offices into open workspace"
+];
+
+export function CopilotConsole({
+  projectVersions,
+  activeVersion,
+  activeTab,
+  outline,
+  projectType,
+  onCopilotRevision,
+  onSelectVersion,
+  onTabChange,
+  onRegeneratePlan
+}: CopilotConsoleProps) {
+  const [expanded, setExpanded] = useState(true);
+  const [input, setInput] = useState("");
+  const [isSending, setIsSending] = useState(false);
+  const [messages, setMessages] = useState<CopilotMessage[]>([
+    {
+      id: "welcome",
+      role: "assistant",
+      content: "Evo Copilot is connected to the active PlanVersion. Each edit forks a new version on the timeline."
+    }
+  ]);
+  const entries = useCopilotTimelineStore((state) => state.entries);
+  const markUndone = useCopilotTimelineStore((state) => state.markUndone);
+
+  const contextRows = useMemo(
+    () => [
+      ["Outline", `${outline.length} pts`],
+      ["Type", projectType],
+      ["Scheme", activeVersion?.label ?? "None"],
+      ["Tab", activeTab]
+    ],
+    [activeTab, activeVersion?.label, outline.length, projectType]
+  );
+
+  async function submitMessage(messageText = input, baseVersion = activeVersion) {
+    const text = messageText.trim();
+
+    if (!text || !baseVersion || isSending) {
+      return;
+    }
+
+    setInput("");
+    setIsSending(true);
+    setMessages((current) => [...current, { id: `user-${Date.now()}`, role: "user", content: text }]);
+
+    try {
+      const response = await fetch("/api/modify-plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          currentVersion: baseVersion,
+          userRequest: text
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`modify-plan failed with ${response.status}`);
+      }
+
+      const data = (await response.json()) as {
+        version?: PlanVersion;
+        findings?: CopilotFinding[];
+        warning?: string;
+      };
+
+      if (!data.version?.rooms) {
+        throw new Error("modify-plan did not return a complete PlanVersion.");
+      }
+
+      onCopilotRevision(data.version, text, baseVersion);
+      setMessages((current) => [
+        ...current,
+        {
+          id: `assistant-${Date.now()}`,
+          role: "assistant",
+          content: data.warning
+            ? `Fallback design update applied. ${data.warning}`
+            : "Design revision forked. Plan, inspector and 3D model now reference the new version."
+        },
+        {
+          id: `findings-${Date.now()}`,
+          role: "findings",
+          title: "Copilot findings",
+          items: data.findings ?? []
+        }
+      ]);
+    } catch (error) {
+      setMessages((current) => [
+        ...current,
+        {
+          id: `assistant-error-${Date.now()}`,
+          role: "assistant",
+          content: error instanceof Error ? error.message : "Copilot request failed."
+        }
+      ]);
+    } finally {
+      setIsSending(false);
+    }
+  }
+
+  function handleUndo(entryId: string, parentVersionId: string) {
+    const parent = projectVersions.find((version) => version.id === parentVersionId);
+
+    if (!parent) {
+      return;
+    }
+
+    onSelectVersion(parent);
+    markUndone(entryId);
+    setMessages((current) => [
+      ...current,
+      {
+        id: `assistant-undo-${Date.now()}`,
+        role: "assistant",
+        content: `Reverted active scheme to ${parent.label}.`
+      }
+    ]);
+  }
+
+  function handleRegenerate(prompt: string, parentVersionId: string) {
+    const parent = projectVersions.find((version) => version.id === parentVersionId);
+
+    if (!parent) {
+      return;
+    }
+
+    void submitMessage(prompt, parent);
+  }
+
+  function handleAction(action: CopilotAction) {
+    if (action.id === "switch-tab") {
+      onTabChange((action.payload as WorkspaceTab | undefined) ?? "Model");
+      return;
+    }
+
+    if (action.id === "generate-massing" || action.id === "generate-flow-diagram") {
+      onTabChange(action.id === "generate-massing" ? "Model" : "Analysis");
+      return;
+    }
+
+    if (action.id === "regenerate-plan") {
+      onRegeneratePlan();
+    }
+  }
+
+  return (
+    <section className="border-t border-line bg-[#0a0f15]">
+      <button
+        className="flex w-full items-center justify-between px-4 py-2 text-left"
+        type="button"
+        onClick={() => setExpanded((value) => !value)}
+      >
+        <div className="flex items-center gap-2">
+          <Bot className="h-4 w-4 text-accent" />
+          <span className="text-sm font-semibold text-white">AI Copilot Console</span>
+          <span className="rounded border border-line px-2 py-0.5 text-[11px] text-muted">
+            {entries.length} timeline events
+          </span>
+        </div>
+        {expanded ? <ChevronDown className="h-4 w-4 text-muted" /> : <ChevronUp className="h-4 w-4 text-muted" />}
+      </button>
+
+      {expanded ? (
+        <div className="grid h-[300px] grid-cols-[minmax(0,1fr)_280px] gap-3 border-t border-line px-4 pb-4 pt-3">
+          <div className="flex min-h-0 flex-col rounded border border-line bg-panel/90 p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-accent" />
+                <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">Prompt stream</span>
+              </div>
+            </div>
+
+            <div className="mb-2 grid grid-cols-4 gap-2">
+              {contextRows.map(([label, value]) => (
+                <div className="rounded border border-line bg-white/[0.03] p-2" key={label}>
+                  <div className="text-[10px] text-muted">{label}</div>
+                  <div className="mt-1 truncate text-[11px] text-slate-100">{value}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mb-2 min-h-0 flex-1 space-y-2 overflow-auto rounded border border-line bg-[#0b1118] p-2">
+              {messages.map((message) => {
+                if (message.role === "findings") {
+                  return (
+                    <div className="rounded border border-line bg-white/[0.03] p-2" key={message.id}>
+                      <div className="mb-2 text-xs font-medium text-slate-100">{message.title}</div>
+                      <div className="space-y-2">
+                        {message.items.map((finding) => (
+                          <FindingCard finding={finding} key={finding.id} onAction={handleAction} />
+                        ))}
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div
+                    className={`rounded p-2 text-xs leading-5 ${
+                      message.role === "user"
+                        ? "ml-8 bg-accent/15 text-slate-100"
+                        : "mr-8 border border-line bg-white/[0.03] text-slate-200"
+                    }`}
+                    key={message.id}
+                  >
+                    {message.content}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="mb-2 flex flex-wrap gap-1.5">
+              {promptChips.map((chip) => (
+                <button
+                  className="rounded border border-line px-2 py-1 text-[11px] text-muted hover:border-accent/60 hover:text-accent"
+                  disabled={isSending || !activeVersion}
+                  key={chip}
+                  type="button"
+                  onClick={() => void submitMessage(chip)}
+                >
+                  {chip}
+                </button>
+              ))}
+            </div>
+
+            <form
+              className="flex items-center gap-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void submitMessage();
+              }}
+            >
+              <label className="grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded border border-line text-muted hover:border-accent/50 hover:text-accent">
+                <input accept="image/*,.pdf,.svg" className="hidden" type="file" />
+                <span className="text-[10px]">+</span>
+              </label>
+              <input
+                className="h-9 min-w-0 flex-1 rounded border border-line bg-[#0b1118] px-2 text-sm text-slate-100 outline-none focus:border-accent/70"
+                disabled={isSending || !activeVersion}
+                placeholder="Describe a design change for the active scheme..."
+                value={input}
+                onChange={(event) => setInput(event.target.value)}
+              />
+              <button
+                className="grid h-9 w-9 place-items-center rounded bg-accent text-[#061014] disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={isSending || !activeVersion || !input.trim()}
+                type="submit"
+                aria-label="Send"
+              >
+                {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              </button>
+            </form>
+          </div>
+
+          <AiTimelinePanel
+            versions={projectVersions}
+            activeVersionId={activeVersion?.id ?? ""}
+            onUndo={handleUndo}
+            onRegenerate={handleRegenerate}
+          />
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function FindingCard({
+  finding,
+  onAction
+}: {
+  finding: CopilotFinding;
+  onAction: (action: CopilotAction) => void;
+}) {
+  const Icon =
+    finding.tone === "warning" ? AlertTriangle : finding.tone === "success" ? CheckCircle2 : Info;
+  const toneClass =
+    finding.tone === "warning"
+      ? "text-warning"
+      : finding.tone === "success"
+        ? "text-success"
+        : "text-accent";
+
+  return (
+    <div className="rounded border border-line bg-[#0b1118] p-2">
+      <div className="flex gap-2">
+        <Icon className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${toneClass}`} />
+        <div className="min-w-0">
+          <div className="text-xs text-slate-100">{finding.text}</div>
+          {finding.sub ? <div className="mt-1 text-[11px] leading-4 text-muted">{finding.sub}</div> : null}
+        </div>
+      </div>
+      {finding.actions?.length ? (
+        <div className="mt-2 flex flex-wrap gap-1.5 pl-5">
+          {finding.actions.map((action) => (
+            <button
+              className="rounded border border-line px-2 py-1 text-[11px] text-muted hover:border-accent/60 hover:text-accent"
+              key={`${finding.id}-${action.id}-${action.label}`}
+              type="button"
+              onClick={() => onAction(action)}
+            >
+              {action.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}

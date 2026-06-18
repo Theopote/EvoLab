@@ -1,8 +1,7 @@
 "use client";
 
 import { useShallow } from "zustand/react/shallow";
-import { BottomPanel } from "@/components/bottom-panel";
-import { CopilotPanel } from "@/components/copilot-panel";
+import { BottomPanel } from "@/componeimport { CopilotConsole } from "@/components/copilot/CopilotConsole";
 import { DiagramCanvas } from "@/components/diagrams/DiagramCanvas";
 import { DiagramLayerList } from "@/components/diagrams/DiagramLayerList";
 import { ExportPanel } from "@/components/export-panel";
@@ -22,9 +21,11 @@ import { TopNav } from "@/components/top-nav";
 import { PresentationWorkspace } from "@/components/presentation/PresentationWorkspace";
 import { VersionCompareGrid } from "@/components/version-compare/VersionCompareGrid";
 import { PhaseSubNav } from "@/components/workflow/PhaseSubNav";
+import { SchemeSplitViewport } from "@/components/workflow/SchemeSplitViewport";
 import { VersionSplitCompare } from "@/components/workflow/VersionSplitCompare";
 import { ViewportKpiHud } from "@/components/workflow/ViewportKpiHud";
 import { WorkflowLeftSidebar } from "@/components/workflow/WorkflowLeftSidebar";
+import { useCopilotTimelineStore } from "@/lib/copilot-timeline-store";
 import { Scene } from "@/components/viewer-3d/Scene";
 import { tabForDeliverSubview } from "@/lib/workflow-phases";
 import { useEvoProject } from "@/lib/project-store";
@@ -104,8 +105,8 @@ export function EvoLabWorkspace() {
     <main className="flex min-h-screen flex-col bg-canvas text-slate-100">
       <TopNav project={project} workflowPhase={workflowPhase} onPhaseChange={setWorkflowPhase} />
       <PhaseSubNav phase={workflowPhase} activeTab={activeTab} onTabChange={setActiveTab} />
-      <section className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_218px] overflow-hidden">
-        <div className="grid min-h-0 grid-cols-[260px_minmax(0,1fr)_380px] overflow-hidden">
+      <section className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_auto_218px] overflow-hidden">
+        <div className="grid min-h-0 grid-cols-[260px_minmax(0,1fr)_300px] overflow-hidden">
           <WorkflowLeftSidebar
             phase={workflowPhase}
             versions={project.versions}
@@ -128,28 +129,29 @@ export function EvoLabWorkspace() {
           </section>
 
           <aside className="min-h-0 overflow-auto border-l border-line bg-[#0d141d] p-4">
-            <CopilotPanel
-              activeVersion={activeVersion}
-              activeTab={activeTab}
-              outline={outline}
-              projectType={project.projectType}
-              onVersionUpdated={updateActiveVersion}
-              onTabChange={setActiveTab}
-              onRegeneratePlan={returnToPlanGeneration}
-            />
-
             {workflowPhase === "brief_site" && activeTab === "Plan" ? (
-              <div className="mt-4 space-y-4">
+              <div className="space-y-4">
                 <SiteContextPanel />
                 <BriefForm value={brief} onChange={updateBrief} />
               </div>
             ) : null}
 
-            <div className="mt-4">
+            <div className={workflowPhase === "brief_site" && activeTab === "Plan" ? "mt-4" : ""}>
               <InspectorPanel />
             </div>
           </aside>
         </div>
+        <CopilotConsole
+          projectVersions={project.versions}
+          activeVersion={activeVersion}
+          activeTab={activeTab}
+          outline={outline}
+          projectType={project.projectType}
+          onCopilotRevision={handleCopilotRevision}
+          onSelectVersion={setActiveVersion}
+          onTabChange={setActiveTab}
+          onRegeneratePlan={returnToPlanGeneration}
+        />
         <BottomPanel
           project={project}
           activeVersion={activeVersion}
@@ -270,7 +272,44 @@ export function EvoLabWorkspace() {
     );
   }
 
+  function handleCopilotRevision(
+    version: Parameters<typeof updateActiveVersion>[0],
+    prompt: string,
+    parentVersion: NonNullable<typeof activeVersion>
+  ) {
+    updateActiveVersion(version);
+    useCopilotTimelineStore.getState().addEntry({
+      prompt,
+      parentVersionId: parentVersion.id,
+      parentVersionLabel: parentVersion.label,
+      resultVersionId: version.id,
+      resultVersionLabel: version.label
+    });
+  }
+
   function PlanWorkspace() {
+    if (workflowPhase === "scheme") {
+      return (
+        <section className="grid min-h-full grid-rows-[minmax(560px,1fr)_minmax(280px,0.8fr)] gap-4">
+          <SchemeSplitViewport
+            activeVersion={activeVersion}
+            activeLevelId={activeLevelId}
+            onLevelChange={setActiveLevel}
+          />
+          <PlanResultGrid
+            outline={outline}
+            closed={outlineClosed}
+            brief={brief}
+            zoning={zoning}
+            versions={project.versions}
+            activeVersionId={project.activeVersionId}
+            onGenerated={appendGeneratedVersions}
+            onSelectVersion={setActiveVersion}
+          />
+        </section>
+      );
+    }
+
     return (
       <section className="grid min-h-full grid-rows-[minmax(360px,0.9fr)_minmax(320px,1fr)] gap-4">
         <div className="grid min-h-0 grid-cols-[360px_minmax(0,1fr)] gap-4">
