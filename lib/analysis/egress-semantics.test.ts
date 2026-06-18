@@ -2,8 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildPathGraph } from "@/lib/analysis/path-graph";
 import {
   computeSemanticEgressForRoom,
-  findSemanticEgressRoute,
-  findNearestSemanticExitPath
+  findSemanticEgressRoute
 } from "@/lib/analysis/egress-semantics";
 import { initialProjectData } from "@/lib/evolab-data";
 import { computeEgressPathMetrics } from "@/lib/rules/path-metrics";
@@ -31,27 +30,55 @@ describe("semantic egress chain", () => {
     expect(route?.missingLinks).toEqual([]);
   });
 
-  it("reports incomplete chains when corridor is bypassed", () => {
-    const isolatedVersion = {
+  it("reports incomplete chains when door and corridor are missing", () => {
+    const boxedVersion = {
       ...baseVersion,
-      rooms: baseVersion.rooms.map((room) =>
-        room.id === "consult-01"
-          ? {
-              ...room,
-              adjacents: ["core-01"],
-              doors: []
-            }
-          : room
-      )
+      levels: baseVersion.levels.map((level) => ({ ...level, openings: [] })),
+      rooms: [
+        {
+          id: "room-a",
+          name: "Isolated Office",
+          type: "office" as const,
+          zone: "private" as const,
+          polygon: [
+            [0, 0],
+            [10, 0],
+            [10, 8],
+            [0, 8]
+          ],
+          areaSqm: 80,
+          ceilingHeight: 3,
+          doors: [],
+          windows: [],
+          adjacents: ["stair-1"]
+        },
+        {
+          id: "stair-1",
+          name: "Exit Stair",
+          type: "stair" as const,
+          zone: "circulation" as const,
+          polygon: [
+            [10, 0],
+            [14, 0],
+            [14, 8],
+            [10, 8]
+          ],
+          areaSqm: 32,
+          ceilingHeight: 3,
+          doors: [],
+          windows: [],
+          adjacents: ["room-a"]
+        }
+      ]
     };
 
-    const graph = buildPathGraph(isolatedVersion);
-    const route = findNearestSemanticExitPath(graph, isolatedVersion, "consult-01");
+    const route = computeSemanticEgressForRoom(boxedVersion, "room-a");
 
     expect(route).toBeDefined();
     expect(route?.semanticValid).toBe(false);
     expect(route?.method).toBe("semantic-incomplete");
     expect(route?.missingLinks).toContain("door");
+    expect(route?.missingLinks).not.toContain("stair");
   });
 
   it("aggregates semantic egress metrics for compliance", () => {

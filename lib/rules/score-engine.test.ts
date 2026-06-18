@@ -37,7 +37,8 @@ describe("rules score engine", () => {
     const egressItem = compliance.find((item) => item.id === "egress-distance");
 
     expect(egress.maxDistance).toBeGreaterThan(0);
-    expect(egressItem?.message).toContain("egress path");
+    expect(egress.semanticRouteCount).toBeGreaterThan(0);
+    expect(egressItem?.message).toMatch(/egress path|door-corridor-stair|semantic/i);
   });
 
   it("explains score delta between versions", () => {
@@ -66,7 +67,7 @@ describe("rules score engine", () => {
     expect(portalNodes.length).toBeGreaterThan(0);
     expect(["opening-aware", "door-aware", "adjacency"]).toContain(pathGraph.method);
     expect(["opening-aware", "door-aware", "adjacency"]).toContain(roomGraph.method);
-    expect(["opening-aware-path", "door-aware-path", "path", "centroid-fallback"]).toContain(egress.method);
+    expect(["semantic-opening-aware", "semantic-door-aware", "semantic-adjacency", "semantic-incomplete", "centroid-fallback"]).toContain(egress.method);
   });
 
   it("scores wet-core vertical alignment and shaft capacity", () => {
