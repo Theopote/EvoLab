@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseDxfToGraph } from "@/lib/plan-import/dxf-import";
 import { buildPlanVersionFromGraph } from "@/lib/plan-import/graph-to-version";
-import { shouldFallbackPdfToVision } from "@/lib/plan-import/pdf-import";
+import { extractWallsFromPdfOperatorList, shouldFallbackPdfToVision } from "@/lib/plan-import/pdf-import";
 import type { RecognizedPlanGraph } from "@/lib/schemas/recognized-plan-graph-schema";
 
 const sampleGraph: RecognizedPlanGraph = {
@@ -132,5 +132,47 @@ describe("shouldFallbackPdfToVision", () => {
         warnings: []
       })
     ).toBe(false);
+  });
+});
+
+describe("extractWallsFromPdfOperatorList", () => {
+  const viewport = {
+    convertToViewportPoint(x: number, y: number) {
+      return [x, y];
+    }
+  };
+
+  it("extracts stroked line segments as walls", () => {
+    const walls = extractWallsFromPdfOperatorList(
+      {
+        fnArray: [2, 91],
+        argsArray: [
+          [6],
+          [20, [0, 100, 100, 1, 300, 100], [100, 100, 300, 100]]
+        ]
+      },
+      600,
+      400,
+      viewport
+    );
+
+    expect(walls).toHaveLength(1);
+    expect(walls[0]?.start).toEqual([100, 100]);
+    expect(walls[0]?.end).toEqual([300, 100]);
+    expect(walls[0]?.thickness).toBe(6);
+  });
+
+  it("converts thin filled rectangles into wall centerlines", () => {
+    const walls = extractWallsFromPdfOperatorList(
+      {
+        fnArray: [91],
+        argsArray: [[24, [0, 100, 100, 1, 300, 100, 1, 300, 120, 1, 100, 120, 3], [100, 100, 300, 120]]]
+      },
+      600,
+      400,
+      viewport
+    );
+
+    expect(walls.some((wall) => wall.start[1] === 110 && wall.end[1] === 110)).toBe(true);
   });
 });
