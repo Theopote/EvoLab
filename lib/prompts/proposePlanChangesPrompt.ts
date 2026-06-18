@@ -33,6 +33,9 @@ Allowed PlanOperation types (use only these):
 4. align_wet_rooms — optional roomIds[], optional nearShaftId, maxDistanceMeters
 5. update_room — roomId, patch with name/type/zone only (no polygon edits)
 6. optimize_egress — note only; use when intent is egress-focused but geometry should be adjusted via shift_rooms/widen_corridor
+7. split_room — roomId, splitAxis horizontal|vertical, splitRatio 0.15-0.85, secondRoomName (optional secondRoomId)
+8. add_opening — roomId, openingKind door|window, wall, position 0-1, width in meters
+9. resize_opening — roomId, openingKind, openingIndex, width in meters
 
 Rules:
 - NEVER return a full PlanVersion or room polygons.
@@ -44,6 +47,9 @@ Rules:
 - For corridor width or egress distance requests, combine widen_corridor and/or shift_rooms.
 - For core relocation requests, use move_core with realistic distanceMeters.
 - For wet-room / shaft adjacency, use align_wet_rooms.
+- For subdividing a room, use split_room instead of inventing new polygons.
+- For door/window requests, use add_opening or resize_opening — never rewrite the full level opening graph.
+- Do not propose operations that touch lockedElementIds when they are listed in input.
 - Findings describe consequences and may include CopilotAction buttons.
 - Do not return markdown or text outside tool input.
 The server will execute operations with a deterministic geometry engine and post-process the result.

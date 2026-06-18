@@ -315,6 +315,8 @@ export function createMockChangeProposal(currentVersion: PlanVersion, userReques
   const shouldMoveCore = /\u6838\u5fc3|core|\u5317/i.test(userRequest);
   const shouldWidenCorridor = /corridor|\u8d70\u5eca|\u52a8\u7ebf/i.test(userRequest);
   const shouldAlignWet = /wet|plumb|\u6c34|\u4e95\u9053|shaft/i.test(userRequest);
+  const shouldSplitRoom = /split|divide|\u62c6\u5206|\u5206\u5272/i.test(userRequest);
+  const shouldAddOpening = /door|window|\u95e8|\u7a97|opening/i.test(userRequest);
 
   const coreRooms = currentVersion.rooms.filter(
     (room) => room.type === "elevator" || room.type === "stair" || room.type === "shaft"
@@ -323,6 +325,9 @@ export function createMockChangeProposal(currentVersion: PlanVersion, userReques
   const wetRooms = currentVersion.rooms.filter(
     (room) => room.type === "bathroom" || room.type === "kitchen" || room.needsPlumbing
   );
+  const splitCandidate =
+    currentVersion.rooms.find((room) => room.type === "office" || room.type === "consultation") ??
+    currentVersion.rooms[0];
 
   const operations: PlanChangeProposal["operations"] = [];
 
@@ -360,6 +365,35 @@ export function createMockChangeProposal(currentVersion: PlanVersion, userReques
       targetRoomIds: wetRooms.map((room) => room.id),
       roomIds: wetRooms.slice(0, 3).map((room) => room.id),
       maxDistanceMeters: 10
+    });
+  }
+
+  if (shouldSplitRoom && splitCandidate) {
+    operations.push({
+      id: "op-split-room",
+      type: "split_room",
+      label: `Split ${splitCandidate.name}`,
+      rationale: "Divides the target room without rewriting the full plan.",
+      targetRoomIds: [splitCandidate.id],
+      roomId: splitCandidate.id,
+      splitAxis: "vertical",
+      splitRatio: 0.55,
+      secondRoomName: `${splitCandidate.name} B`
+    });
+  }
+
+  if (shouldAddOpening && splitCandidate) {
+    operations.push({
+      id: "op-add-opening",
+      type: "add_opening",
+      label: `Add door to ${splitCandidate.name}`,
+      rationale: "Adds a circulation opening on the selected room edge.",
+      targetRoomIds: [splitCandidate.id],
+      roomId: splitCandidate.id,
+      openingKind: /window|\u7a97/i.test(userRequest) ? "window" : "door",
+      wall: "west",
+      position: 0.5,
+      width: /window|\u7a97/i.test(userRequest) ? 1.5 : 0.9
     });
   }
 

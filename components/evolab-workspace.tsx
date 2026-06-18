@@ -189,6 +189,7 @@ export function EvoLabWorkspace() {
           activeTab={activeTab}
           outline={outline}
           projectType={project.projectType}
+          lockedElementIds={project.domain.lockedElementIds}
           onCopilotRevision={handleCopilotRevision}
           onAnalyzedVersion={handleAnalyzedVersion}
           onSelectVersion={setActiveVersion}

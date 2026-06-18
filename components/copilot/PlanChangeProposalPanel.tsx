@@ -1,14 +1,23 @@
 "use client";
 
-import { Check, ChevronDown, ChevronUp, X } from "lucide-react";
-import { useMemo, useState } from "react";
-import { buildPreviewVersion, operationSummary } from "@/lib/plan-change-engine";
+import { Check, ChevronDown, ChevronUp, Lock, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { PlanChangeProposalDiffPreview } from "@/components/copilot/PlanChangeProposalDiffPreview";
+import { getHighlightedRoomIds } from "@/lib/plan-change-diff";
+import {
+  applyPlanOperationsWithReport,
+  buildPreviewVersion,
+  getBlockedLocksForOperation,
+  isOperationBlockedByLocks,
+  operationSummary
+} from "@/lib/plan-change-engine";
 import type { PlanChangeProposal } from "@/lib/schemas/plan-change-proposal-schema";
 import type { PlanVersion } from "@/lib/project-types";
 
 interface PlanChangeProposalPanelProps {
   baseVersion: PlanVersion;
   proposal: PlanChangeProposal;
+  lockedElementIds?: string[];
   onApply: (version: PlanVersion, acceptedOperationIds: string[]) => void;
   onDismiss: () => void;
 }
@@ -16,24 +25,68 @@ interface PlanChangeProposalPanelProps {
 export function PlanChangeProposalPanel({
   baseVersion,
   proposal,
+  lockedElementIds = [],
   onApply,
   onDismiss
 }: PlanChangeProposalPanelProps) {
   const [expanded, setExpanded] = useState(true);
-  const [acceptedIds, setAcceptedIds] = useState<Set<string>>(
-    () => new Set(proposal.operations.map((operation) => operation.id))
-  );
+  const [hoveredOperationId, setHoveredOperationId] = useState<string | null>(null);
+  const [acceptedIds, setAcceptedIds] = useState<Set<string>>(() => {
+    const unlocked = proposal.operations
+      .filter((operation) => !isOperationBlockedByLocks(operation, lockedElementIds, baseVersion))
+      .map((operation) => operation.id);
+
+    return new Set(unlocked);
+  });
+
+  useEffect(() => {
+    setAcceptedIds(
+      new Set(
+        proposal.operations
+          .filter((operation) => !isOperationBlockedByLocks(operation, lockedElementIds, baseVersion))
+          .map((operation) => operation.id)
+      )
+    );
+  }, [baseVersion, proposal, lockedElementIds]);
 
   const preview = useMemo(
     () =>
       buildPreviewVersion(baseVersion, proposal, {
         acceptedOperationIds: [...acceptedIds],
+        lockedElementIds,
         versionLabel: `${baseVersion.label} / Copilot (${acceptedIds.size}/${proposal.operations.length})`
       }),
-    [acceptedIds, baseVersion, proposal]
+    [acceptedIds, baseVersion, lockedElementIds, proposal]
   );
 
-  function toggleOperation(operationId: string) {
+  const report = useMemo(
+    () =>
+      applyPlanOperationsWithReport(baseVersion, proposal.operations, {
+        acceptedOperationIds: [...acceptedIds],
+        lockedElementIds,
+        skipPostProcess: true
+      }),
+    [acceptedIds, baseVersion, lockedElementIds, proposal.operations]
+  );
+
+  const focusedRoomIds = useMemo(() => {
+    if (!hoveredOperationId) {
+      return [];
+    }
+
+    return getHighlightedRoomIds(baseVersion, preview, [hoveredOperationId], proposal.operations);
+  }, [baseVersion, hoveredOperationId, preview, proposal.operations]);
+
+  const highlightRoomIds = useMemo(
+    () => getHighlightedRoomIds(baseVersion, preview, [...acceptedIds], proposal.operations),
+    [acceptedIds, baseVersion, preview, proposal.operations]
+  );
+
+  function toggleOperation(operationId: string, blocked: boolean) {
+    if (blocked) {
+      return;
+    }
+
     setAcceptedIds((current) => {
       const next = new Set(current);
 
@@ -63,6 +116,13 @@ export function PlanChangeProposalPanel({
 
       {expanded ? (
         <div className="mt-2 space-y-2">
+          <PlanChangeProposalDiffPreview
+            baseVersion={baseVersion}
+            focusedRoomIds={focusedRoomIds}
+            highlightRoomIds={highlightRoomIds}
+            previewVersion={preview}
+          />
+
           {proposal.constraints.length ? (
             <div className="rounded border border-line bg-[#0b1118] p-2">
               <div className="mb-1 text-[11px] font-medium text-muted">Constraints</div>
@@ -80,28 +140,51 @@ export function PlanChangeProposalPanel({
             </div>
           ) : null}
 
+          {report.skippedOperations.length ? (
+            <div className="rounded border border-warning/30 bg-warning/5 p-2 text-[11px] text-warning">
+              {report.skippedOperations.length} operation(s) skipped because target elements are locked.
+            </div>
+          ) : null}
+
           <div className="space-y-1.5">
             {proposal.operations.map((operation) => {
               const checked = acceptedIds.has(operation.id);
+              const blockedLocks = getBlockedLocksForOperation(operation, lockedElementIds, baseVersion);
+              const blocked = blockedLocks.length > 0;
 
               return (
                 <label
-                  className={`flex cursor-pointer gap-2 rounded border p-2 text-[11px] ${
-                    checked ? "border-accent/40 bg-accent/10" : "border-line bg-[#0b1118] opacity-70"
+                  className={`flex gap-2 rounded border p-2 text-[11px] ${
+                    blocked
+                      ? "cursor-not-allowed border-line bg-[#0b1118] opacity-50"
+                      : checked
+                        ? "cursor-pointer border-accent/40 bg-accent/10"
+                        : "cursor-pointer border-line bg-[#0b1118] opacity-80"
                   }`}
                   key={operation.id}
+                  onMouseEnter={() => setHoveredOperationId(operation.id)}
+                  onMouseLeave={() => setHoveredOperationId(null)}
                 >
                   <input
                     checked={checked}
                     className="mt-0.5"
+                    disabled={blocked}
                     type="checkbox"
-                    onChange={() => toggleOperation(operation.id)}
+                    onChange={() => toggleOperation(operation.id, blocked)}
                   />
                   <span className="min-w-0">
-                    <span className="font-medium text-slate-100">{operation.label}</span>
+                    <span className="flex items-center gap-1 font-medium text-slate-100">
+                      {operation.label}
+                      {blocked ? <Lock className="h-3 w-3 text-warning" /> : null}
+                    </span>
                     <span className="mt-0.5 block text-muted">{operationSummary(operation)}</span>
                     {operation.rationale ? (
                       <span className="mt-0.5 block leading-4 text-slate-400">{operation.rationale}</span>
+                    ) : null}
+                    {blocked ? (
+                      <span className="mt-0.5 block text-warning">
+                        Locked: {blockedLocks.join(", ")}
+                      </span>
                     ) : null}
                   </span>
                 </label>
@@ -122,9 +205,17 @@ export function PlanChangeProposalPanel({
             <button
               className="inline-flex items-center gap-1 rounded border border-line px-2 py-1 text-[11px] text-muted hover:text-slate-200"
               type="button"
-              onClick={() => setAcceptedIds(new Set(proposal.operations.map((operation) => operation.id)))}
+              onClick={() =>
+                setAcceptedIds(
+                  new Set(
+                    proposal.operations
+                      .filter((operation) => !isOperationBlockedByLocks(operation, lockedElementIds, baseVersion))
+                      .map((operation) => operation.id)
+                  )
+                )
+              }
             >
-              Select all
+              Select all unlocked
             </button>
             <button
               className="inline-flex items-center gap-1 rounded border border-line px-2 py-1 text-[11px] text-muted hover:text-slate-200"

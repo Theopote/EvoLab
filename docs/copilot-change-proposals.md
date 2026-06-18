@@ -60,8 +60,11 @@ interface PlanChangeProposal {
 | `align_wet_rooms` | 湿区靠井道 | 将 bathroom/kitchen 向最近 shaft 平移 |
 | `update_room` | 元数据更新 | 改 name / type / zone，不动几何 |
 | `optimize_egress` | 疏散优化（占位） | 记录 metadata 提示，v1 不改动几何以避免幻觉 |
+| `split_room` | 拆分房间 | 沿水平/垂直轴切分矩形房间，生成第二个房间 |
+| `add_opening` | 新增门窗 | 向 room.doors / room.windows 追加 Opening |
+| `resize_opening` | 调整门窗宽度 | 按 index 修改已有 opening 宽度 |
 
-后续可扩展：`split_room`、`merge_rooms`、`relayout_zone`、`add_opening` 等。
+后续可扩展：`merge_rooms`、`relayout_zone` 等。
 
 ### API 响应（新）
 
@@ -99,22 +102,25 @@ interface ModifyPlanResponse {
 | `lib/plan-change-engine.ts` | 操作执行与预览构建 |
 | `app/api/modify-plan/route.ts` | proposal 优先，legacy 回退 |
 | `components/copilot/PlanChangeProposalPanel.tsx` | 逐条审批 UI |
+| `components/copilot/PlanChangeProposalDiffPreview.tsx` | 内嵌几何 diff 预览 |
+| `lib/plan-change-diff.ts` | 房间级变更摘要 |
+| `lib/plan-change-engine.test.ts` | 引擎单元测试 |
 | `components/copilot-panel.tsx` / `CopilotConsole.tsx` | 接入审批流 |
 
 ## 迁移计划
 
-### Phase 1（当前）
+### Phase 1（已完成）
 
 - [x] Schema + 几何引擎（6 类 operation）
 - [x] API proposal 优先
 - [x] Copilot UI 逐条 accept + Apply selected
-- [ ] 单元测试覆盖引擎
 
-### Phase 2
+### Phase 2（当前）
 
-- 更多 operation（split_room、opening 调整）
-- Copilot 内嵌 mini diff（高亮受影响房间）
-- 锁定元素：跳过 `lockedElementIds` 上的 operation
+- [x] 更多 operation：`split_room`、`add_opening`、`resize_opening`
+- [x] Copilot 内嵌 mini diff（`PlanChangeProposalDiffPreview`）
+- [x] 锁定元素：跳过 `lockedElementIds` 上的 operation
+- [x] 单元测试：`lib/plan-change-engine.test.ts`（`npm test`）
 
 ### Phase 3
 

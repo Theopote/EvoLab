@@ -23,6 +23,7 @@ interface CopilotConsoleProps {
   activeTab: WorkspaceTab;
   outline: Point[];
   projectType: string;
+  lockedElementIds?: string[];
   onCopilotRevision: (version: PlanVersion, prompt: string, parentVersion: PlanVersion) => void;
   onAnalyzedVersion: (version: PlanVersion, source: { fileName: string; prompt?: string }) => void;
   onSelectVersion: (version: PlanVersion) => void;
@@ -43,6 +44,7 @@ export function CopilotConsole({
   activeTab,
   outline,
   projectType,
+  lockedElementIds = [],
   onCopilotRevision,
   onAnalyzedVersion,
   onSelectVersion,
@@ -211,6 +213,7 @@ export function CopilotConsole({
         body: JSON.stringify({
           currentVersion: baseVersion,
           userRequest: text,
+          lockedElementIds,
           referenceImages: files.map((file) => ({
             base64: file.base64,
             mediaType: file.mediaType,
@@ -392,6 +395,7 @@ export function CopilotConsole({
               {pendingProposal ? (
                 <PlanChangeProposalPanel
                   baseVersion={pendingProposal.baseVersion}
+                  lockedElementIds={lockedElementIds}
                   proposal={pendingProposal.proposal}
                   onApply={(version) => applyPendingProposal(version)}
                   onDismiss={() => setPendingProposal(null)}

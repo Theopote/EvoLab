@@ -1,11 +1,30 @@
+import { getOperationTargetIds } from "@/lib/plan-change-diff";
 import { postProcessPlanVersion } from "@/lib/plan-postprocess";
 import { polygonArea } from "@/lib/plan-validation";
-import type { PlanOperation, PlanChangeProposal } from "@/lib/schemas/plan-change-proposal-schema";
-import type { PlanVersion, Point, Room } from "@/lib/project-types";
+import type { PlanChangeProposal, PlanOperation } from "@/lib/schemas/plan-change-proposal-schema";
+import type { Opening, PlanVersion, Point, Room } from "@/lib/project-types";
 
 const CORE_TYPES = new Set(["stair", "elevator", "shaft"]);
 const WET_TYPES = new Set(["bathroom", "kitchen"]);
 const CORRIDOR_TYPE = "corridor";
+
+export interface SkippedPlanOperation {
+  operationId: string;
+  label: string;
+  lockedElementIds: string[];
+}
+
+export interface PlanOperationsReport {
+  version: PlanVersion;
+  appliedOperationIds: string[];
+  skippedOperations: SkippedPlanOperation[];
+}
+
+export interface ApplyPlanOperationsOptions {
+  acceptedOperationIds?: string[];
+  lockedElementIds?: string[];
+  skipPostProcess?: boolean;
+}
 
 function shiftPolygon(points: Point[], dx: number, dy: number): Point[] {
   return points.map(([x, y]) => [x + dx, y + dy]);
@@ -77,15 +96,15 @@ function widenRectPolygon(polygon: Point[], extraWidth: number, side: "left" | "
   ];
 }
 
-function updateRoomInVersion(version: PlanVersion, roomId: string, updater: (room: Room) => Room): PlanVersion {
-  const nextLevels = version.levels.map((level) => ({
+function replaceRoomsInVersion(version: PlanVersion, nextRooms: Room[]): PlanVersion {
+  const nextLevels = version.levels.map((level, index) => ({
     ...level,
-    rooms: level.rooms.map((room) => (room.id === roomId ? updater(room) : room))
+    rooms: index === 0 ? nextRooms : level.rooms.filter((room) => nextRooms.some((item) => item.id === room.id))
   }));
 
   return {
     ...version,
-    rooms: nextLevels.flatMap((level) => level.rooms),
+    rooms: nextRooms,
     levels: nextLevels,
     building: {
       ...version.building,
@@ -94,18 +113,99 @@ function updateRoomInVersion(version: PlanVersion, roomId: string, updater: (roo
   };
 }
 
+function updateRoomInVersion(version: PlanVersion, roomId: string, updater: (room: Room) => Room): PlanVersion {
+  const nextRooms = version.rooms.map((room) => (room.id === roomId ? updater(room) : room));
+  return replaceRoomsInVersion(version, nextRooms);
+}
+
 function updateRoomsInVersion(
   version: PlanVersion,
   roomIds: Set<string>,
   updater: (room: Room) => Room
 ): PlanVersion {
-  let next = version;
+  const nextRooms = version.rooms.map((room) => (roomIds.has(room.id) ? updater(room) : room));
+  return replaceRoomsInVersion(version, nextRooms);
+}
 
-  roomIds.forEach((roomId) => {
-    next = updateRoomInVersion(next, roomId, updater);
-  });
+function splitRectRoom(
+  room: Room,
+  axis: "horizontal" | "vertical",
+  ratio: number,
+  secondRoom: { id: string; name: string }
+): { first: Room; second: Room } | undefined {
+  const bounds = roomBounds(room.polygon);
+  const spanX = bounds.maxX - bounds.minX;
+  const spanY = bounds.maxY - bounds.minY;
 
-  return next;
+  if (spanX < 2 || spanY < 2) {
+    return undefined;
+  }
+
+  if (axis === "vertical") {
+    const cutX = bounds.minX + spanX * ratio;
+    const firstPolygon: Point[] = [
+      [bounds.minX, bounds.minY],
+      [cutX, bounds.minY],
+      [cutX, bounds.maxY],
+      [bounds.minX, bounds.maxY]
+    ];
+    const secondPolygon: Point[] = [
+      [cutX, bounds.minY],
+      [bounds.maxX, bounds.minY],
+      [bounds.maxX, bounds.maxY],
+      [cutX, bounds.maxY]
+    ];
+
+    return {
+      first: {
+        ...room,
+        polygon: firstPolygon,
+        areaSqm: Number(polygonArea(firstPolygon).toFixed(1))
+      },
+      second: {
+        ...room,
+        id: secondRoom.id,
+        name: secondRoom.name,
+        polygon: secondPolygon,
+        areaSqm: Number(polygonArea(secondPolygon).toFixed(1)),
+        doors: [],
+        windows: [],
+        adjacents: room.adjacents
+      }
+    };
+  }
+
+  const cutY = bounds.minY + spanY * ratio;
+  const firstPolygon: Point[] = [
+    [bounds.minX, bounds.minY],
+    [bounds.maxX, bounds.minY],
+    [bounds.maxX, cutY],
+    [bounds.minX, cutY]
+  ];
+  const secondPolygon: Point[] = [
+    [bounds.minX, cutY],
+    [bounds.maxX, cutY],
+    [bounds.maxX, bounds.maxY],
+    [bounds.minX, bounds.maxY]
+  ];
+
+  return {
+    first: {
+      ...room,
+      polygon: firstPolygon,
+      areaSqm: Number(polygonArea(firstPolygon).toFixed(1))
+    },
+    second: {
+      ...room,
+      id: secondRoom.id,
+      name: secondRoom.name,
+      polygon: secondPolygon,
+      areaSqm: Number(polygonArea(secondPolygon).toFixed(1)),
+      doors: [],
+      windows: [],
+      adjacents: room.adjacents
+    }
+  };
 }
 
 function applyMoveCore(version: PlanVersion, operation: Extract<PlanOperation, { type: "move_core" }>): PlanVersion {
@@ -215,6 +315,77 @@ function applyOptimizeEgress(
   };
 }
 
+function applySplitRoom(version: PlanVersion, operation: Extract<PlanOperation, { type: "split_room" }>): PlanVersion {
+  const room = version.rooms.find((item) => item.id === operation.roomId);
+
+  if (!room) {
+    return version;
+  }
+
+  const secondRoomId = operation.secondRoomId ?? `${operation.roomId}-split-b`;
+  const split = splitRectRoom(room, operation.splitAxis, operation.splitRatio, {
+    id: secondRoomId,
+    name: operation.secondRoomName
+  });
+
+  if (!split) {
+    return version;
+  }
+
+  const nextRooms = version.rooms.flatMap((item) => {
+    if (item.id !== operation.roomId) {
+      return [item];
+    }
+
+    return [split.first, split.second];
+  });
+
+  return replaceRoomsInVersion(version, nextRooms);
+}
+
+function applyAddOpening(version: PlanVersion, operation: Extract<PlanOperation, { type: "add_opening" }>): PlanVersion {
+  const opening: Opening = {
+    wall: operation.wall,
+    position: operation.position,
+    width: operation.width
+  };
+
+  return updateRoomInVersion(version, operation.roomId, (room) => {
+    if (operation.openingKind === "door") {
+      return {
+        ...room,
+        doors: [...room.doors, opening]
+      };
+    }
+
+    return {
+      ...room,
+      windows: [...room.windows, opening]
+    };
+  });
+}
+
+function applyResizeOpening(
+  version: PlanVersion,
+  operation: Extract<PlanOperation, { type: "resize_opening" }>
+): PlanVersion {
+  return updateRoomInVersion(version, operation.roomId, (room) => {
+    if (operation.openingKind === "door") {
+      const doors = room.doors.map((door, index) =>
+        index === operation.openingIndex ? { ...door, width: operation.width } : door
+      );
+
+      return { ...room, doors };
+    }
+
+    const windows = room.windows.map((window, index) =>
+      index === operation.openingIndex ? { ...window, width: operation.width } : window
+    );
+
+    return { ...room, windows };
+  });
+}
+
 function applyOperation(version: PlanVersion, operation: PlanOperation): PlanVersion {
   switch (operation.type) {
     case "move_core":
@@ -229,14 +400,101 @@ function applyOperation(version: PlanVersion, operation: PlanOperation): PlanVer
       return applyUpdateRoom(version, operation);
     case "optimize_egress":
       return applyOptimizeEgress(version, operation);
+    case "split_room":
+      return applySplitRoom(version, operation);
+    case "add_opening":
+      return applyAddOpening(version, operation);
+    case "resize_opening":
+      return applyResizeOpening(version, operation);
     default:
       return version;
   }
 }
 
-export interface ApplyPlanOperationsOptions {
-  acceptedOperationIds?: string[];
-  skipPostProcess?: boolean;
+function resolveOperationTargets(version: PlanVersion, operation: PlanOperation): string[] {
+  const explicit = getOperationTargetIds(operation);
+
+  if (explicit.length) {
+    return explicit;
+  }
+
+  switch (operation.type) {
+    case "move_core":
+      return version.rooms.filter((room) => CORE_TYPES.has(room.type)).map((room) => room.id);
+    case "widen_corridor":
+      return version.rooms.filter((room) => room.type === CORRIDOR_TYPE).map((room) => room.id);
+    case "align_wet_rooms":
+      return version.rooms
+        .filter((room) => WET_TYPES.has(room.type) || room.needsPlumbing)
+        .map((room) => room.id);
+    default:
+      return [];
+  }
+}
+
+export function getBlockedLocksForOperation(
+  operation: PlanOperation,
+  lockedElementIds: string[],
+  version?: PlanVersion
+): string[] {
+  if (!lockedElementIds.length) {
+    return [];
+  }
+
+  if (operation.type === "optimize_egress") {
+    return [];
+  }
+
+  const locked = new Set(lockedElementIds);
+  const targets = version ? resolveOperationTargets(version, operation) : getOperationTargetIds(operation);
+
+  return targets.filter((id) => locked.has(id));
+}
+
+export function isOperationBlockedByLocks(
+  operation: PlanOperation,
+  lockedElementIds: string[],
+  version?: PlanVersion
+): boolean {
+  return getBlockedLocksForOperation(operation, lockedElementIds, version).length > 0;
+}
+
+export function applyPlanOperationsWithReport(
+  baseVersion: PlanVersion,
+  operations: PlanOperation[],
+  options: ApplyPlanOperationsOptions = {}
+): PlanOperationsReport {
+  const lockedElementIds = options.lockedElementIds ?? [];
+  const candidate = options.acceptedOperationIds
+    ? operations.filter((operation) => options.acceptedOperationIds!.includes(operation.id))
+    : operations;
+
+  const appliedOperationIds: string[] = [];
+  const skippedOperations: SkippedPlanOperation[] = [];
+
+  const reduced = candidate.reduce((version, operation) => {
+    const blockedLocks = getBlockedLocksForOperation(operation, lockedElementIds, version);
+
+    if (blockedLocks.length) {
+      skippedOperations.push({
+        operationId: operation.id,
+        label: operation.label,
+        lockedElementIds: blockedLocks
+      });
+      return version;
+    }
+
+    appliedOperationIds.push(operation.id);
+    return applyOperation(version, operation);
+  }, baseVersion);
+
+  const version = options.skipPostProcess ? reduced : postProcessPlanVersion(reduced);
+
+  return {
+    version,
+    appliedOperationIds,
+    skippedOperations
+  };
 }
 
 export function applyPlanOperations(
@@ -244,36 +502,31 @@ export function applyPlanOperations(
   operations: PlanOperation[],
   options: ApplyPlanOperationsOptions = {}
 ): PlanVersion {
-  const accepted = options.acceptedOperationIds
-    ? operations.filter((operation) => options.acceptedOperationIds!.includes(operation.id))
-    : operations;
-
-  const reduced = accepted.reduce((version, operation) => applyOperation(version, operation), baseVersion);
-
-  if (options.skipPostProcess) {
-    return reduced;
-  }
-
-  return postProcessPlanVersion(reduced);
+  return applyPlanOperationsWithReport(baseVersion, operations, options).version;
 }
 
 export function buildPreviewVersion(
   baseVersion: PlanVersion,
   proposal: PlanChangeProposal,
-  options?: { acceptedOperationIds?: string[]; versionLabel?: string }
+  options?: {
+    acceptedOperationIds?: string[];
+    lockedElementIds?: string[];
+    versionLabel?: string;
+  }
 ): PlanVersion {
-  const applied = applyPlanOperations(baseVersion, proposal.operations, {
-    acceptedOperationIds: options?.acceptedOperationIds
+  const report = applyPlanOperationsWithReport(baseVersion, proposal.operations, {
+    acceptedOperationIds: options?.acceptedOperationIds,
+    lockedElementIds: options?.lockedElementIds
   });
 
   return {
-    ...applied,
+    ...report.version,
     id: `${baseVersion.id}-proposal-${Date.now()}`,
     label: options?.versionLabel ?? `${baseVersion.label} / Copilot Proposal`,
     createdAt: new Date().toISOString(),
     parentVersionId: baseVersion.id,
     metadata: {
-      ...applied.metadata,
+      ...report.version.metadata,
       strategy: proposal.intent,
       refinementSummary: `Copilot proposal: ${proposal.intent}`
     }
@@ -294,5 +547,11 @@ export function operationSummary(operation: PlanOperation): string {
       return `Update room ${operation.roomId}`;
     case "optimize_egress":
       return operation.note ?? operation.label;
+    case "split_room":
+      return `Split ${operation.roomId} ${operation.splitAxis} at ${Math.round(operation.splitRatio * 100)}%`;
+    case "add_opening":
+      return `Add ${operation.openingKind} on ${operation.wall} wall (${operation.width}m)`;
+    case "resize_opening":
+      return `Resize ${operation.openingKind} #${operation.openingIndex} to ${operation.width}m`;
   }
 }

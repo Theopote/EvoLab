@@ -60,13 +60,42 @@ export const OptimizeEgressOperationSchema = BaseOperationSchema.extend({
   note: z.string().optional()
 });
 
+export const SplitRoomOperationSchema = BaseOperationSchema.extend({
+  type: z.literal("split_room"),
+  roomId: z.string().min(1),
+  splitAxis: z.enum(["horizontal", "vertical"]),
+  splitRatio: z.number().min(0.15).max(0.85).default(0.5),
+  secondRoomId: z.string().min(1).optional(),
+  secondRoomName: z.string().min(1)
+});
+
+export const AddOpeningOperationSchema = BaseOperationSchema.extend({
+  type: z.literal("add_opening"),
+  roomId: z.string().min(1),
+  openingKind: z.enum(["door", "window"]),
+  wall: z.enum(["north", "south", "east", "west"]),
+  position: z.number().min(0.05).max(0.95).default(0.5),
+  width: z.number().positive().max(6)
+});
+
+export const ResizeOpeningOperationSchema = BaseOperationSchema.extend({
+  type: z.literal("resize_opening"),
+  roomId: z.string().min(1),
+  openingKind: z.enum(["door", "window"]),
+  openingIndex: z.number().int().min(0).default(0),
+  width: z.number().positive().max(6)
+});
+
 export const PlanOperationSchema = z.discriminatedUnion("type", [
   MoveCoreOperationSchema,
   ShiftRoomsOperationSchema,
   WidenCorridorOperationSchema,
   AlignWetRoomsOperationSchema,
   UpdateRoomOperationSchema,
-  OptimizeEgressOperationSchema
+  OptimizeEgressOperationSchema,
+  SplitRoomOperationSchema,
+  AddOpeningOperationSchema,
+  ResizeOpeningOperationSchema
 ]);
 
 export const PlanChangeProposalSchema = z.object({

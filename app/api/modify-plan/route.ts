@@ -16,6 +16,7 @@ export type { ModifyPlanResponse } from "@/lib/copilot-modify-types";
 interface ModifyPlanRequest {
   currentVersion?: PlanVersion;
   userRequest?: string;
+  lockedElementIds?: string[];
   referenceImages?: Array<{ base64: string; mediaType?: string; fileName?: string }>;
 }
 
@@ -48,6 +49,7 @@ export async function POST(request: Request) {
       input: {
         currentVersion: body.currentVersion,
         userRequest: body.userRequest,
+        lockedElementIds: body.lockedElementIds ?? [],
         referenceImageCount: referenceImages.length,
         referenceImageNames: referenceImages.map((image) => image.fileName).filter(Boolean)
       },
@@ -63,7 +65,9 @@ export async function POST(request: Request) {
     });
 
     if (proposalData.proposal?.operations?.length) {
-      const version = buildPreviewVersion(body.currentVersion, proposalData.proposal);
+      const version = buildPreviewVersion(body.currentVersion, proposalData.proposal, {
+        lockedElementIds: body.lockedElementIds
+      });
 
       return NextResponse.json({
         mode: "proposal",
@@ -82,6 +86,7 @@ export async function POST(request: Request) {
       input: {
         currentVersion: body.currentVersion,
         userRequest: body.userRequest,
+        lockedElementIds: body.lockedElementIds ?? [],
         referenceImageCount: referenceImages.length,
         referenceImageNames: referenceImages.map((image) => image.fileName).filter(Boolean)
       },
