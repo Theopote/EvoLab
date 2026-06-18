@@ -244,7 +244,7 @@ export function PresentationWorkspace() {
       return;
     }
 
-    setNotice("Capturing isometric, eye-level, and plan views from the 3D scene…");
+    setNotice("Capturing isometric, eye-level, plan, and exploded views from the 3D scene…");
     requestCapture();
   }
 

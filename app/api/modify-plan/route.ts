@@ -44,7 +44,10 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       ...data,
-      version: postProcessPlanVersion(data.version)
+      version: postProcessPlanVersion({
+        ...data.version,
+        parentVersionId: data.version.parentVersionId ?? body.currentVersion.id
+      })
     });
   } catch (error) {
     return NextResponse.json({

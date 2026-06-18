@@ -3,7 +3,7 @@
 import { Environment } from "@react-three/drei";
 import { Canvas, useThree } from "@react-three/fiber";
 import { useEffect, useRef } from "react";
-import { BuildingModel } from "@/components/viewer-3d/BuildingModel";
+import { PresentationCaptureBuilding } from "@/components/presentation/PresentationCaptureBuilding";
 import { SiteContextBuildings, SiteEnvelopeMesh } from "@/components/viewer-3d/SiteContextScene";
 import { buildCaptureViews } from "@/lib/presentation/capture-views";
 import type { PresentationCaptureImage } from "@/lib/presentation-capture-store";
@@ -14,6 +14,7 @@ function CaptureRig({ spanMeters }: { spanMeters: number }) {
   const { gl, camera, scene } = useThree();
   const completeCapture = usePresentationCaptureStore((state) => state.completeCapture);
   const failCapture = usePresentationCaptureStore((state) => state.failCapture);
+  const setExplodeFactor = usePresentationCaptureStore((state) => state.setExplodeFactor);
   const started = useRef(false);
 
   useEffect(() => {
@@ -42,6 +43,9 @@ function CaptureRig({ spanMeters }: { spanMeters: number }) {
             return;
           }
 
+          setExplodeFactor(view.explodeFactor);
+          await waitFrames(view.explodeFactor > 0 ? 4 : 2);
+
           camera.position.set(view.position[0], view.position[1], view.position[2]);
           camera.lookAt(view.target[0], view.target[1], view.target[2]);
           camera.updateProjectionMatrix();
@@ -68,7 +72,7 @@ function CaptureRig({ spanMeters }: { spanMeters: number }) {
     return () => {
       cancelled = true;
     };
-  }, [camera, completeCapture, failCapture, gl, scene, spanMeters]);
+  }, [camera, completeCapture, failCapture, gl, scene, setExplodeFactor, spanMeters]);
 
   return null;
 }
@@ -103,7 +107,7 @@ export function PresentationCaptureCanvas() {
         <directionalLight castShadow position={[24, 40, 16]} intensity={1.6} />
         <SiteEnvelopeMesh />
         <SiteContextBuildings />
-        <BuildingModel />
+        <PresentationCaptureBuilding version={activeVersion} />
         <Environment preset="city" />
         <CaptureRig spanMeters={span} />
       </Canvas>

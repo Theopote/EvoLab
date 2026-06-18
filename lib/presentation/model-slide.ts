@@ -10,7 +10,7 @@ export function createModelSlidePlaceholder(): PresentationSlide {
     title: "3D Model Views",
     subtitle: "Live WebGL captures",
     bullets: [
-      "Use Capture 3D views to embed isometric, eye-level, and plan renders from the active model.",
+      "Use Capture 3D views to embed isometric, eye-level, plan, and exploded WebGL renders.",
       "Captures include site envelope and surrounding context when available."
     ]
   };

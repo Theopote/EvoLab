@@ -59,6 +59,12 @@ export interface PlanVersionMetadata {
   repairs?: string[];
   zoningApplied?: boolean;
   envelopeCompliant?: boolean;
+  pipelinePhases?: {
+    topology: boolean;
+    geometry: boolean;
+    refinement: boolean;
+  };
+  refinementSummary?: string;
 }
 
 export interface Room {

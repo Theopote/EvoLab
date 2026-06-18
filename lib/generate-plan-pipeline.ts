@@ -323,7 +323,8 @@ export async function runGeneratePlanPipeline(body: GeneratePlanRequest): Promis
       metadata: {
         ...version.metadata,
         zoningApplied: Boolean(constraints.envelope),
-        envelopeCompliant: true
+        envelopeCompliant: true,
+        pipelinePhases: meta.phases
       }
     })),
     meta

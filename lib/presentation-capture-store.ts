@@ -9,8 +9,10 @@ export interface PresentationCaptureImage {
 interface PresentationCaptureStore {
   status: "idle" | "capturing" | "done" | "error";
   images: PresentationCaptureImage[];
+  explodeFactor: number;
   error?: string;
   requestCapture: () => void;
+  setExplodeFactor: (factor: number) => void;
   completeCapture: (images: PresentationCaptureImage[]) => void;
   failCapture: (message: string) => void;
   resetCapture: () => void;
@@ -19,28 +21,34 @@ interface PresentationCaptureStore {
 export const usePresentationCaptureStore = create<PresentationCaptureStore>((set) => ({
   status: "idle",
   images: [],
+  explodeFactor: 0,
   error: undefined,
   requestCapture: () =>
     set({
       status: "capturing",
       images: [],
+      explodeFactor: 0,
       error: undefined
     }),
+  setExplodeFactor: (factor) => set({ explodeFactor: factor }),
   completeCapture: (images) =>
     set({
       status: "done",
       images,
-      error: undefined
+      error: undefined,
+      explodeFactor: 0
     }),
   failCapture: (message) =>
     set({
       status: "error",
-      error: message
+      error: message,
+      explodeFactor: 0
     }),
   resetCapture: () =>
     set({
       status: "idle",
       images: [],
+      explodeFactor: 0,
       error: undefined
     })
 }));

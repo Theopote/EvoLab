@@ -48,7 +48,7 @@ export function EvoLabWorkspace() {
     updateBrief,
     setActiveAnalysisLayers,
     setActiveMepLayers,
-    replaceVersions,
+    appendGeneratedVersions,
     setActiveVersion,
     updateActiveVersion,
     generateMep,
@@ -78,7 +78,7 @@ export function EvoLabWorkspace() {
       updateBrief: state.updateBrief,
       setActiveAnalysisLayers: state.setActiveAnalysisLayers,
       setActiveMepLayers: state.setActiveMepLayers,
-      replaceVersions: state.replaceVersions,
+      appendGeneratedVersions: state.appendGeneratedVersions,
       setActiveVersion: state.setActiveVersion,
       updateActiveVersion: state.updateActiveVersion,
       generateMep: state.generateMep,
@@ -262,7 +262,7 @@ export function EvoLabWorkspace() {
           zoning={zoning}
           versions={project.versions}
           activeVersionId={project.activeVersionId}
-          onGenerated={replaceVersions}
+          onGenerated={appendGeneratedVersions}
           onSelectVersion={setActiveVersion}
         />
       </section>

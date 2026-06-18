@@ -97,6 +97,13 @@ export function summarizeVersionEvolution(project: ProjectData, activeVersion: P
       : "Spatial strategy recorded in version metadata when available."
   ];
 
+  if (activeVersion.metadata?.pipelinePhases) {
+    const phases = activeVersion.metadata.pipelinePhases;
+    evolutionNarrative.push(
+      `Pipeline: topology ${phases.topology ? "✓" : "–"} · geometry ${phases.geometry ? "✓" : "–"} · AI refinement ${phases.refinement ? "✓" : "–"}.`
+    );
+  }
+
   if (previous && activeRow) {
     evolutionNarrative.push(
       `Compared to "${previous.label}": ${activeRow.deltaRooms && activeRow.deltaRooms > 0 ? "+" : ""}${activeRow.deltaRooms ?? 0} rooms · ${activeRow.deltaArea && activeRow.deltaArea > 0 ? "+" : ""}${activeRow.deltaArea ?? 0} sqm gross · score ${activeRow.totalScore} vs ${previous.totalScore}.`

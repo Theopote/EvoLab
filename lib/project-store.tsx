@@ -99,6 +99,7 @@ interface EvoProjectStore {
   updateWall: (wallId: string, patch: Partial<Wall>) => void;
   updateOpening: (openingId: string, patch: Partial<OpeningElement>) => void;
   replaceVersions: (versions: PlanVersion[], projectType?: string) => void;
+  appendGeneratedVersions: (versions: PlanVersion[], projectType?: string) => void;
   setActiveVersion: (version: PlanVersion) => void;
   updateActiveVersion: (version: PlanVersion) => void;
   generateMep: () => Promise<void>;
@@ -287,6 +288,7 @@ function createInitialState(): Omit<
   | "updateWall"
   | "updateOpening"
   | "replaceVersions"
+  | "appendGeneratedVersions"
   | "setActiveVersion"
   | "updateActiveVersion"
   | "generateMep"
@@ -657,6 +659,23 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
 
         state.project.projectType = projectType;
         state.project.versions = normalizedVersions;
+        state.project.activeVersionId = normalizedVersions[0]?.id ?? state.project.activeVersionId;
+        clearSelectionDraft(state);
+        bumpGeometryRevision(state);
+        refreshDerivedDraft(state);
+      })
+    ),
+  appendGeneratedVersions: (versions, projectType = get().brief.projectType) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        const parentVersionId = state.project.activeVersionId || state.project.versions[0]?.id;
+        const normalizedVersions = normalizeProjectVersions(versions).map((version) => ({
+          ...version,
+          parentVersionId: version.parentVersionId ?? parentVersionId
+        }));
+
+        state.project.projectType = projectType;
+        state.project.versions = [...state.project.versions, ...normalizedVersions];
         state.project.activeVersionId = normalizedVersions[0]?.id ?? state.project.activeVersionId;
         clearSelectionDraft(state);
         bumpGeometryRevision(state);
