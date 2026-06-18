@@ -13,14 +13,21 @@ export const scoreWetCore = (context: ScoringContext): MetricResult => {
   const stackingBonus = Math.min(8, vertical.stackedShaftCount * 2);
   const score = clampScore(pathScore * 0.5 + verticalScore * 0.3 + capacityScore * 0.2 + stackingBonus);
   const pathRooms = metrics.perRoom.filter((item) => item.method === "path").length;
+  const stackAlignedRooms = metrics.perRoom.filter((item) => item.verticalAligned).length;
+  const incompleteStackRooms = metrics.perRoom.filter((item) => (item.missingLinks?.length ?? 0) > 0).length;
 
   return {
     score,
-    summary: `Average wet-to-shaft path ${round1(metrics.averageDistance)}m; ${vertical.stackGroups} shaft stack(s), capacity ${round1(vertical.shaftCapacityRatio)}x demand.`,
+    summary: `Average wet-to-stack path ${round1(metrics.averageDistance)}m; ${vertical.stackGroups} shaft stack(s), capacity ${round1(vertical.shaftCapacityRatio)}x demand.`,
     evidence: [
       { label: "Average path", value: `${round1(metrics.averageDistance)}m` },
       { label: "Max allowed", value: `${maxDistance}m`, impact: metrics.averageDistance <= maxDistance ? "positive" : "negative" },
-      { label: "Path-based rooms", value: `${pathRooms}/${metrics.perRoom.length || 0}` },
+      { label: "Stack-path rooms", value: `${pathRooms}/${metrics.perRoom.length || 0}` },
+      {
+        label: "Vertical stack alignment",
+        value: `${stackAlignedRooms}/${metrics.perRoom.length || 0}`,
+        impact: stackAlignedRooms > 0 ? "positive" : "neutral"
+      },
       {
         label: "Vertical stacks",
         value: `${vertical.stackedShaftCount} aligned / ${vertical.stackGroups} group(s)`,
@@ -41,6 +48,9 @@ export const scoreWetCore = (context: ScoringContext): MetricResult => {
         : []),
       ...(vertical.shaftCapacityRatio < 1
         ? [`Shaft area covers only ${Math.round(vertical.shaftCapacityRatio * 100)}% of estimated wet-core demand.`]
+        : []),
+      ...(incompleteStackRooms > 0
+        ? [`${incompleteStackRooms} wet room(s) are missing horizontal stack path and/or vertical riser alignment.`]
         : [])
     ].filter(Boolean)
   };

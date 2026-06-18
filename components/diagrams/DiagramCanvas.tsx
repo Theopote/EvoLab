@@ -2,10 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { computeAnalysis, type AnalysisResult } from "@/lib/analysis-engine";
-import type { AnalysisLayerId, PlanVersion, Point, Room } from "@/lib/project-types";
 import { getAnalysisLayersForProject } from "@/components/diagrams/DiagramLayerList";
 import { layerRequested } from "@/lib/typology/analysis-layers";
 import type { AnalysisWorkerResponse } from "@/lib/analysis-worker";
+import type { AnalysisLayerId, PlanVersion, Point, Room } from "@/lib/project-types";
 
 interface DiagramCanvasProps {
   activeLayers: AnalysisLayerId[];
@@ -51,6 +51,35 @@ function polygonPoints(points: Point[]) {
 
 function pathPoints(points: Point[]) {
   return points.map(([x, y]) => `${x},${y}`).join(" ");
+}
+
+function egressLegendNote(analysis: AnalysisResult | undefined, layerId: AnalysisLayerId) {
+  if (layerId !== "egress_path" && layerId !== "egress_distance") {
+    return null;
+  }
+
+  const summary = analysis?.egressSummary;
+  if (!summary) {
+    return null;
+  }
+
+  const issueRooms = analysis.egressDiagnostics.filter((item) => !item.semanticValid);
+  if (issueRooms.length === 0) {
+    return summary.label;
+  }
+
+  const missingCounts = issueRooms.reduce<Record<string, number>>((acc, item) => {
+    item.missingLinks.forEach((link) => {
+      acc[link] = (acc[link] ?? 0) + 1;
+    });
+    return acc;
+  }, {});
+
+  const missingSummary = Object.entries(missingCounts)
+    .map(([link, count]) => `${count}× ${link}`)
+    .join(" · ");
+
+  return `${summary.label} · ${issueRooms.length} incomplete (${missingSummary})`;
 }
 
 function useWorkerAnalysis(
@@ -244,27 +273,38 @@ export function DiagramCanvas({ activeLayers, version, levelId, projectType }: D
                   fill="none"
                   markerEnd="url(#arrow-egress)"
                   points={pathPoints(path.points)}
-                  stroke="#22c55e"
-                  strokeOpacity="0.85"
+                  stroke={path.semanticValid === false ? "#f59e0b" : "#22c55e"}
+                  strokeDasharray={path.semanticValid === false ? "1.2 0.8" : undefined}
+                  strokeOpacity="0.9"
                   strokeWidth="0.45"
                 />
               ))
             : null}
 
           {activeLayers.includes("egress_distance")
-            ? analysis?.egressDistances.map(({ roomId, center, distance }) => {
-                const [x, y] = center;
+            ? analysis?.egressDiagnostics.map((item) => {
+                const room = analysis.egressDistances.find((distance) => distance.roomId === item.roomId);
+                if (!room) {
+                  return null;
+                }
+                const [x, y] = room.center;
                 return (
-                  <text
-                    fill={distance > 30 ? "#f97316" : "#9fb3c8"}
-                    fontSize="1.3"
-                    key={`distance-${roomId}`}
-                    textAnchor="middle"
-                    x={x}
-                    y={y + 2.2}
-                  >
-                    {Math.round(distance)}m
-                  </text>
+                  <g key={`egress-diagnostic-${item.roomId}`}>
+                    <text
+                      fill={item.semanticValid ? "#9fb3c8" : "#f59e0b"}
+                      fontSize="1.2"
+                      textAnchor="middle"
+                      x={x}
+                      y={y + 2.2}
+                    >
+                      {Math.round(item.distance)}m
+                    </text>
+                    {!item.semanticValid && item.missingLinks.length > 0 ? (
+                      <text fill="#f59e0b" fontSize="1" textAnchor="middle" x={x} y={y + 3.6}>
+                        missing {item.missingLinks.join(", ")}
+                      </text>
+                    ) : null}
+                  </g>
                 );
               })
             : null}
@@ -293,15 +333,40 @@ export function DiagramCanvas({ activeLayers, version, levelId, projectType }: D
         {activeLayers.map((layerId) => {
           const layer = analysisLayers.find((item) => item.id === layerId);
           const legend = layerLegend[layerId];
+          const egressNote = egressLegendNote(analysis, layerId);
           return (
             <div className="flex items-center gap-2 rounded border border-line bg-[#0b1118] px-2 py-1 text-xs text-muted" key={layerId}>
               <span className="h-2.5 w-2.5 rounded-sm" style={{ background: legend?.color ?? "#9fb3c8" }} />
               <span>{layer?.label ?? layerId}</span>
-              {legend ? <span className="text-[11px] text-muted/80">/ {legend.label}</span> : null}
+              {egressNote ? (
+                <span className="text-[11px] text-amber-300/90">{egressNote}</span>
+              ) : legend ? (
+                <span className="text-[11px] text-muted/80">/ {legend.label}</span>
+              ) : null}
             </div>
           );
         })}
       </div>
+
+      {analysis?.egressSummary && (activeLayers.includes("egress_path") || activeLayers.includes("egress_distance")) ? (
+        <div className="mt-2 rounded border border-line/80 bg-[#0b1118] px-2 py-2 text-[11px] leading-5 text-muted">
+          <div className="text-slate-200">
+            Egress routing: {analysis.egressSummary.label}
+          </div>
+          <div>
+            {analysis.egressSummary.validCount} semantic · {analysis.egressSummary.incompleteCount} incomplete ·{" "}
+            {analysis.egressSummary.fallbackCount} fallback
+          </div>
+          {analysis.egressDiagnostics
+            .filter((item) => !item.semanticValid)
+            .slice(0, 4)
+            .map((item) => (
+              <div className="text-amber-300/90" key={`egress-legend-${item.roomId}`}>
+                {item.roomName}: missing {item.missingLinks.join(", ") || "semantic chain"}
+              </div>
+            ))}
+        </div>
+      ) : null}
     </section>
   );
 }

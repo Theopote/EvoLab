@@ -1,5 +1,5 @@
 import { computeDaylightSamples } from "@/lib/analysis/daylight";
-import { computeSemanticEgressForRoom } from "@/lib/analysis/egress-semantics";
+import { computeSemanticEgressForRoom, egressMethodLabel, summarizeEgressMethod, type EgressPathMethod, type SemanticEgressRoute } from "@/lib/analysis/egress-semantics";
 import { buildRoomGraph, findRoomPath, pathLength } from "@/lib/analysis/graph";
 import { computeSightlineCone } from "@/lib/analysis/sightline";
 import {
@@ -23,6 +23,26 @@ export interface AnalysisPathOverlay {
   id: string;
   points: Point[];
   distance?: number;
+  semanticValid?: boolean;
+  missingLinks?: string[];
+}
+
+export interface EgressDiagnosticOverlay {
+  roomId: string;
+  roomName: string;
+  distance: number;
+  semanticValid: boolean;
+  method: EgressPathMethod;
+  missingLinks: string[];
+  exitName?: string;
+}
+
+export interface EgressSummaryOverlay {
+  method: EgressPathMethod;
+  incompleteCount: number;
+  fallbackCount: number;
+  validCount: number;
+  label: string;
 }
 
 export interface AnalysisVectorOverlay {
@@ -58,6 +78,8 @@ export interface AnalysisResult {
   cleanDirtyFlow?: AnalysisServiceFlowOverlay;
   egressPaths: AnalysisPathOverlay[];
   egressDistances: AnalysisDistanceOverlay[];
+  egressDiagnostics: EgressDiagnosticOverlay[];
+  egressSummary?: EgressSummaryOverlay;
   corePoint: Point;
   coreLines: AnalysisVectorOverlay[];
 }
@@ -189,6 +211,8 @@ function computeFlowPaths(version: PlanVersion, graph: ReturnType<typeof buildRo
 function computeEgress(version: PlanVersion) {
   const egressPaths: AnalysisPathOverlay[] = [];
   const egressDistances: AnalysisDistanceOverlay[] = [];
+  const egressDiagnostics: EgressDiagnosticOverlay[] = [];
+  const semanticRoutes: SemanticEgressRoute[] = [];
 
   version.rooms
     .filter((room) => !["stair", "elevator", "shaft"].includes(room.type))
@@ -196,51 +220,102 @@ function computeEgress(version: PlanVersion) {
       const route = computeSemanticEgressForRoom(version, room.id);
 
       if (route) {
+        semanticRoutes.push(route);
         egressPaths.push({
           id: `egress-${room.id}`,
           points: route.path,
-          distance: route.distance
+          distance: route.distance,
+          semanticValid: route.semanticValid,
+          missingLinks: route.missingLinks
         });
         egressDistances.push({
           roomId: room.id,
           center: centroid(room),
           distance: route.distance
+        });
+        egressDiagnostics.push({
+          roomId: room.id,
+          roomName: room.name,
+          distance: route.distance,
+          semanticValid: route.semanticValid,
+          method: route.method,
+          missingLinks: route.missingLinks,
+          exitName: route.exitName
         });
         return;
       }
 
       const graph = buildRoomGraph(version);
-      const legacyRoute = findRoomPath(graph, room.id, version.rooms.find((item) => item.type === "stair" || item.type === "elevator")?.id ?? "");
+      const legacyRoute = findRoomPath(
+        graph,
+        room.id,
+        version.rooms.find((item) => item.type === "stair" || item.type === "elevator")?.id ?? ""
+      );
 
       if (legacyRoute && legacyRoute.length >= 2) {
+        const legacyDistance = pathLength(legacyRoute);
         egressPaths.push({
           id: `egress-${room.id}`,
           points: legacyRoute,
-          distance: pathLength(legacyRoute)
+          distance: legacyDistance,
+          semanticValid: false,
+          missingLinks: ["door", "corridor", "stair"]
         });
         egressDistances.push({
           roomId: room.id,
           center: centroid(room),
-          distance: pathLength(legacyRoute)
+          distance: legacyDistance
+        });
+        egressDiagnostics.push({
+          roomId: room.id,
+          roomName: room.name,
+          distance: legacyDistance,
+          semanticValid: false,
+          method: "semantic-incomplete",
+          missingLinks: ["door", "corridor", "stair"]
         });
         return;
       }
 
       const corePoint = nearestCorePoint(version);
       const center = centroid(room);
+      const fallbackDistance = Math.hypot(center[0] - corePoint[0], center[1] - corePoint[1]);
       egressPaths.push({
         id: `egress-${room.id}`,
         points: [center, corePoint],
-        distance: Math.hypot(center[0] - corePoint[0], center[1] - corePoint[1])
+        distance: fallbackDistance,
+        semanticValid: false,
+        missingLinks: ["door", "corridor", "stair"]
       });
       egressDistances.push({
         roomId: room.id,
         center,
-        distance: Math.hypot(center[0] - corePoint[0], center[1] - corePoint[1])
+        distance: fallbackDistance
+      });
+      egressDiagnostics.push({
+        roomId: room.id,
+        roomName: room.name,
+        distance: fallbackDistance,
+        semanticValid: false,
+        method: "centroid-fallback",
+        missingLinks: ["door", "corridor", "stair"]
       });
     });
 
-  return { egressPaths, egressDistances };
+  const summaryMethod = summarizeEgressMethod(semanticRoutes);
+
+  return {
+    egressPaths,
+    egressDistances,
+    egressDiagnostics,
+    egressSummary: {
+      method: summaryMethod,
+      incompleteCount: egressDiagnostics.filter((item) => item.method === "semantic-incomplete").length,
+      fallbackCount: egressDiagnostics.filter((item) => item.method === "centroid-fallback").length,
+      validCount: egressDiagnostics.filter((item) => item.semanticValid).length,
+      label: egressMethodLabel(summaryMethod)
+    }
+  };
 }
 
 export function computeAnalysis(
@@ -284,7 +359,12 @@ export function computeAnalysis(
   const egress =
     layerRequested(layers, "egress_path") || layerRequested(layers, "egress_distance")
       ? computeEgress(scopedVersion)
-      : { egressPaths: [], egressDistances: [] };
+      : {
+          egressPaths: [],
+          egressDistances: [],
+          egressDiagnostics: [],
+          egressSummary: undefined
+        };
 
   const publicRoom = roomByTypes(scopedVersion, ["lobby"]) ?? scopedVersion.rooms[0];
   const corridor = roomByTypes(scopedVersion, ["corridor"]);
@@ -331,6 +411,14 @@ export function computeAnalysis(
     cleanDirtyFlow: serviceFlow,
     egressPaths: layerRequested(layers, "egress_path") ? egress.egressPaths : [],
     egressDistances: layerRequested(layers, "egress_distance") ? egress.egressDistances : [],
+    egressDiagnostics:
+      layerRequested(layers, "egress_path") || layerRequested(layers, "egress_distance")
+        ? egress.egressDiagnostics
+        : [],
+    egressSummary:
+      layerRequested(layers, "egress_path") || layerRequested(layers, "egress_distance")
+        ? egress.egressSummary
+        : undefined,
     corePoint,
     coreLines: layerRequested(layers, "core_efficiency")
       ? scopedVersion.rooms.map((room) => ({

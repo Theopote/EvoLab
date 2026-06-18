@@ -367,8 +367,9 @@ function checkComplianceForLevel(version: PlanVersion, levelId: string, rulePack
   const narrowCorridors = corridorWidths.filter((item) => item.clearWidthM < corridorMinWidth);
   const daylightResults = checkDaylightCompliance(version, roomsNeedingDaylight, daylightMaxDepth);
   const roomsWithoutDaylight = daylightResults.filter((item) => !item.compliant);
-  const plumbingFarRooms = roomsNeedingPlumbing.filter(
-    (room) => nearestDistanceToRooms(room, shaftOrEquipmentRooms, version) > plumbingMaxDistance
+  const wetCoreMetrics = computeWetCorePathMetrics(version, levelId);
+  const wetStackIssues = wetCoreMetrics.perRoom.filter(
+    (item) => item.distance > plumbingMaxDistance || (item.missingLinks?.length ?? 0) > 0
   );
   const equipmentRooms = rooms.filter((room) => room.type === "equipment_room");
   const misalignedEquipmentRooms = equipmentRooms.filter((room) =>
@@ -429,12 +430,12 @@ function checkComplianceForLevel(version: PlanVersion, levelId: string, rulePack
     {
       id: "plumbing-proximity",
       title: "Plumbing proximity",
-      status: plumbingFarRooms.length === 0 ? "success" : "warning",
+      status: wetStackIssues.length === 0 ? "success" : "warning",
       message:
-        plumbingFarRooms.length === 0
-          ? "Rooms needing plumbing are within path distance of shafts or equipment rooms."
-          : `${plumbingFarRooms.length} plumbing room may exceed ${plumbingMaxDistance}m path distance to shafts.`,
-      basis: `Wet rooms should be within ${plumbingMaxDistance}m path distance of shafts or service zones.`,
+        wetStackIssues.length === 0
+          ? "Wet rooms reach a shaft stack via horizontal path with riser alignment where multi-floor stacks exist."
+          : `${wetStackIssues.length} wet room may exceed ${plumbingMaxDistance}m stack path or lacks vertical riser alignment.`,
+      basis: `Wet rooms should reach a shaft stack within ${plumbingMaxDistance}m horizontal path and align to a vertical riser.`,
       levelId,
       levelName
     },
