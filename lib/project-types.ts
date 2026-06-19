@@ -114,6 +114,8 @@ export interface PlanVersionMetadata {
   relayoutedAt?: string;
   validationWarnings?: string[];
   repairs?: string[];
+  /** Per-floor validation rollup produced by postProcessPlanVersion. */
+  floorValidationSummary?: FloorValidationSummary[];
   zoningApplied?: boolean;
   envelopeCompliant?: boolean;
   pipelinePhases?: {
@@ -125,6 +127,18 @@ export interface PlanVersionMetadata {
   programCompliant?: boolean;
   programValidationWarnings?: string[];
   hybridSourceVersionIds?: string[];
+}
+
+export interface FloorValidationSummary {
+  levelId: string;
+  levelName: string;
+  floorProgram?: FloorProgram;
+  issueCount: number;
+  errorCount: number;
+  warningCount: number;
+  valid: boolean;
+  issueIds: string[];
+  messages: string[];
 }
 
 export interface TopologyGraphRoom {

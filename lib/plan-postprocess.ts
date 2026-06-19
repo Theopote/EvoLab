@@ -4,7 +4,7 @@ import { enforceOpeningConstraintsOnVersion } from "@/lib/opening-constraints";
 import { applyLevelRoomsToVersion, resolveLevelRooms } from "@/lib/level-rooms";
 import type { PlanVersion, Point, Room } from "@/lib/project-types";
 import { calculateScores } from "@/lib/plan-scoring";
-import { polygonArea, validatePlanVersion } from "@/lib/plan-validation";
+import { polygonArea, validatePlanVersion, buildFloorValidationSummary } from "@/lib/plan-validation";
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
@@ -141,6 +141,7 @@ export function postProcessPlanVersion(draft: PlanVersionDraft, options: PostPro
   const allIssues = [...initialValidation.issues, ...finalValidation.issues];
   const scores = calculateScores(normalized, allIssues, options);
   const validationWarnings = Array.from(new Set(allIssues.map((issue) => issue.message)));
+  const floorValidationSummary = buildFloorValidationSummary(normalized, finalValidation.issues);
   const repairs = Array.from(new Set([...openingEnforced.repairs, ...repaired.repairs]));
 
   return {
@@ -149,6 +150,7 @@ export function postProcessPlanVersion(draft: PlanVersionDraft, options: PostPro
     metadata: {
       ...normalized.metadata,
       validationWarnings,
+      floorValidationSummary,
       repairs
     }
   };

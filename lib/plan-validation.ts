@@ -1,5 +1,5 @@
 import type { CodeContext } from "@/lib/building-domain";
-import type { PlanVersion, Point, Room } from "@/lib/project-types";
+import type { FloorValidationSummary, PlanVersion, Point, Room } from "@/lib/project-types";
 import {
   intersectionArea,
   isPolygonInside,
@@ -249,4 +249,50 @@ export function validatePlanVersion(
     valid: issues.every((issue) => issue.severity !== "error"),
     issues
   };
+}
+
+function summarizeIssues(issues: PlanValidationIssue[]): Pick<
+  FloorValidationSummary,
+  "issueCount" | "errorCount" | "warningCount" | "valid" | "issueIds" | "messages"
+> {
+  const errorCount = issues.filter((issue) => issue.severity === "error").length;
+  const warningCount = issues.filter((issue) => issue.severity === "warning").length;
+
+  return {
+    issueCount: issues.length,
+    errorCount,
+    warningCount,
+    valid: errorCount === 0,
+    issueIds: issues.map((issue) => issue.id),
+    messages: issues.map((issue) => issue.message)
+  };
+}
+
+/** Roll up validation issues per physical floor (plus building-wide bucket when present). */
+export function buildFloorValidationSummary(
+  version: PlanVersion,
+  issues: PlanValidationIssue[]
+): FloorValidationSummary[] {
+  const buildingWideIssues = issues.filter((issue) => !issue.levelId);
+  const summaries = collectLevelValidationUnits(version).map((unit) => {
+    const level = version.levels.find((item) => item.id === unit.levelId);
+    const levelIssues = issues.filter((issue) => issue.levelId === unit.levelId);
+
+    return {
+      levelId: unit.levelId,
+      levelName: unit.levelName,
+      floorProgram: level?.floorProgram,
+      ...summarizeIssues(levelIssues)
+    };
+  });
+
+  if (buildingWideIssues.length > 0) {
+    summaries.unshift({
+      levelId: "building",
+      levelName: "Building-wide",
+      ...summarizeIssues(buildingWideIssues)
+    });
+  }
+
+  return summaries;
 }
