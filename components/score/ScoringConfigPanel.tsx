@@ -5,6 +5,7 @@ import { useMemo } from "react";
 import type { ProjectDomain, ScoringConfig } from "@/lib/building-domain";
 import {
   COMPLIANCE_RULE_FIELDS,
+  EGRESS_WIDTH_FIELDS,
   GOAL_WEIGHT_FIELDS,
   PROGRAM_GOALS_PRESET_OPTIONS,
   RULE_PACK_PRESET_OPTIONS,
@@ -15,6 +16,7 @@ import {
   resolveProgramGoalsFromDomain,
   resolveRulePackFromDomain
 } from "@/lib/rules/scoring-config";
+import { resolveEgressWidthConfig } from "@/lib/compliance-rules";
 import type { ProgramGoalWeights, ScoringThresholds } from "@/lib/rules/types";
 
 interface ScoringConfigPanelProps {
@@ -36,6 +38,7 @@ export function ScoringConfigPanel({ domain, projectType, onChange, onReset }: S
 
   const resolvedRulePack = useMemo(() => resolveRulePackFromDomain(domain, projectType), [domain, projectType]);
   const resolvedGoals = useMemo(() => resolveProgramGoalsFromDomain(domain, projectType), [domain, projectType]);
+  const egressDefaults = useMemo(() => resolveEgressWidthConfig(projectType), [projectType]);
   const normalizedWeights = previewNormalizedWeights(resolvedGoals.weights);
   const weightTotal = GOAL_WEIGHT_FIELDS.filter((field) => field.normalized).reduce(
     (total, field) => total + (resolvedGoals.weights[field.key] ?? 0),
@@ -81,6 +84,25 @@ export function ScoringConfigPanel({ domain, projectType, onChange, onReset }: S
       ruleThresholds: {
         ...config.ruleThresholds,
         [key]: parsed
+      }
+    });
+  };
+
+  const updateEgressWidth = (
+    key: "widthPer100PersonsM" | "areaPerOccupantSqm",
+    rawValue: string,
+    bounds?: { min?: number; max?: number }
+  ) => {
+    const parsed = Number(rawValue);
+    if (!Number.isFinite(parsed)) {
+      return;
+    }
+
+    const value = bounds ? clamp(parsed, bounds.min ?? parsed, bounds.max ?? parsed) : parsed;
+    onChange({
+      egressWidth: {
+        ...config.egressWidth,
+        [key]: value
       }
     });
   };
@@ -160,6 +182,36 @@ export function ScoringConfigPanel({ domain, projectType, onChange, onReset }: S
                         type="number"
                         value={currentValue}
                         onChange={(event) => updateRuleThreshold(field.key, event.target.value)}
+                      />
+                      {field.unit ? <span className="shrink-0 text-[10px]">{field.unit}</span> : null}
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="rounded border border-line/80 bg-[#0b1118]/80 p-3">
+            <div className="mb-2 text-[10px] uppercase tracking-[0.12em] text-muted">Building egress width (multi-floor)</div>
+            <p className="mb-2 text-[11px] leading-5 text-warning">
+              {config.egressWidth?.notice ?? egressDefaults.notice}
+            </p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {EGRESS_WIDTH_FIELDS.map((field) => {
+                const currentValue = config.egressWidth?.[field.key] ?? egressDefaults[field.key];
+
+                return (
+                  <label className="grid gap-1 text-[11px] text-muted" key={field.key}>
+                    <span>{field.label}</span>
+                    <div className="flex items-center gap-2">
+                      <input
+                        className="w-full rounded border border-line bg-[#0a0f15] px-2 py-1 text-sm text-slate-100 outline-none focus:border-accent/60"
+                        max={field.max}
+                        min={field.min}
+                        step={field.step ?? 0.1}
+                        type="number"
+                        value={currentValue}
+                        onChange={(event) => updateEgressWidth(field.key, event.target.value, field)}
                       />
                       {field.unit ? <span className="shrink-0 text-[10px]">{field.unit}</span> : null}
                     </div>

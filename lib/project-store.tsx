@@ -797,7 +797,10 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
               : state.project.domain.scoringConfig?.goalWeights,
             ruleThresholds: patch.ruleThresholds
               ? { ...state.project.domain.scoringConfig?.ruleThresholds, ...patch.ruleThresholds }
-              : state.project.domain.scoringConfig?.ruleThresholds
+              : state.project.domain.scoringConfig?.ruleThresholds,
+            egressWidth: patch.egressWidth
+              ? { ...state.project.domain.scoringConfig?.egressWidth, ...patch.egressWidth }
+              : state.project.domain.scoringConfig?.egressWidth
           },
           state.project.projectType
         );

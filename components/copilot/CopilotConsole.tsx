@@ -5,7 +5,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AiTimelinePanel } from "@/components/copilot/AiTimelinePanel";
 import { CopilotProposalHistoryPanel } from "@/components/copilot/CopilotProposalHistoryPanel";
 import { PlanChangeProposalPanel } from "@/components/copilot/PlanChangeProposalPanel";
+import { DiffPreviewOverlay } from "@/components/floor-plan/DiffPreviewOverlay";
 import type { ModifyPlanResponse } from "@/lib/copilot-modify-types";
+import {
+  buildComplianceFixPackageById,
+  requestComplianceFixPreview,
+  type ComplianceFixPreview
+} from "@/lib/compliance-fix";
 import { useEvoProject } from "@/lib/project-store";
 import type {
   CopilotAction,
@@ -61,6 +67,8 @@ export function CopilotConsole({
   const [pinnedFiles, setPinnedFiles] = useState<CopilotPinnedFile[]>([]);
   const [pendingProposalId, setPendingProposalId] = useState<string | null>(null);
   const [pendingPlan, setPendingPlan] = useState<CopilotPlan | null>(null);
+  const [pendingComplianceFix, setPendingComplianceFix] = useState<ComplianceFixPreview | null>(null);
+  const [isComplianceFixing, setIsComplianceFixing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const {
     copilotProposals,
@@ -71,7 +79,8 @@ export function CopilotConsole({
     addCopilotProposalComment,
     refreshCopilotInsights,
     reviewCopilotInsights,
-    recordDesignDecision
+    recordDesignDecision,
+    scoringConfig
   } = useEvoProject(
     useShallow((state) => ({
       copilotProposals: state.project.domain.copilotProposals,
@@ -82,7 +91,8 @@ export function CopilotConsole({
       addCopilotProposalComment: state.addCopilotProposalComment,
       refreshCopilotInsights: state.refreshCopilotInsights,
       reviewCopilotInsights: state.reviewCopilotInsights,
-      recordDesignDecision: state.recordDesignDecision
+      recordDesignDecision: state.recordDesignDecision,
+      scoringConfig: state.project.domain.scoringConfig
     }))
   );
   const insightQueue = useEvoProject((state) => state.project.domain.copilotInsightQueue);
@@ -469,11 +479,112 @@ export function CopilotConsole({
 
     if (action.id === "regenerate-plan") {
       onRegeneratePlan();
+      return;
     }
+
+    if (action.id === "optimize-egress" && action.payload && activeVersion) {
+      void runComplianceFixAction(action.payload);
+    }
+  }
+
+  async function runComplianceFixAction(violationId: string) {
+    if (!activeVersion || isComplianceFixing) {
+      return;
+    }
+
+    const fixPackage = buildComplianceFixPackageById(activeVersion, violationId, {
+      buildingType: projectType,
+      scoringConfig
+    });
+
+    if (!fixPackage) {
+      setMessages((current) => [
+        ...current,
+        {
+          id: `assistant-fix-miss-${Date.now()}`,
+          role: "assistant",
+          content: "This compliance issue cannot be auto-fixed yet. Try a manual inpaint edit on the affected floor."
+        }
+      ]);
+      return;
+    }
+
+    setIsComplianceFixing(true);
+    onTabChange("Plan");
+
+    try {
+      const preview = await requestComplianceFixPreview(activeVersion, fixPackage);
+      setPendingComplianceFix(preview);
+      setMessages((current) => [
+        ...current,
+        {
+          id: `assistant-fix-preview-${Date.now()}`,
+          role: "assistant",
+          content: `Prepared a localized fix preview for ${fixPackage.floorName}. Review before accepting.`
+        }
+      ]);
+    } catch (error) {
+      setMessages((current) => [
+        ...current,
+        {
+          id: `assistant-fix-error-${Date.now()}`,
+          role: "assistant",
+          content: error instanceof Error ? error.message : "Compliance fix request failed."
+        }
+      ]);
+    } finally {
+      setIsComplianceFixing(false);
+    }
+  }
+
+  function acceptComplianceFixPreview() {
+    if (!pendingComplianceFix || !activeVersion) {
+      return;
+    }
+
+    const preview = pendingComplianceFix;
+    onCopilotRevision(preview.version, preview.prompt, activeVersion);
+    setPendingComplianceFix(null);
+    refreshCopilotInsights();
+    setMessages((current) => [
+      ...current,
+      {
+        id: `assistant-fix-applied-${Date.now()}`,
+        role: "assistant",
+        content: preview.warning
+          ? `Applied compliance fix with note: ${preview.warning}`
+          : "Applied compliance fix as a new scheme version."
+      }
+    ]);
+  }
+
+  function rejectComplianceFixPreview() {
+    setPendingComplianceFix(null);
+    setMessages((current) => [
+      ...current,
+      {
+        id: `assistant-fix-rejected-${Date.now()}`,
+        role: "assistant",
+        content: "Compliance fix preview rejected."
+      }
+    ]);
   }
 
   return (
     <section className="border-t border-line bg-[#0a0f15]">
+      {pendingComplianceFix && activeVersion ? (
+        <div className="border-b border-line px-4 py-3">
+          <DiffPreviewOverlay
+            baseVersion={activeVersion}
+            highlightRoomIds={pendingComplianceFix.highlightRoomIds}
+            notice={pendingComplianceFix.warning}
+            previewVersion={pendingComplianceFix.version}
+            title="Compliance fix preview"
+            onAccept={acceptComplianceFixPreview}
+            onReject={rejectComplianceFixPreview}
+          />
+        </div>
+      ) : null}
       <button
         className="flex w-full items-center justify-between px-4 py-2 text-left"
         type="button"

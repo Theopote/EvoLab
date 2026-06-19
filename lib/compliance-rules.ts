@@ -6,7 +6,7 @@ import type { CopilotActionId, CopilotFinding } from "@/lib/project-types";
 import { computeEgressPathMetrics, computeWetCorePathMetrics, egressMethodLabel } from "@/lib/rules/path-metrics";
 import { checkDaylightCompliance } from "@/lib/rules/metrics/daylight-compliance";
 import { measureCorridorsClearWidth } from "@/lib/rules/metrics/corridor-width";
-import { ruleBasis, ruleThreshold } from "@/lib/rules/rule-pack";
+import { resolveRulePack, ruleBasis, ruleThreshold } from "@/lib/rules/rule-pack";
 import type { RulePack } from "@/lib/rules/types";
 import { buildVerticalAlignmentReport } from "@/lib/vertical-alignment";
 import { deriveVerticalElements } from "@/lib/vertical-elements";
@@ -39,17 +39,19 @@ export interface ComplianceFix {
   affectedFloorIds: string[];
 }
 
+export interface EgressWidthConfig {
+  widthPer100PersonsM: number;
+  areaPerOccupantSqm: number;
+  notice: string;
+}
+
 export interface ComplianceContext {
   version: PlanVersion;
   rulePack: RulePack;
   buildingType: string;
   elevations: Map<string, number>;
   verticalElements: VerticalElement[];
-  egressWidth?: {
-    widthPer100PersonsM: number;
-    areaPerOccupantSqm: number;
-    notice: string;
-  };
+  egressWidth: EgressWidthConfig;
 }
 
 export interface ComplianceRule {
@@ -148,14 +150,15 @@ function fixActionForRule(ruleId: string): CopilotActionId | undefined {
   return undefined;
 }
 
-function checkCorridorWidthRule(ctx: ComplianceContext, levelId: string): ComplianceResult[] {
-  const level = ctx.version.levels.find((item) => item.id === levelId);
+function checkCorridorWidthRule(ctx: ComplianceContext, levelId?: string): ComplianceResult[] {
+  const resolvedLevelId = levelId ?? ctx.version.levels[0]?.id ?? "level-01";
+  const level = ctx.version.levels.find((item) => item.id === resolvedLevelId);
   const rooms = level ? resolveLevelRooms(level, ctx.version.standardFloorGroups) : [];
   const corridorMinWidth = ruleThreshold(ctx.rulePack, "corridor-width", 1.2);
   const corridorRooms = rooms.filter((room) => room.type === "corridor");
   const corridorWidths = measureCorridorsClearWidth(corridorRooms);
   const narrowCorridors = corridorWidths.filter((item) => item.clearWidthM < corridorMinWidth);
-  const levelName = level?.name ?? levelId;
+  const levelName = level?.name ?? resolvedLevelId;
 
   return [
     resultBase(
@@ -172,18 +175,19 @@ function checkCorridorWidthRule(ctx: ComplianceContext, levelId: string): Compli
           ).toFixed(1)}m).`,
       ruleBasis(ctx.rulePack, "corridor-width", "Corridor clear width should not be less than 1.2m."),
       {
-        levelId,
+        levelId: resolvedLevelId,
         levelName,
-        affectedFloorIds: [levelId],
+        affectedFloorIds: [resolvedLevelId],
         fixScope: "single_floor"
       }
     )
   ];
 }
 
-function checkEgressDistanceRule(ctx: ComplianceContext, levelId: string): ComplianceResult[] {
-  const level = ctx.version.levels.find((item) => item.id === levelId);
-  const egressMetrics = computeEgressPathMetrics(ctx.version, levelId);
+function checkEgressDistanceRule(ctx: ComplianceContext, levelId?: string): ComplianceResult[] {
+  const resolvedLevelId = levelId ?? ctx.version.levels[0]?.id ?? "level-01";
+  const level = ctx.version.levels.find((item) => item.id === resolvedLevelId);
+  const egressMetrics = computeEgressPathMetrics(ctx.version, resolvedLevelId);
   const egressMaxDistance = ctx.rulePack.scoring.egressMaxDistanceM;
   const maxEgressDistance = egressMetrics.maxDistance;
   const egressMethod = egressMetrics.method;
@@ -194,7 +198,7 @@ function checkEgressDistanceRule(ctx: ComplianceContext, levelId: string): Compl
     egressMethod !== "semantic-incomplete" &&
     egressMetrics.incompleteRouteCount === 0 &&
     egressMetrics.fallbackRouteCount === 0;
-  const levelName = level?.name ?? levelId;
+  const levelName = level?.name ?? resolvedLevelId;
 
   return [
     resultBase(
@@ -217,9 +221,9 @@ function checkEgressDistanceRule(ctx: ComplianceContext, levelId: string): Compl
           : `Maximum egress path is about ${round(maxEgressDistance)}m via ${egressLabel}.`,
       ruleBasis(ctx.rulePack, "egress-distance", "Egress travel distance should not exceed 30m."),
       {
-        levelId,
+        levelId: resolvedLevelId,
         levelName,
-        affectedFloorIds: [levelId],
+        affectedFloorIds: [resolvedLevelId],
         fixScope: "single_floor",
         fixActionId: fixActionForRule("egress-distance")
       }
@@ -227,14 +231,15 @@ function checkEgressDistanceRule(ctx: ComplianceContext, levelId: string): Compl
   ];
 }
 
-function checkDaylightRule(ctx: ComplianceContext, levelId: string): ComplianceResult[] {
-  const level = ctx.version.levels.find((item) => item.id === levelId);
+function checkDaylightRule(ctx: ComplianceContext, levelId?: string): ComplianceResult[] {
+  const resolvedLevelId = levelId ?? ctx.version.levels[0]?.id ?? "level-01";
+  const level = ctx.version.levels.find((item) => item.id === resolvedLevelId);
   const rooms = level ? resolveLevelRooms(level, ctx.version.standardFloorGroups) : [];
   const daylightMaxDepth = ctx.rulePack.scoring.daylightMaxDepthM;
   const roomsNeedingDaylight = rooms.filter((room) => room.needsDaylight);
   const daylightResults = checkDaylightCompliance(ctx.version, roomsNeedingDaylight, daylightMaxDepth);
   const roomsWithoutDaylight = daylightResults.filter((item) => !item.compliant);
-  const levelName = level?.name ?? levelId;
+  const levelName = level?.name ?? resolvedLevelId;
 
   return [
     resultBase(
@@ -249,23 +254,24 @@ function checkDaylightRule(ctx: ComplianceContext, levelId: string): ComplianceR
         : `${roomsWithoutDaylight.length} daylight-required room fails exterior window, facade contact, or ${daylightMaxDepth}m depth.`,
       `Rooms with needsDaylight should touch an exterior wall, have windows, and stay within ${daylightMaxDepth}m depth.`,
       {
-        levelId,
+        levelId: resolvedLevelId,
         levelName,
-        affectedFloorIds: [levelId],
+        affectedFloorIds: [resolvedLevelId],
         fixScope: "single_floor"
       }
     )
   ];
 }
 
-function checkPlumbingProximityRule(ctx: ComplianceContext, levelId: string): ComplianceResult[] {
-  const level = ctx.version.levels.find((item) => item.id === levelId);
+function checkPlumbingProximityRule(ctx: ComplianceContext, levelId?: string): ComplianceResult[] {
+  const resolvedLevelId = levelId ?? ctx.version.levels[0]?.id ?? "level-01";
+  const level = ctx.version.levels.find((item) => item.id === resolvedLevelId);
   const plumbingMaxDistance = ctx.rulePack.scoring.plumbingMaxDistanceM;
-  const wetCoreMetrics = computeWetCorePathMetrics(ctx.version, levelId);
+  const wetCoreMetrics = computeWetCorePathMetrics(ctx.version, resolvedLevelId);
   const wetStackIssues = wetCoreMetrics.perRoom.filter(
     (item) => item.distance > plumbingMaxDistance || (item.missingLinks?.length ?? 0) > 0
   );
-  const levelName = level?.name ?? levelId;
+  const levelName = level?.name ?? resolvedLevelId;
 
   return [
     resultBase(
@@ -280,21 +286,22 @@ function checkPlumbingProximityRule(ctx: ComplianceContext, levelId: string): Co
         : `${wetStackIssues.length} wet room may exceed ${plumbingMaxDistance}m stack path or lacks vertical riser alignment.`,
       `Wet rooms should reach a shaft stack within ${plumbingMaxDistance}m horizontal path and align to a vertical riser.`,
       {
-        levelId,
+        levelId: resolvedLevelId,
         levelName,
-        affectedFloorIds: [levelId],
+        affectedFloorIds: [resolvedLevelId],
         fixScope: "single_floor"
       }
     )
   ];
 }
 
-function checkStairCountRule(ctx: ComplianceContext, levelId: string): ComplianceResult[] {
-  const level = ctx.version.levels.find((item) => item.id === levelId);
+function checkStairCountRule(ctx: ComplianceContext, levelId?: string): ComplianceResult[] {
+  const resolvedLevelId = levelId ?? ctx.version.levels[0]?.id ?? "level-01";
+  const level = ctx.version.levels.find((item) => item.id === resolvedLevelId);
   const rooms = level ? resolveLevelRooms(level, ctx.version.standardFloorGroups) : [];
   const stairRooms = rooms.filter((room) => room.type === "stair" || room.type === "elevator");
   const minCoreCount = ruleThreshold(ctx.rulePack, "stair-count", 1);
-  const levelName = level?.name ?? levelId;
+  const levelName = level?.name ?? resolvedLevelId;
 
   return [
     resultBase(
@@ -309,17 +316,18 @@ function checkStairCountRule(ctx: ComplianceContext, levelId: string): Complianc
         : "No stair or elevator core room is present.",
       ruleBasis(ctx.rulePack, "stair-count", "At least one stair/elevator core should exist."),
       {
-        levelId,
+        levelId: resolvedLevelId,
         levelName,
-        affectedFloorIds: [levelId],
+        affectedFloorIds: [resolvedLevelId],
         fixScope: "single_floor"
       }
     )
   ];
 }
 
-function checkEquipmentShaftAlignmentRule(ctx: ComplianceContext, levelId: string): ComplianceResult[] {
-  const level = ctx.version.levels.find((item) => item.id === levelId);
+function checkEquipmentShaftAlignmentRule(ctx: ComplianceContext, levelId?: string): ComplianceResult[] {
+  const resolvedLevelId = levelId ?? ctx.version.levels[0]?.id ?? "level-01";
+  const level = ctx.version.levels.find((item) => item.id === resolvedLevelId);
   const rooms = level ? resolveLevelRooms(level, ctx.version.standardFloorGroups) : [];
   const shaftOrEquipmentRooms = rooms.filter((room) => room.type === "shaft" || room.type === "equipment_room");
   const equipmentRooms = rooms.filter((room) => room.type === "equipment_room");
@@ -330,7 +338,7 @@ function checkEquipmentShaftAlignmentRule(ctx: ComplianceContext, levelId: strin
       ctx.version
     ) > 10
   );
-  const levelName = level?.name ?? levelId;
+  const levelName = level?.name ?? resolvedLevelId;
 
   return [
     resultBase(
@@ -345,9 +353,9 @@ function checkEquipmentShaftAlignmentRule(ctx: ComplianceContext, levelId: strin
         : `${misalignedEquipmentRooms.length} equipment room may not align with shafts.`,
       "Example rule: equipment rooms should align with shafts or service risers.",
       {
-        levelId,
+        levelId: resolvedLevelId,
         levelName,
-        affectedFloorIds: [levelId],
+        affectedFloorIds: [resolvedLevelId],
         fixScope: "single_floor"
       }
     )
@@ -375,7 +383,7 @@ function checkStairEgressWidthRule(ctx: ComplianceContext): ComplianceResult[] {
     return [];
   }
 
-  const config = ctx.egressWidth!;
+  const config = ctx.egressWidth;
   const totalOccupants = ctx.version.levels.reduce((total, level) => {
     const rooms = resolveLevelRooms(level, ctx.version.standardFloorGroups);
     return total + computeOccupantLoad(rooms, config.areaPerOccupantSqm);
@@ -519,7 +527,7 @@ export const complianceRules: ComplianceRule[] = [
 export function resolveEgressWidthConfig(
   buildingType: string,
   scoringConfig?: ScoringConfig
-): ComplianceContext["egressWidth"] {
+): EgressWidthConfig {
   const normalizedType = buildingType.toLowerCase();
   const override = scoringConfig?.egressWidth;
 
@@ -644,4 +652,20 @@ export function generateComplianceInsights(results: ComplianceResult[]): Copilot
           ]
         : undefined
     }));
+}
+
+export function findComplianceResultById(
+  version: PlanVersion,
+  violationId: string,
+  options: { buildingType?: string; scoringConfig?: ScoringConfig; rulePack?: RulePack } = {}
+): ComplianceResult | undefined {
+  const rulePack =
+    options.rulePack ??
+    resolveRulePack({ projectType: options.buildingType ?? "healthcare" });
+  const ctx = buildComplianceContext(version, rulePack, {
+    buildingType: options.buildingType ?? "healthcare",
+    scoringConfig: options.scoringConfig
+  });
+
+  return runComplianceCheck(ctx).find((result) => result.id === violationId);
 }
