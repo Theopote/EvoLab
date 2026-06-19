@@ -37,6 +37,7 @@ Allowed PlanOperation types (use only these):
 8. merge_room — primaryRoomId, secondaryRoomId, mergedRoomName (optional mergedRoomId). Rooms must share a full interior wall.
 8. add_opening — roomId, openingKind door|window, wall, position 0-1, width in meters
 9. resize_opening — roomId, openingKind, openingIndex, width in meters
+10. update_room_polygon — roomId, polygon with 4-16 [x,y] vertices (inpaint / localized reshaping only)
 
 Rules:
 - NEVER return a full PlanVersion or room polygons.

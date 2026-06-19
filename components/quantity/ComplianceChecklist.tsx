@@ -1,13 +1,17 @@
 "use client";
 
 import { AlertTriangle, CheckCircle2, Sparkles } from "lucide-react";
-import { DiffPreviewOverlay } from "@/components/floor-plan/DiffPreviewOverlay";
+import { useState } from "react";
+import { PlanChangeProposalPanel } from "@/components/copilot/PlanChangeProposalPanel";
 import { useComplianceFixAction } from "@/components/copilot/useComplianceFixAction";
 import type { ScoringConfig } from "@/lib/building-domain";
 import { complianceFixLabel } from "@/lib/compliance-rules";
 import { isComplianceFixAction } from "@/lib/compliance-fix";
+import { useEvoProject } from "@/lib/project-store";
 import type { ComplianceItem } from "@/lib/quantity-engine";
 import type { PlanVersion } from "@/lib/project-types";
+import type { PlanChangeProposal } from "@/lib/schemas/plan-change-proposal-schema";
+import { useShallow } from "zustand/react/shallow";
 
 interface ComplianceChecklistProps {
   items: ComplianceItem[];
@@ -25,33 +29,43 @@ export function ComplianceChecklist({
   onApplyRevision
 }: ComplianceChecklistProps) {
   const warningCount = items.filter((item) => item.status === "warning").length;
-  const {
-    pendingComplianceFix,
-    isComplianceFixing,
-    runComplianceFixAction,
-    acceptComplianceFixPreview,
-    rejectComplianceFixPreview
-  } = useComplianceFixAction({
+  const { lockedElementIds } = useEvoProject(
+    useShallow((state) => ({
+      lockedElementIds: state.project.domain.lockedElementIds
+    }))
+  );
+  const [pendingProposal, setPendingProposal] = useState<{
+    prompt: string;
+    proposal: PlanChangeProposal;
+    allowedRoomIds?: string[];
+  } | null>(null);
+  const { isComplianceFixing, runComplianceFixAction } = useComplianceFixAction({
     activeVersion,
     projectType,
     scoringConfig,
-    onApplyPreview: (preview) => {
-      onApplyRevision?.(preview.version, preview.prompt);
+    onProposalReady: (input) => {
+      setPendingProposal({
+        prompt: input.prompt,
+        proposal: input.proposal,
+        allowedRoomIds: input.highlightRoomIds
+      });
     }
   });
 
   return (
     <section className="rounded border border-line bg-panel/90 p-3">
-      {pendingComplianceFix && activeVersion ? (
+      {pendingProposal && activeVersion ? (
         <div className="mb-3">
-          <DiffPreviewOverlay
+          <PlanChangeProposalPanel
+            allowedRoomIds={pendingProposal.allowedRoomIds}
             baseVersion={activeVersion}
-            highlightRoomIds={pendingComplianceFix.highlightRoomIds}
-            notice={pendingComplianceFix.warning}
-            previewVersion={pendingComplianceFix.version}
-            title="Compliance fix preview"
-            onAccept={acceptComplianceFixPreview}
-            onReject={rejectComplianceFixPreview}
+            lockedElementIds={lockedElementIds}
+            proposal={pendingProposal.proposal}
+            onApply={(version) => {
+              onApplyRevision?.(version, pendingProposal.prompt);
+              setPendingProposal(null);
+            }}
+            onDismiss={() => setPendingProposal(null)}
           />
         </div>
       ) : null}
@@ -91,7 +105,7 @@ export function ComplianceChecklist({
                   {canFix ? (
                     <button
                       className="mt-2 inline-flex items-center gap-1 rounded border border-line px-2 py-1 text-[11px] text-muted hover:border-accent/60 hover:text-accent disabled:opacity-50"
-                      disabled={isComplianceFixing || Boolean(pendingComplianceFix)}
+                      disabled={isComplianceFixing || Boolean(pendingProposal)}
                       type="button"
                       onClick={() => void runComplianceFixAction(item.id)}
                     >

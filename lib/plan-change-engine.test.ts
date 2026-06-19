@@ -76,6 +76,82 @@ describe("plan-change-engine", () => {
     expect(changes.removed.length).toBeGreaterThan(0);
   });
 
+  it("skips operations outside the allowed inpaint region", () => {
+    const corridor = baseVersion.rooms.find((room) => room.type === "corridor");
+    const office = baseVersion.rooms.find((room) => room.type === "office");
+
+    if (!corridor || !office) {
+      return;
+    }
+
+    const operations: PlanOperation[] = [
+      {
+        id: "op-shift-office",
+        type: "shift_rooms",
+        label: "Shift office",
+        targetRoomIds: [office.id],
+        roomIds: [office.id],
+        dx: 1,
+        dy: 0
+      },
+      {
+        id: "op-widen-corridor",
+        type: "widen_corridor",
+        label: "Widen corridor",
+        targetRoomIds: [corridor.id],
+        corridorIds: [corridor.id],
+        extraWidthMeters: 0.4,
+        side: "both"
+      }
+    ];
+
+    const report = applyPlanOperationsWithReport(baseVersion, operations, {
+      allowedRoomIds: [corridor.id],
+      skipPostProcess: true
+    });
+
+    expect(report.appliedOperationIds).toEqual(["op-widen-corridor"]);
+    expect(report.skippedOperations.some((item) => item.operationId === "op-shift-office")).toBe(true);
+  });
+
+  it("updates a room polygon in place", () => {
+    const room = baseVersion.rooms.find((item) => item.type === "office");
+
+    if (!room) {
+      return;
+    }
+
+    const bounds = room.polygon.reduce(
+      (acc, [x, y]) => ({
+        minX: Math.min(acc.minX, x),
+        minY: Math.min(acc.minY, y),
+        maxX: Math.max(acc.maxX, x),
+        maxY: Math.max(acc.maxY, y)
+      }),
+      { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity }
+    );
+    const polygon: [number, number][] = [
+      [bounds.minX, bounds.minY],
+      [bounds.maxX + 1, bounds.minY],
+      [bounds.maxX + 1, bounds.maxY],
+      [bounds.minX, bounds.maxY]
+    ];
+
+    const operation = {
+      id: "op-update-polygon",
+      type: "update_room_polygon" as const,
+      label: "Reshape office",
+      targetRoomIds: [room.id],
+      roomId: room.id,
+      polygon
+    };
+
+    const next = applyPlanOperations(baseVersion, [operation], { skipPostProcess: true });
+    const updated = next.rooms.find((item) => item.id === room.id);
+
+    expect(updated?.polygon[1][0]).toBeGreaterThan(room.polygon[1][0]);
+  });
+
   it("adds a door opening to a room", () => {
     const operation: PlanOperation = {
       id: "op-add-door",

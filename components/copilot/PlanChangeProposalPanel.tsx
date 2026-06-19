@@ -18,6 +18,7 @@ interface PlanChangeProposalPanelProps {
   baseVersion: PlanVersion;
   proposal: PlanChangeProposal;
   lockedElementIds?: string[];
+  allowedRoomIds?: string[];
   onApply: (version: PlanVersion, acceptedOperationIds: string[]) => void;
   onDismiss: () => void;
   onAddComment?: (text: string) => void;
@@ -27,6 +28,7 @@ export function PlanChangeProposalPanel({
   baseVersion,
   proposal,
   lockedElementIds = [],
+  allowedRoomIds,
   onApply,
   onDismiss,
   onAddComment
@@ -57,9 +59,10 @@ export function PlanChangeProposalPanel({
       buildPreviewVersion(baseVersion, proposal, {
         acceptedOperationIds: [...acceptedIds],
         lockedElementIds,
+        allowedRoomIds,
         versionLabel: `${baseVersion.label} / Copilot (${acceptedIds.size}/${proposal.operations.length})`
       }),
-    [acceptedIds, baseVersion, lockedElementIds, proposal]
+    [acceptedIds, allowedRoomIds, baseVersion, lockedElementIds, proposal]
   );
 
   const report = useMemo(
@@ -67,9 +70,10 @@ export function PlanChangeProposalPanel({
       applyPlanOperationsWithReport(baseVersion, proposal.operations, {
         acceptedOperationIds: [...acceptedIds],
         lockedElementIds,
+        allowedRoomIds,
         skipPostProcess: true
       }),
-    [acceptedIds, baseVersion, lockedElementIds, proposal.operations]
+    [acceptedIds, allowedRoomIds, baseVersion, lockedElementIds, proposal.operations]
   );
 
   const focusedRoomIds = useMemo(() => {

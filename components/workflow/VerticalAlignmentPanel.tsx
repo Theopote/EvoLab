@@ -2,12 +2,15 @@
 
 import { AlertTriangle, CheckCircle2, Sparkles } from "lucide-react";
 import { useMemo, useState } from "react";
-import { DiffPreviewOverlay } from "@/components/floor-plan/DiffPreviewOverlay";
+import { PlanChangeProposalPanel } from "@/components/copilot/PlanChangeProposalPanel";
 import { VerticalSectionView } from "@/components/workflow/VerticalSectionView";
+import type { ModifyPlanResponse } from "@/lib/copilot-modify-types";
 import { captureInpaintImagesFromBBox } from "@/lib/inpaint-capture";
+import { useEvoProject } from "@/lib/project-store";
 import type { PlanVersion, VerticalAlignmentIssue } from "@/lib/project-types";
 import { buildVerticalAlignmentReport } from "@/lib/vertical-alignment";
 import { buildAlignmentFixPackage } from "@/lib/vertical-alignment-fix";
+import { useShallow } from "zustand/react/shallow";
 
 interface VerticalAlignmentPanelProps {
   version: PlanVersion;
@@ -23,14 +26,15 @@ export function VerticalAlignmentPanel({
   onApplyRevision
 }: VerticalAlignmentPanelProps) {
   const report = useMemo(() => buildVerticalAlignmentReport(version), [version]);
+  const { lockedElementIds } = useEvoProject(
+    useShallow((state) => ({
+      lockedElementIds: state.project.domain.lockedElementIds
+    }))
+  );
   const [fixingIssueId, setFixingIssueId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [pendingPreview, setPendingPreview] = useState<{
-    version: PlanVersion;
-    prompt: string;
-    warning?: string;
-    highlightRoomIds: string[];
-  } | null>(null);
+  const [pendingProposal, setPendingProposal] = useState<ModifyPlanResponse | null>(null);
+  const [pendingPrompt, setPendingPrompt] = useState("");
 
   if (version.levels.length <= 1) {
     return (
@@ -70,31 +74,29 @@ export function VerticalAlignmentPanel({
           baseImage,
           maskImage,
           allowedRoomIds: fixPackage.allowedRoomIds,
+          lockedElementIds,
           levelId: fixPackage.levelId,
           structuralConstraints: fixPackage.structuralConstraints
         })
       });
 
-      const data = (await response.json()) as {
-        version?: PlanVersion;
-        warning?: string;
+      const data = (await response.json()) as ModifyPlanResponse & {
         structuralViolations?: string[];
         error?: string;
       };
 
-      if (!response.ok || !data.version?.rooms) {
+      if (!response.ok || !data.version?.rooms || !data.proposal?.operations?.length) {
         throw new Error(data.error ?? `inpaint-plan failed with ${response.status}`);
       }
 
       const warning = [data.warning, ...(data.structuralViolations ?? [])].filter(Boolean).join(" ");
 
-      setPendingPreview({
-        version: data.version,
-        prompt: fixPackage.userRequest,
-        warning: warning || undefined,
-        highlightRoomIds: fixPackage.highlightRoomIds
+      setPendingProposal({
+        ...data,
+        warning: warning || data.warning
       });
-      setNotice("Review the alignment fix preview before accepting.");
+      setPendingPrompt(fixPackage.userRequest);
+      setNotice("Review each alignment fix operation before applying.");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Alignment fix request failed.");
     } finally {
@@ -102,32 +104,36 @@ export function VerticalAlignmentPanel({
     }
   }
 
-  function acceptPreview() {
-    if (!pendingPreview || !onApplyRevision) {
+  function applyProposal(nextVersion: PlanVersion) {
+    if (!pendingProposal || !onApplyRevision) {
       return;
     }
 
-    onApplyRevision(pendingPreview.version, pendingPreview.prompt);
-    setPendingPreview(null);
-    setNotice(pendingPreview.warning ? `Applied with note: ${pendingPreview.warning}` : "Alignment fix applied.");
+    onApplyRevision(nextVersion, pendingPrompt);
+    setPendingProposal(null);
+    setPendingPrompt("");
+    setNotice(
+      pendingProposal.warning
+        ? `Alignment fix applied with note: ${pendingProposal.warning}`
+        : "Alignment fix applied."
+    );
   }
 
-  function rejectPreview() {
-    setPendingPreview(null);
-    setNotice("Alignment fix preview rejected.");
+  function dismissProposal() {
+    setPendingProposal(null);
+    setPendingPrompt("");
+    setNotice("Alignment fix proposal rejected.");
   }
 
   return (
     <section className="grid gap-3">
-      {pendingPreview ? (
-        <DiffPreviewOverlay
+      {pendingProposal ? (
+        <PlanChangeProposalPanel
           baseVersion={version}
-          highlightRoomIds={pendingPreview.highlightRoomIds}
-          notice={pendingPreview.warning}
-          previewVersion={pendingPreview.version}
-          title="Vertical alignment fix preview"
-          onAccept={acceptPreview}
-          onReject={rejectPreview}
+          lockedElementIds={lockedElementIds}
+          proposal={pendingProposal.proposal}
+          onApply={applyProposal}
+          onDismiss={dismissProposal}
         />
       ) : null}
 
@@ -171,7 +177,7 @@ export function VerticalAlignmentPanel({
                   {onApplyRevision && issue.position ? (
                     <button
                       className="inline-flex items-center gap-1 rounded border border-accent/40 px-2 py-1 text-[11px] text-accent disabled:opacity-50"
-                      disabled={Boolean(fixingIssueId) || Boolean(pendingPreview)}
+                      disabled={Boolean(fixingIssueId) || Boolean(pendingProposal)}
                       type="button"
                       onClick={() => void fixIssue(issue)}
                     >

@@ -236,6 +236,7 @@ export function createMockInpaintProposal(
     proposal,
     version,
     findings: base.findings,
+    mode: "proposal" as const,
     warning: formatCopilotFallbackWarning("Only rooms inside the painted mask were considered.")
   };
 }

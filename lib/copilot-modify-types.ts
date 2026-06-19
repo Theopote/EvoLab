@@ -8,6 +8,7 @@ export interface ModifyPlanResponse {
   findings: CopilotFinding[];
   fallback?: boolean;
   warning?: string;
+  structuralViolations?: string[];
 }
 
 export interface PendingCopilotProposalView {
