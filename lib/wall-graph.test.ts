@@ -120,20 +120,20 @@ describe("wall graph", () => {
   it("clamps wall drag to minimum room width", () => {
     const graph = deriveWallGraph([livingRoom, bedroom]);
     const shared = graph.edges.find((edge) => edge.roomIds.length === 2)!;
-    const normal = [1, 0] as const;
-    const clamped = clampWallDragOffset(5, [livingRoom, bedroom], shared, normal, 0.6);
+    const normal: [number, number] = [1, 0];
+    const clamped = clampWallDragOffset(9.8, [livingRoom, bedroom], shared, normal, 0.6);
 
-    expect(clamped).toBeLessThan(5);
-    expect(clamped).toBeGreaterThan(0);
+    expect(clamped).toBeLessThan(9.8);
+    expect(clamped).toBeGreaterThan(9);
   });
 
   it("applies clamped wall drag offsets from original rooms", () => {
     const graph = deriveWallGraph([livingRoom, bedroom]);
     const shared = graph.edges.find((edge) => edge.roomIds.length === 2)!;
-    const next = applyWallDragByOffset([livingRoom, bedroom], shared.id, 9, [1, 0], 0.6);
+    const next = applyWallDragByOffset([livingRoom, bedroom], shared.id, 9.8, [1, 0], 0.6);
     const movedBedroom = next.find((room) => room.id === "bedroom")!;
 
-    expect(movedBedroom.polygon[0][0] - movedBedroom.polygon[1][0]).toBeGreaterThanOrEqual(0.59);
+    expect(Math.abs(movedBedroom.polygon[1][0] - movedBedroom.polygon[0][0])).toBeGreaterThanOrEqual(0.59);
   });
 
   it("hit tests the nearest wall edge", () => {

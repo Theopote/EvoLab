@@ -22,6 +22,8 @@ import { useEditPreviewStore } from "@/lib/edit-preview-store";
 import { corridorComplianceRoomIds } from "@/lib/drag-compliance";
 import { normalizePlanVersion } from "@/lib/architecture-model";
 import type { GridSnapStep } from "@/lib/plan-snap";
+import { clientToSvgPoint } from "@/components/floor-plan/floor-plan-utils";
+import { deriveWallGraph, hitTestWalls } from "@/lib/wall-graph";
 
 export interface FloorPlanCanvasProps {
   version?: PlanVersion;
@@ -48,6 +50,7 @@ export function FloorPlanCanvas({
   const dragBaseSignatureRef = useRef<string>("");
   const [gridStep, setGridStep] = useState<GridSnapStep>(0.1);
   const [gridSnapEnabled, setGridSnapEnabled] = useState(true);
+  const [hoveredWallId, setHoveredWallId] = useState<string | undefined>();
   const activeTool = useInteractionStore((state) => state.activeTool);
   const previewRooms = useEditPreviewStore((state) => state.previewRooms);
   const complianceRoomIds = useEditPreviewStore((state) => state.complianceRoomIds);
@@ -141,6 +144,7 @@ export function FloorPlanCanvas({
   const level = version?.levels.find((item) => item.id === levelId) ?? version?.levels[0];
   const sourceRooms = level?.rooms.length ? level.rooms : version?.rooms ?? [];
   const rooms = previewRooms ?? sourceRooms;
+  const wallGraph = useMemo(() => deriveWallGraph(sourceRooms), [sourceRooms]);
   const previewWalls = useMemo(() => {
     if (!version || !previewRooms) {
       return level?.walls ?? [];
@@ -150,6 +154,29 @@ export function FloorPlanCanvas({
     const previewLevel = normalized.levels.find((item) => item.id === levelId) ?? normalized.levels[0];
     return previewLevel?.walls ?? [];
   }, [level?.walls, levelId, previewRooms, version]);
+
+  const handleCanvasPointerMove = useCallback(
+    (event: React.PointerEvent<SVGSVGElement>) => {
+      if (!interactive || activeTool !== "select" || previewRooms) {
+        return;
+      }
+
+      const svgElement = svgRef.current;
+
+      if (!svgElement) {
+        return;
+      }
+
+      const [x, y] = clientToSvgPoint(svgElement, event.clientX, event.clientY);
+      const hit = hitTestWalls([x, y], wallGraph);
+      setHoveredWallId(hit?.id);
+    },
+    [activeTool, interactive, previewRooms, wallGraph]
+  );
+
+  const handleCanvasPointerLeave = useCallback(() => {
+    setHoveredWallId(undefined);
+  }, []);
 
   if (!version) {
     return (
@@ -170,9 +197,14 @@ export function FloorPlanCanvas({
     : undefined;
   const traceEnabled = interactive && activeTool === "trace";
   const inpaintEnabled = interactive && activeTool === "inpaint";
+  const geometryEditEnabled =
+    interactive &&
+    !inpaintEnabled &&
+    (activeTool === "select" || activeTool === "trace") &&
+    Boolean(selectedRoom && !lockedElementIds.includes(selectedRoom.id));
   const wallDragEnabled =
     interactive &&
-    activeTool === "select" &&
+    (activeTool === "select" || activeTool === "trace") &&
     Boolean(selectedWallId) &&
     Boolean(selectedWall && !selectedWall.roomIds.some((roomId) => lockedElementIds.includes(roomId)));
   const parametricOpeningEnabled =
@@ -227,6 +259,8 @@ export function FloorPlanCanvas({
           className="relative h-full min-h-[420px] w-full"
           viewBox={getViewBox(version)}
           role="img"
+          onPointerLeave={interactive ? handleCanvasPointerLeave : undefined}
+          onPointerMove={interactive ? handleCanvasPointerMove : undefined}
           onClick={() => {
             if (interactive && !traceEnabled && !inpaintEnabled) {
               clearSelection();
@@ -243,6 +277,7 @@ export function FloorPlanCanvas({
           />
           <WallLayer
             walls={previewWalls}
+            hoveredWallId={hoveredWallId}
             selectedWallId={selectedWallId}
             onSelectWall={interactive && !inpaintEnabled ? selectWall : undefined}
           />
@@ -261,7 +296,7 @@ export function FloorPlanCanvas({
             selectedRoomId={selectedRoomId}
             selectedWallId={selectedWallId}
             selectedOpeningId={selectedOpeningId}
-            traceEnabled={traceEnabled}
+            geometryEditEnabled={geometryEditEnabled}
             wallDragEnabled={wallDragEnabled}
             openingEditEnabled={openingEditEnabled}
             gridSnapEnabled={gridSnapEnabled}
@@ -276,7 +311,8 @@ export function FloorPlanCanvas({
         </svg>
         <div className="absolute bottom-3 left-3 rounded border border-line bg-[#081018]/90 px-2 py-1 text-xs text-muted">
           1 grid = 1 m / {version.label}
-          {traceEnabled ? " / Trace vertices" : ""}
+          {geometryEditEnabled ? " / Drag vertices or edge handles" : ""}
+          {traceEnabled ? " / Trace mode" : ""}
           {inpaintEnabled ? " / Inpaint mask" : ""}
           {wallDragEnabled ? " / Drag shared wall" : ""}
           {openingEditEnabled ? " / Drag opening along wall" : ""}

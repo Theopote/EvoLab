@@ -1,10 +1,18 @@
 "use client";
 
-import { useRef } from "react";
+import { useMemo, useRef } from "react";
 import type { OpeningElement, Point, Room, Wall } from "@/lib/project-types";
 import { clientToSvgPoint, openingSegment, polygonPoints } from "@/components/floor-plan/floor-plan-utils";
 import { openingCenterFromDragPoint } from "@/lib/opening-wall-utils";
-import { collectVertexAnchors, applyVertexDrag, applyWallDrag } from "@/lib/wall-graph";
+import {
+  applyNodeDrag,
+  applyWallDragByOffset,
+  deriveWallGraph,
+  edgeUnitNormal,
+  findRoomEdge,
+  quantizePoint,
+  roomsAtNode
+} from "@/lib/wall-graph";
 import {
   constrainOrthoDelta,
   projectDeltaOntoNormal,
@@ -23,15 +31,17 @@ function midpoint(a: Point, b: Point): Point {
 interface GeometryDragSession {
   pointerId: number;
   dragStart: Point;
+  originalRooms: Room[];
   anchor?: Point;
-  vertexIndex?: number;
+  nodeId?: string;
   wallId?: string;
   wallNormal?: Point;
 }
 
 function ControlPoints({
   polygon,
-  traceEnabled,
+  roomId,
+  geometryEditEnabled,
   allRooms,
   svgRef,
   gridStep,
@@ -41,7 +51,8 @@ function ControlPoints({
   onCancelPreview
 }: {
   polygon: Point[];
-  traceEnabled: boolean;
+  roomId: string;
+  geometryEditEnabled: boolean;
   allRooms: Room[];
   svgRef?: React.RefObject<SVGSVGElement | null>;
   gridStep: GridSnapStep;
@@ -51,7 +62,8 @@ function ControlPoints({
   onCancelPreview?: () => void;
 }) {
   const sessionRef = useRef<GeometryDragSession | null>(null);
-  const endpointTargets = collectVertexAnchors(allRooms);
+  const graph = useMemo(() => deriveWallGraph(allRooms), [allRooms]);
+  const endpointTargets = graph.nodes.map((node) => node.position);
 
   function toSnappedPoint(event: React.PointerEvent<SVGCircleElement>, origin?: Point) {
     const svgElement = svgRef?.current;
@@ -75,7 +87,7 @@ function ControlPoints({
   function handlePointerMove(event: React.PointerEvent<SVGCircleElement>) {
     const session = sessionRef.current;
 
-    if (!session || session.pointerId !== event.pointerId || session.anchor === undefined) {
+    if (!session || session.pointerId !== event.pointerId || !session.nodeId) {
       return;
     }
 
@@ -85,75 +97,226 @@ function ControlPoints({
       return;
     }
 
-    onPreviewRooms?.(applyVertexDrag(allRooms, session.anchor, next));
+    onPreviewRooms?.(applyNodeDrag(session.originalRooms, graph, session.nodeId, next));
   }
 
-  const vertices = polygon;
-  const midpoints: Point[] = polygon.map((pt, i) => midpoint(pt, polygon[(i + 1) % polygon.length]));
+  const midpoints: Point[] = polygon.map((point, index) => midpoint(point, polygon[(index + 1) % polygon.length]));
 
   return (
     <g data-layer="control-points">
-      {midpoints.map(([x, y], i) => (
-        <circle
-          key={`mp-${i}`}
-          cx={x}
-          cy={y}
-          r={MIDPOINT_R}
-          fill="#0d1c29"
-          stroke="#4fb5c8"
-          strokeWidth="0.14"
-        />
-      ))}
-      {vertices.map(([x, y], i) => (
-        <circle
-          key={`vt-${i}`}
-          cx={x}
-          cy={y}
-          r={VERTEX_R}
-          fill="#4fb5c8"
-          stroke="#e2e8f0"
-          strokeWidth="0.16"
-          style={{ cursor: traceEnabled ? "grab" : "default" }}
-          onPointerDown={(event) => {
-            if (!traceEnabled || !onPreviewRooms || !onCommitRooms) {
-              return;
-            }
+      {midpoints.map(([x, y], index) => {
+        const edge = findRoomEdge(graph, roomId, index);
 
-            sessionRef.current = {
-              pointerId: event.pointerId,
-              dragStart: [x, y],
-              anchor: [x, y],
-              vertexIndex: i
-            };
-            onPreviewRooms(allRooms);
-            event.currentTarget.setPointerCapture(event.pointerId);
-            event.stopPropagation();
-          }}
-          onPointerMove={handlePointerMove}
-          onPointerUp={(event) => {
-            if (sessionRef.current?.pointerId !== event.pointerId) {
-              return;
-            }
+        if (!edge || !geometryEditEnabled) {
+          return (
+            <circle
+              key={`mp-${index}`}
+              cx={x}
+              cy={y}
+              r={MIDPOINT_R}
+              fill="#0d1c29"
+              stroke="#4fb5c8"
+              strokeWidth="0.14"
+            />
+          );
+        }
 
-            const session = sessionRef.current;
-            const next = toSnappedPoint(event, session?.dragStart);
+        return (
+          <EdgeMidpointHandle
+            key={`mp-${index}`}
+            allRooms={allRooms}
+            center={[x, y]}
+            edge={edge}
+            enabled={geometryEditEnabled}
+            gridEnabled={gridEnabled}
+            gridStep={gridStep}
+            svgRef={svgRef}
+            onCancelPreview={onCancelPreview}
+            onCommitRooms={onCommitRooms}
+            onPreviewRooms={onPreviewRooms}
+          />
+        );
+      })}
+      {polygon.map(([x, y], index) => {
+        const nodeId = quantizePoint([x, y]);
+        const shared = roomsAtNode(graph, nodeId).length > 1;
 
-            if (session?.anchor && next) {
-              onCommitRooms?.(applyVertexDrag(allRooms, session.anchor, next));
-            } else {
+        return (
+          <circle
+            key={`vt-${index}`}
+            cx={x}
+            cy={y}
+            r={VERTEX_R}
+            fill={shared ? "#f59e0b" : "#4fb5c8"}
+            stroke={shared ? "#fde68a" : "#e2e8f0"}
+            strokeWidth="0.16"
+            style={{ cursor: geometryEditEnabled ? "grab" : "default" }}
+            onPointerDown={(event) => {
+              if (!geometryEditEnabled || !onPreviewRooms || !onCommitRooms) {
+                return;
+              }
+
+              sessionRef.current = {
+                pointerId: event.pointerId,
+                dragStart: [x, y],
+                originalRooms: allRooms,
+                anchor: [x, y],
+                nodeId
+              };
+              onPreviewRooms(allRooms);
+              event.currentTarget.setPointerCapture(event.pointerId);
+              event.stopPropagation();
+            }}
+            onPointerMove={handlePointerMove}
+            onPointerUp={(event) => {
+              if (sessionRef.current?.pointerId !== event.pointerId) {
+                return;
+              }
+
+              const session = sessionRef.current;
+              const next = toSnappedPoint(event, session?.dragStart);
+
+              if (session?.nodeId && next) {
+                onCommitRooms?.(applyNodeDrag(session.originalRooms, graph, session.nodeId, next));
+              } else {
+                onCancelPreview?.();
+              }
+
+              sessionRef.current = null;
+              event.currentTarget.releasePointerCapture(event.pointerId);
+            }}
+            onPointerCancel={() => {
+              sessionRef.current = null;
               onCancelPreview?.();
-            }
-
-            sessionRef.current = null;
-            event.currentTarget.releasePointerCapture(event.pointerId);
-          }}
-          onPointerCancel={() => {
-            sessionRef.current = null;
-            onCancelPreview?.();
-          }}
-        />
-      ))}
+            }}
+          />
+        );
+      })}
     </g>
+  );
+}
+
+function EdgeMidpointHandle({
+  center,
+  edge,
+  allRooms,
+  svgRef,
+  enabled,
+  gridStep,
+  gridEnabled,
+  onPreviewRooms,
+  onCommitRooms,
+  onCancelPreview
+}: {
+  center: Point;
+  edge: ReturnType<typeof deriveWallGraph>["edges"][number];
+  allRooms: Room[];
+  svgRef?: React.RefObject<SVGSVGElement | null>;
+  enabled: boolean;
+  gridStep: GridSnapStep;
+  gridEnabled: boolean;
+  onPreviewRooms?: (rooms: Room[]) => void;
+  onCommitRooms?: (rooms: Room[]) => void;
+  onCancelPreview?: () => void;
+}) {
+  const sessionRef = useRef<GeometryDragSession | null>(null);
+  const normal = edgeUnitNormal(edge.nodeA, edge.nodeB);
+
+  function currentOffset(event: React.PointerEvent<SVGCircleElement>) {
+    const session = sessionRef.current;
+    const svgElement = svgRef?.current;
+
+    if (!session || !svgElement) {
+      return null;
+    }
+
+    const [x, y] = clientToSvgPoint(svgElement, event.clientX, event.clientY);
+    const rawDelta: Point = [x - session.dragStart[0], y - session.dragStart[1]];
+    const projected = projectDeltaOntoNormal(rawDelta, session.wallNormal ?? normal);
+    const nextPoint = snapPoint([session.dragStart[0] + projected[0], session.dragStart[1] + projected[1]], {
+      gridEnabled,
+      gridStep
+    });
+    const snappedDelta: Point = [nextPoint[0] - session.dragStart[0], nextPoint[1] - session.dragStart[1]];
+
+    return snappedDelta[0] * normal[0] + snappedDelta[1] * normal[1];
+  }
+
+  return (
+    <circle
+      cx={center[0]}
+      cy={center[1]}
+      r={MIDPOINT_R}
+      fill="#0d1c29"
+      stroke="#38bdf8"
+      strokeWidth="0.16"
+      style={{ cursor: enabled ? "grab" : "default" }}
+      onPointerDown={(event) => {
+        if (!enabled || !onPreviewRooms || !onCommitRooms) {
+          return;
+        }
+
+        const svgElement = svgRef?.current;
+
+        if (!svgElement) {
+          return;
+        }
+
+        const [x, y] = clientToSvgPoint(svgElement, event.clientX, event.clientY);
+
+        sessionRef.current = {
+          pointerId: event.pointerId,
+          dragStart: [x, y],
+          originalRooms: allRooms,
+          wallId: edge.id,
+          wallNormal: normal
+        };
+        onPreviewRooms(allRooms);
+        event.currentTarget.setPointerCapture(event.pointerId);
+        event.stopPropagation();
+      }}
+      onPointerMove={(event) => {
+        const session = sessionRef.current;
+
+        if (!session || session.pointerId !== event.pointerId || !session.wallId) {
+          return;
+        }
+
+        const offset = currentOffset(event);
+
+        if (offset === null) {
+          return;
+        }
+
+        onPreviewRooms?.(
+          applyWallDragByOffset(session.originalRooms, session.wallId, offset, session.wallNormal ?? normal)
+        );
+      }}
+      onPointerUp={(event) => {
+        const session = sessionRef.current;
+
+        if (!session || session.pointerId !== event.pointerId || !session.wallId) {
+          return;
+        }
+
+        const offset = currentOffset(event);
+
+        if (offset !== null) {
+          onCommitRooms?.(
+            applyWallDragByOffset(session.originalRooms, session.wallId, offset, session.wallNormal ?? normal)
+          );
+        } else {
+          onCancelPreview?.();
+        }
+
+        sessionRef.current = null;
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }}
+      onPointerCancel={() => {
+        sessionRef.current = null;
+        onCancelPreview?.();
+      }}
+    />
   );
 }
 
@@ -182,7 +345,7 @@ function WallDragHandle({
   const center = midpoint(wall.start, wall.end);
   const normal = wallUnitNormal(wall);
 
-  function currentDelta(event: React.PointerEvent<SVGCircleElement>) {
+  function currentOffset(event: React.PointerEvent<SVGCircleElement>) {
     const session = sessionRef.current;
     const svgElement = svgRef?.current;
 
@@ -193,12 +356,13 @@ function WallDragHandle({
     const [x, y] = clientToSvgPoint(svgElement, event.clientX, event.clientY);
     const rawDelta: Point = [x - session.dragStart[0], y - session.dragStart[1]];
     const projected = projectDeltaOntoNormal(rawDelta, session.wallNormal ?? normal);
-    const nextPoint = snapPoint(
-      [session.dragStart[0] + projected[0], session.dragStart[1] + projected[1]],
-      { gridEnabled, gridStep }
-    );
+    const nextPoint = snapPoint([session.dragStart[0] + projected[0], session.dragStart[1] + projected[1]], {
+      gridEnabled,
+      gridStep
+    });
+    const snappedDelta: Point = [nextPoint[0] - session.dragStart[0], nextPoint[1] - session.dragStart[1]];
 
-    return [nextPoint[0] - session.dragStart[0], nextPoint[1] - session.dragStart[1]] as Point;
+    return snappedDelta[0] * normal[0] + snappedDelta[1] * normal[1];
   }
 
   return (
@@ -226,6 +390,7 @@ function WallDragHandle({
         sessionRef.current = {
           pointerId: event.pointerId,
           dragStart: [x, y],
+          originalRooms: allRooms,
           wallId: wall.id,
           wallNormal: normal
         };
@@ -240,13 +405,15 @@ function WallDragHandle({
           return;
         }
 
-        const delta = currentDelta(event);
+        const offset = currentOffset(event);
 
-        if (!delta) {
+        if (offset === null) {
           return;
         }
 
-        onPreviewRooms?.(applyWallDrag(allRooms, session.wallId, delta));
+        onPreviewRooms?.(
+          applyWallDragByOffset(session.originalRooms, session.wallId, offset, session.wallNormal ?? normal)
+        );
       }}
       onPointerUp={(event) => {
         const session = sessionRef.current;
@@ -255,10 +422,12 @@ function WallDragHandle({
           return;
         }
 
-        const delta = currentDelta(event);
+        const offset = currentOffset(event);
 
-        if (delta) {
-          onCommitRooms?.(applyWallDrag(allRooms, session.wallId, delta));
+        if (offset !== null) {
+          onCommitRooms?.(
+            applyWallDragByOffset(session.originalRooms, session.wallId, offset, session.wallNormal ?? normal)
+          );
         } else {
           onCancelPreview?.();
         }
@@ -349,7 +518,7 @@ interface SelectionLayerProps {
   selectedRoomId?: string;
   selectedWallId?: string;
   selectedOpeningId?: string;
-  traceEnabled?: boolean;
+  geometryEditEnabled?: boolean;
   wallDragEnabled?: boolean;
   openingEditEnabled?: boolean;
   gridStep?: GridSnapStep;
@@ -368,7 +537,7 @@ export function SelectionLayer({
   selectedRoomId,
   selectedWallId,
   selectedOpeningId,
-  traceEnabled = false,
+  geometryEditEnabled = false,
   wallDragEnabled = false,
   openingEditEnabled = false,
   gridStep = 0.1,
@@ -404,11 +573,12 @@ export function SelectionLayer({
           />
           <ControlPoints
             allRooms={rooms}
+            geometryEditEnabled={geometryEditEnabled}
             gridEnabled={gridSnapEnabled}
             gridStep={gridStep}
             polygon={selectedRoom.polygon}
+            roomId={selectedRoom.id}
             svgRef={svgRef}
-            traceEnabled={traceEnabled}
             onCommitRooms={onRoomsGeometryCommit}
             onCancelPreview={onRoomsGeometryCancel}
             onPreviewRooms={onRoomsGeometryPreview}

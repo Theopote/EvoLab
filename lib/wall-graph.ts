@@ -1,8 +1,6 @@
 import type { Point, Room } from "@/lib/project-types";
 import { polygonArea } from "@/lib/plan-validation";
-import { edgeKeyToWallId, polygonEdges } from "@/lib/wall-extractor";
-
-export const WALL_GRAPH_TOLERANCE = 0.05;
+import { polygonEdges } from "@/lib/wall-extractor";
 export const HIT_THRESHOLD_M = 0.35;
 export const MIN_ROOM_WIDTH = 0.6;
 
@@ -45,6 +43,13 @@ export function quantizePoint(point: Point, tolerance = WALL_GRAPH_TOLERANCE): s
 
 export function wallIdToEdgeKey(wallId: string) {
   return wallId.replace(/^wall-/, "").replace(/-/g, "|");
+}
+
+
+export const WALL_GRAPH_TOLERANCE = 0.05;
+
+export function edgeKeyToWallId(key: string) {
+  return `wall-${key.replace(/\|/g, "-")}`;
 }
 
 export function edgeKeyToWallIdFromKey(key: string) {
