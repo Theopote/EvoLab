@@ -24,7 +24,7 @@ import {
   strategyForIndex,
   type SchemeStrategy
 } from "@/lib/scheme-strategies";
-import { rescoreVersions, scoringInputFromDomain } from "@/lib/rules/resolve-version-scoring";
+import { rescoreVersions } from "@/lib/rules/resolve-version-scoring";
 import {
   programTopologyErrorSummary,
   programVersionErrorSummary,

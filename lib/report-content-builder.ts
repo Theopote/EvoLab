@@ -44,12 +44,17 @@ export function buildReportDocument(input: {
     riskCount: scored.scores?.riskCount ?? 0
   };
 
+  const circulationRatio =
+    quantities.summary.grossArea > 0
+      ? quantities.areaByZone.circulation / quantities.summary.grossArea
+      : 0;
+
   const performanceFacts = {
     areaEfficiency: scored.scores?.areaEfficiency ?? 0,
     circulationScore: scored.scores?.circulationScore ?? 0,
     daylightScore: scored.scores?.daylightScore ?? 0,
     mepAlignmentScore: scored.scores?.mepAlignmentScore ?? 0,
-    circulationRatio: quantities.summary.circulationRatio,
+    circulationRatio,
     windowCount: quantities.summary.windowCount
   };
 
@@ -89,7 +94,7 @@ export function buildReportDocument(input: {
         {
           id: blockId("section-performance", "p1"),
           type: "paragraph",
-          content: `Area efficiency ${scored.scores?.areaEfficiency ?? 0}, circulation ${scored.scores?.circulationScore ?? 0}, daylight ${scored.scores?.daylightScore ?? 0}, and MEP alignment ${scored.scores?.mepAlignmentScore ?? 0}. Circulation accounts for ${Math.round(quantities.summary.circulationRatio * 100)}% of gross area.`
+          content: `Area efficiency ${scored.scores?.areaEfficiency ?? 0}, circulation ${scored.scores?.circulationScore ?? 0}, daylight ${scored.scores?.daylightScore ?? 0}, and MEP alignment ${scored.scores?.mepAlignmentScore ?? 0}. Circulation accounts for ${Math.round(circulationRatio * 100)}% of gross area.`
         },
         {
           id: blockId("section-performance", "plan"),

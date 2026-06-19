@@ -6,7 +6,7 @@ import { postProcessPlanVersion } from "@/lib/plan-postprocess";
 import { hybridizeSchemesPrompt } from "@/lib/prompts/hybridizeSchemesPrompt";
 import { enforceRegionLock } from "@/lib/region-lock";
 import { ModifyPlanToolInputSchema } from "@/lib/schemas/plan-version-schema";
-import type { CopilotFinding, PlanVersion, Room } from "@/lib/project-types";
+import type { CopilotFinding, PlanVersion } from "@/lib/project-types";
 
 interface HybridRegion {
   sourceVersionId: string;

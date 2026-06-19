@@ -16,6 +16,7 @@ import type {
   WorkspaceTab
 } from "@/lib/project-types";
 import { useCopilotTimelineStore } from "@/lib/copilot-timeline-store";
+import { useCopilotUploadStore } from "@/lib/copilot-upload-store";
 import { diffRoomIds } from "@/lib/design-decision-log";
 import { pendingInsightCount } from "@/lib/copilot-insight-queue";
 import { detectCopilotPlan, type CopilotPlan } from "@/lib/copilot-plan";

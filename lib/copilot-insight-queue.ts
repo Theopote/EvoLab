@@ -53,11 +53,11 @@ export function buildCopilotInsightsFromEngines(
     });
   }
 
-  if (quantities.summary.circulationRatio > 0.28) {
+  if (quantities.summary.grossArea > 0 && quantities.areaByZone.circulation / quantities.summary.grossArea > 0.28) {
     findings.push({
       id: findingId("circulation"),
       tone: "info",
-      text: `Circulation ratio is ${Math.round(quantities.summary.circulationRatio * 100)}% of gross area.`,
+      text: `Circulation ratio is ${Math.round((quantities.areaByZone.circulation / quantities.summary.grossArea) * 100)}% of gross area.`,
       sub: "From quantity-engine"
     });
   }

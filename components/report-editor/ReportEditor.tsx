@@ -40,10 +40,9 @@ export function ReportEditor({
         brief,
         siteContext,
         envelope,
-        environmentSurrogate,
-        outline
+        environmentSurrogate
       }),
-    [brief, envelope, environmentSurrogate, outline, project, siteContext, version]
+    [brief, envelope, environmentSurrogate, project, siteContext, version]
   );
   const [document, setDocument] = useState<ReportDocument>(initialDocument);
   const [layout, setLayout] = useState<SlideLayout>(() => buildSlideLayout(initialDocument));
