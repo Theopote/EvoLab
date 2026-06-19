@@ -3,6 +3,7 @@
 import { Boxes, Check, GitCompare, Loader2, Sparkles, Wand2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FloorPlan } from "@/components/floor-plan";
+import { SchemeCompareGrid } from "@/components/comparison/SchemeCompareGrid";
 import { VersionCompareExplainPanel } from "@/components/score/VersionCompareExplainPanel";
 import { listComparableLevelGroups, listComparableLevels } from "@/lib/multi-floor";
 import type { ProgramModel, ProjectDomain } from "@/lib/building-domain";
@@ -354,6 +355,15 @@ export function VersionCompareGrid({
 
         {comparedVersions.length ? (
           <section className="mt-4 space-y-3">
+            {compareScope === "selected-level" && comparedVersions.length >= 2 ? (
+              <SchemeCompareGrid
+                versions={comparedVersions}
+                levelId={resolvedLevelId}
+                domain={domain}
+                projectType={projectType}
+              />
+            ) : null}
+
             {scoredComparedVersions.length === 2 ? (
               <VersionCompareExplainPanel
                 left={scoredComparedVersions[0]!}
@@ -365,20 +375,20 @@ export function VersionCompareGrid({
             ) : null}
 
             <div className="rounded border border-line bg-panel/90 p-3">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-white">Pinned comparison</h2>
-              <div className="flex items-center gap-2 text-xs text-muted">
-                {isComputing ? <Loader2 className="h-3.5 w-3.5 animate-spin text-accent" /> : null}
-                <span>
-                  {comparedVersions.length} selected ·{" "}
-                  {compareScope === "building-total"
-                    ? "Building total"
-                    : compareScope === "all-levels"
-                      ? `${levelResults.length} floors`
-                      : levelOptions.find((level) => level.id === resolvedLevelId)?.name}
-                </span>
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-white">Pinned comparison</h2>
+                <div className="flex items-center gap-2 text-xs text-muted">
+                  {isComputing ? <Loader2 className="h-3.5 w-3.5 animate-spin text-accent" /> : null}
+                  <span>
+                    {comparedVersions.length} selected ·{" "}
+                    {compareScope === "building-total"
+                      ? "Building total"
+                      : compareScope === "all-levels"
+                        ? `${levelResults.length} floors`
+                        : levelOptions.find((level) => level.id === resolvedLevelId)?.name}
+                  </span>
+                </div>
               </div>
-            </div>
 
             {compareScope === "building-total" ? (
               <CompareTable

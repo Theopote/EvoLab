@@ -38,6 +38,12 @@ import {
 } from "@/lib/geometry-change-merge";
 import { calculateQuantities, checkCompliance, type ComplianceItem, type QuantityResult } from "@/lib/quantity-engine";
 import { rescoreVersions, scoringInputFromDomain } from "@/lib/rules/resolve-version-scoring";
+import {
+  buildCopilotInsightsFromEngines,
+  enqueueInsights,
+  markInsightsReviewed
+} from "@/lib/copilot-insight-queue";
+import { appendDesignDecision, createDesignDecision } from "@/lib/design-decision-log";
 import { createDefaultScoringConfig, normalizeScoringConfig } from "@/lib/rules/scoring-config";
 import { applyPlanOperations } from "@/lib/plan-change-engine";
 import type { PlanOperation } from "@/lib/schemas/plan-change-proposal-schema";
@@ -191,6 +197,15 @@ interface EvoProjectStore {
   ) => { prompt: string; parentVersion: PlanVersion; resultVersion: PlanVersion } | undefined;
   dismissCopilotProposal: (proposalId: string) => void;
   addCopilotProposalComment: (proposalId: string, text: string) => void;
+  refreshCopilotInsights: () => void;
+  reviewCopilotInsights: () => void;
+  recordDesignDecision: (input: {
+    trigger: "user_instruction" | "ai_suggestion_accepted" | "manual_edit";
+    description: string;
+    affectedRoomIds?: string[];
+    versionIdBefore: string;
+    versionIdAfter: string;
+  }) => void;
   generateMep: () => Promise<void>;
   openModelForVersion: (version: PlanVersion) => void;
   refineVersion: (version: PlanVersion) => void;
@@ -940,6 +955,38 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
     set(
       produce<EvoProjectStore>((state) => {
         state.project.domain = addCopilotProposalCommentInDomain(state.project.domain, proposalId, text);
+      })
+    ),
+  refreshCopilotInsights: () =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        const version = getActiveVersion(state.project);
+
+        if (!version) {
+          return;
+        }
+
+        const fresh = buildCopilotInsightsFromEngines(version, state.project.domain, state.project.projectType);
+        state.project.domain.copilotInsightQueue = enqueueInsights(state.project.domain.copilotInsightQueue, fresh);
+      })
+    ),
+  reviewCopilotInsights: () =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        if (!state.project.domain.copilotInsightQueue) {
+          return;
+        }
+
+        state.project.domain.copilotInsightQueue = markInsightsReviewed(state.project.domain.copilotInsightQueue);
+      })
+    ),
+  recordDesignDecision: (input) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        state.project.domain.designDecisions = appendDesignDecision(
+          state.project.domain.designDecisions,
+          createDesignDecision(input)
+        );
       })
     ),
   selectChangeSet: (changeSetId) =>

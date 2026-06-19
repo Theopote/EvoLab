@@ -16,7 +16,9 @@ import type {
   WorkspaceTab
 } from "@/lib/project-types";
 import { useCopilotTimelineStore } from "@/lib/copilot-timeline-store";
-import { useCopilotUploadStore } from "@/lib/copilot-upload-store";
+import { diffRoomIds } from "@/lib/design-decision-log";
+import { pendingInsightCount } from "@/lib/copilot-insight-queue";
+import { detectCopilotPlan, type CopilotPlan } from "@/lib/copilot-plan";
 import { isImagePinnedFile, readCopilotUpload, type CopilotPinnedFile } from "@/lib/copilot-upload";
 import { useShallow } from "zustand/react/shallow";
 
@@ -57,6 +59,7 @@ export function CopilotConsole({
   const [isSending, setIsSending] = useState(false);
   const [pinnedFiles, setPinnedFiles] = useState<CopilotPinnedFile[]>([]);
   const [pendingProposalId, setPendingProposalId] = useState<string | null>(null);
+  const [pendingPlan, setPendingPlan] = useState<CopilotPlan | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const {
     copilotProposals,
@@ -64,7 +67,10 @@ export function CopilotConsole({
     registerCopilotProposal,
     applyCopilotProposal,
     dismissCopilotProposal,
-    addCopilotProposalComment
+    addCopilotProposalComment,
+    refreshCopilotInsights,
+    reviewCopilotInsights,
+    recordDesignDecision
   } = useEvoProject(
     useShallow((state) => ({
       copilotProposals: state.project.domain.copilotProposals,
@@ -72,9 +78,14 @@ export function CopilotConsole({
       registerCopilotProposal: state.registerCopilotProposal,
       applyCopilotProposal: state.applyCopilotProposal,
       dismissCopilotProposal: state.dismissCopilotProposal,
-      addCopilotProposalComment: state.addCopilotProposalComment
+      addCopilotProposalComment: state.addCopilotProposalComment,
+      refreshCopilotInsights: state.refreshCopilotInsights,
+      reviewCopilotInsights: state.reviewCopilotInsights,
+      recordDesignDecision: state.recordDesignDecision
     }))
   );
+  const insightQueue = useEvoProject((state) => state.project.domain.copilotInsightQueue);
+  const pendingInsights = pendingInsightCount(insightQueue);
   const pendingProposal = useMemo(() => {
     if (!pendingProposalId) {
       return null;
@@ -121,6 +132,12 @@ export function CopilotConsole({
       fileInputRef.current?.click();
     }
   }, [uploadRequestId]);
+
+  useEffect(() => {
+    if (activeVersion) {
+      refreshCopilotInsights();
+    }
+  }, [activeVersion?.id, activeVersion?.rooms, refreshCopilotInsights]);
 
   async function handleFileSelection(fileList: FileList | null) {
     const file = fileList?.[0];
@@ -243,6 +260,21 @@ export function CopilotConsole({
       return;
     }
 
+    const plan = detectCopilotPlan(text);
+
+    if (plan?.requiresConfirmation) {
+      setPendingPlan(plan);
+      setMessages((current) => [
+        ...current,
+        {
+          id: `assistant-plan-${Date.now()}`,
+          role: "assistant",
+          content: "This request spans multiple modules. Review the plan below before executing."
+        }
+      ]);
+      return;
+    }
+
     setInput("");
     setIsSending(true);
     setMessages((current) => [...current, { id: `user-${Date.now()}`, role: "user", content: text }]);
@@ -255,6 +287,7 @@ export function CopilotConsole({
           currentVersion: baseVersion,
           userRequest: text,
           lockedElementIds,
+          allVersions: projectVersions,
           referenceImages: files
             .filter(isImagePinnedFile)
             .map((file) => ({
@@ -331,6 +364,13 @@ export function CopilotConsole({
     }
 
     onCopilotRevision(result.resultVersion, result.prompt, result.parentVersion);
+    recordDesignDecision({
+      trigger: "ai_suggestion_accepted",
+      description: pendingProposal.proposal.intent,
+      affectedRoomIds: diffRoomIds(result.parentVersion, result.resultVersion),
+      versionIdBefore: result.parentVersion.id,
+      versionIdAfter: result.resultVersion.id
+    });
     setPendingProposalId(null);
     setMessages((current) => [
       ...current,
@@ -379,6 +419,42 @@ export function CopilotConsole({
     void submitMessage(prompt, parent);
   }
 
+  function showPendingInsights() {
+    const items = insightQueue?.pending ?? [];
+
+    if (!items.length) {
+      return;
+    }
+
+    reviewCopilotInsights();
+    setMessages((current) => [
+      ...current,
+      {
+        id: `findings-auto-${Date.now()}`,
+        role: "findings",
+        title: "New findings from analysis engines",
+        items
+      }
+    ]);
+  }
+
+  function executePendingPlan() {
+    if (!pendingPlan) {
+      return;
+    }
+
+    pendingPlan.steps.forEach((step) => handleAction(step.action));
+    setPendingPlan(null);
+    setMessages((current) => [
+      ...current,
+      {
+        id: `assistant-plan-applied-${Date.now()}`,
+        role: "assistant",
+        content: "Executed the confirmed multi-step plan."
+      }
+    ]);
+  }
+
   function handleAction(action: CopilotAction) {
     if (action.id === "switch-tab") {
       onTabChange((action.payload as WorkspaceTab | undefined) ?? "Model");
@@ -420,6 +496,15 @@ export function CopilotConsole({
                 <Sparkles className="h-4 w-4 text-accent" />
                 <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">Prompt stream</span>
               </div>
+              {pendingInsights > 0 ? (
+                <button
+                  className="rounded border border-accent/50 bg-accent/10 px-2 py-1 text-[11px] text-accent"
+                  type="button"
+                  onClick={showPendingInsights}
+                >
+                  {pendingInsights} new finding{pendingInsights === 1 ? "" : "s"}
+                </button>
+              ) : null}
             </div>
 
             <div className="mb-2 grid grid-cols-4 gap-2">
@@ -432,6 +517,34 @@ export function CopilotConsole({
             </div>
 
             <div className="mb-2 min-h-0 flex-1 space-y-2 overflow-auto rounded border border-line bg-[#0b1118] p-2">
+              {pendingPlan ? (
+                <div className="rounded border border-line bg-white/[0.03] p-2">
+                  <div className="mb-2 text-xs font-medium text-slate-100">Proposed multi-step plan</div>
+                  <ol className="space-y-1 text-xs text-muted">
+                    {pendingPlan.steps.map((step, index) => (
+                      <li key={`${step.description}-${index}`}>
+                        {index + 1}. {step.description}
+                      </li>
+                    ))}
+                  </ol>
+                  <div className="mt-2 flex gap-2">
+                    <button
+                      className="rounded border border-accent/50 px-2 py-1 text-[11px] text-accent"
+                      type="button"
+                      onClick={executePendingPlan}
+                    >
+                      Confirm all steps
+                    </button>
+                    <button
+                      className="rounded border border-line px-2 py-1 text-[11px] text-muted"
+                      type="button"
+                      onClick={() => setPendingPlan(null)}
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+              ) : null}
               {pendingProposal ? (
                 <PlanChangeProposalPanel
                   baseVersion={pendingProposal.baseVersion}

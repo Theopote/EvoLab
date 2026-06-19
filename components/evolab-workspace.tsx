@@ -1,6 +1,7 @@
 "use client";
 
 import { Loader2, RefreshCcw } from "lucide-react";
+import { useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { BottomPanel } from "@/components/bottom-panel";
 import { CopilotConsole } from "@/components/copilot/CopilotConsole";
@@ -24,6 +25,7 @@ import { RenderPanel } from "@/components/render-panel";
 import { TopNav } from "@/components/top-nav";
 import { PresentationWorkspace } from "@/components/presentation/PresentationWorkspace";
 import { VersionCompareGrid } from "@/components/version-compare/VersionCompareGrid";
+import { ReportEditor } from "@/components/report-editor/ReportEditor";
 import { PhaseSubNav } from "@/components/workflow/PhaseSubNav";
 import { SchemeSplitViewport } from "@/components/workflow/SchemeSplitViewport";
 import { ExplodeSlider } from "@/components/viewer-3d/ExplodeSlider";
@@ -44,6 +46,9 @@ export function EvoLabWorkspace() {
     outlineClosed,
     brief,
     zoning,
+    siteContext,
+    buildableEnvelope,
+    environmentSurrogate,
     activeTab,
     workflowPhase,
     compareVersionIds,
@@ -90,6 +95,9 @@ export function EvoLabWorkspace() {
       outlineClosed: state.outlineClosed,
       brief: state.brief,
       zoning: state.zoning,
+      siteContext: state.siteContext,
+      buildableEnvelope: state.buildableEnvelope,
+      environmentSurrogate: state.environmentSurrogate,
       activeTab: state.activeTab,
       workflowPhase: state.workflowPhase,
       compareVersionIds: state.compareVersionIds,
@@ -129,6 +137,7 @@ export function EvoLabWorkspace() {
       returnToPlanGeneration: state.returnToPlanGeneration
     }))
   );
+  const [reportEditorOpen, setReportEditorOpen] = useState(false);
 
   return (
     <main className="flex min-h-screen flex-col bg-canvas text-slate-100">
@@ -155,6 +164,7 @@ export function EvoLabWorkspace() {
               setWorkflowPhase("deliver");
               setActiveTab(tabForDeliverSubview("sheets"));
             }}
+            onOpenReportEditor={() => setReportEditorOpen(true)}
           />
 
           <section className="relative min-h-0 overflow-hidden">
@@ -203,6 +213,18 @@ export function EvoLabWorkspace() {
           onSelectVersion={setActiveVersion}
         />
       </section>
+      {reportEditorOpen && activeVersion ? (
+        <ReportEditor
+          project={project}
+          version={activeVersion}
+          brief={brief}
+          siteContext={siteContext}
+          envelope={buildableEnvelope}
+          environmentSurrogate={environmentSurrogate}
+          outline={outline}
+          onClose={() => setReportEditorOpen(false)}
+        />
+      ) : null}
     </main>
   );
 

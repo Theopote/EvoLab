@@ -22,6 +22,7 @@ import { ParametricOpeningToolbar } from "@/components/floor-plan/ParametricOpen
 import { RoomTopologyToolbar } from "@/components/floor-plan/RoomTopologyToolbar";
 import { WallLayer } from "@/components/floor-plan/layers/WallLayer";
 import { getViewBox } from "@/components/floor-plan/floor-plan-utils";
+import { parseViewBox, formatViewBox } from "@/lib/comparison-viewport";
 import { getResolvedLevel } from "@/lib/level-rooms";
 import { useEvoProject } from "@/lib/project-store";
 import { useInteractionStore } from "@/lib/interaction-store";
@@ -42,6 +43,9 @@ export interface FloorPlanCanvasProps {
   selectedRoomId?: string;
   interactive?: boolean;
   onInpaintRevision?: (version: PlanVersion, prompt: string) => void;
+  viewBoxOverride?: string;
+  onViewBoxChange?: (viewBox: string) => void;
+  enableComparisonPan?: boolean;
 }
 
 function roomsGeometrySignature(rooms: Room[]) {
@@ -54,7 +58,10 @@ export function FloorPlanCanvas({
   levelId: levelIdProp,
   selectedRoomId: selectedRoomIdProp,
   interactive = true,
-  onInpaintRevision
+  onInpaintRevision,
+  viewBoxOverride,
+  onViewBoxChange,
+  enableComparisonPan = false
 }: FloorPlanCanvasProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const dragBaseSignatureRef = useRef<string>("");
@@ -207,6 +214,39 @@ export function FloorPlanCanvas({
     setHoveredWallId(undefined);
   }, []);
 
+  const resolvedViewBox = viewBoxOverride ?? (version ? getViewBox(version) : "0 0 100 100");
+
+  const handleComparisonWheel = useCallback(
+    (event: React.WheelEvent<SVGSVGElement>) => {
+      if (!enableComparisonPan || !onViewBoxChange) {
+        return;
+      }
+
+      event.preventDefault();
+      const parsed = parseViewBox(resolvedViewBox);
+
+      if (!parsed) {
+        return;
+      }
+
+      const factor = event.deltaY > 0 ? 1.08 : 0.92;
+      const nextWidth = parsed.width * factor;
+      const nextHeight = parsed.height * factor;
+      const dx = (parsed.width - nextWidth) / 2;
+      const dy = (parsed.height - nextHeight) / 2;
+
+      onViewBoxChange(
+        formatViewBox({
+          x: parsed.x + dx,
+          y: parsed.y + dy,
+          width: nextWidth,
+          height: nextHeight
+        })
+      );
+    },
+    [enableComparisonPan, onViewBoxChange, resolvedViewBox]
+  );
+
   if (!version) {
     return (
       <div className={className}>
@@ -330,8 +370,9 @@ export function FloorPlanCanvas({
           ref={svgRef}
           className="relative h-full min-h-[420px] w-full"
           style={canvasCursor ? { cursor: canvasCursor } : undefined}
-          viewBox={getViewBox(version)}
+          viewBox={resolvedViewBox}
           role="img"
+          onWheel={enableComparisonPan ? handleComparisonWheel : undefined}
           onPointerLeave={interactive ? handleCanvasPointerLeave : undefined}
           onPointerMove={interactive ? handleCanvasPointerMove : undefined}
           onClick={() => {

@@ -15,6 +15,7 @@ interface WorkflowLeftSidebarProps {
   onSelectVersion: (version: PlanVersion) => void;
   onToggleCompare: (versionId: string) => void;
   onOpenSheets: () => void;
+  onOpenReportEditor?: () => void;
 }
 
 export function WorkflowLeftSidebar({
@@ -24,12 +25,13 @@ export function WorkflowLeftSidebar({
   compareVersionIds,
   onSelectVersion,
   onToggleCompare,
-  onOpenSheets
+  onOpenSheets,
+  onOpenReportEditor
 }: WorkflowLeftSidebarProps) {
   let phasePanel: ReactNode = null;
 
   if (phase === "deliver") {
-    phasePanel = <ReportOutlineSidebar onOpenSheets={onOpenSheets} />;
+    phasePanel = <ReportOutlineSidebar onOpenSheets={onOpenSheets} onOpenReportEditor={onOpenReportEditor} />;
   }
 
   return (

@@ -8,9 +8,10 @@ import { useEvoProject } from "@/lib/project-store";
 
 interface ReportOutlineSidebarProps {
   onOpenSheets: () => void;
+  onOpenReportEditor?: () => void;
 }
 
-export function ReportOutlineSidebar({ onOpenSheets }: ReportOutlineSidebarProps) {
+export function ReportOutlineSidebar({ onOpenSheets, onOpenReportEditor }: ReportOutlineSidebarProps) {
   const { project, activeVersion, brief, siteContext, buildableEnvelope, environmentSurrogate, outline } = useEvoProject(
     useShallow((state) => ({
       project: state.project,
@@ -52,9 +53,16 @@ export function ReportOutlineSidebar({ onOpenSheets }: ReportOutlineSidebarProps
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Report Outline</h2>
-        <button className="text-[11px] text-accent hover:underline" type="button" onClick={onOpenSheets}>
-          Open deck
-        </button>
+        <div className="flex items-center gap-2">
+          <button className="text-[11px] text-accent hover:underline" type="button" onClick={onOpenSheets}>
+            Open deck
+          </button>
+          {onOpenReportEditor ? (
+            <button className="text-[11px] text-accent hover:underline" type="button" onClick={onOpenReportEditor}>
+              Edit report
+            </button>
+          ) : null}
+        </div>
       </div>
       <div className="space-y-1">
         {slides.map((slide, index) => (
