@@ -569,6 +569,14 @@ export function pendingChangeSets(domain: ProjectDomain) {
   return domain.changeSets.filter((changeSet) => changeSet.status === "draft");
 }
 
+export function pendingCopilotProposals(domain: ProjectDomain) {
+  return domain.copilotProposals.filter((proposal) => proposal.status === "draft");
+}
+
+export function pendingReviewCount(domain: ProjectDomain) {
+  return pendingChangeSets(domain).length + pendingCopilotProposals(domain).length;
+}
+
 export function approveChangeSetInDomain(
   domain: ProjectDomain,
   changeSetId: string,

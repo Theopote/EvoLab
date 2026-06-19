@@ -1,5 +1,5 @@
 import { Cloud, GitCompareArrows, Share2, Sparkles } from "lucide-react";
-import { pendingChangeSets } from "@/lib/project-domain";
+import { pendingReviewCount } from "@/lib/project-domain";
 import { workflowPhaseDefinitions, type WorkflowPhase } from "@/lib/workflow-phases";
 import type { ProjectData } from "@/lib/project-types";
 
@@ -11,7 +11,8 @@ interface TopNavProps {
 }
 
 export function TopNav({ project, workflowPhase, onPhaseChange, onOpenReviews }: TopNavProps) {
-  const pendingReviewCount = pendingChangeSets(project.domain).length;
+  const pendingCount = pendingReviewCount(project.domain);
+
   return (
     <header className="flex h-14 items-center border-b border-line bg-[#0b1118] px-4">
       <div className="mr-6 flex items-center gap-2">
@@ -24,32 +25,42 @@ export function TopNav({ project, workflowPhase, onPhaseChange, onOpenReviews }:
         </div>
       </div>
       <nav className="flex h-full items-center gap-1">
-        {workflowPhaseDefinitions.map((phase) => (
-          <button
-            className={`h-9 rounded px-3 text-sm transition ${
-              workflowPhase === phase.id
-                ? "bg-accent/15 text-accent"
-                : "text-slate-300 hover:bg-white/[0.04] hover:text-white"
-            }`}
-            key={phase.id}
-            title={phase.description}
-            type="button"
-            onClick={() => onPhaseChange(phase.id)}
-          >
-            {phase.label}
-          </button>
-        ))}
+        {workflowPhaseDefinitions.map((phase) => {
+          const isReview = phase.id === "review";
+          const badge = isReview && pendingCount > 0 ? pendingCount : undefined;
+
+          return (
+            <button
+              className={`relative h-9 rounded px-3 text-sm transition ${
+                workflowPhase === phase.id
+                  ? "bg-accent/15 text-accent"
+                  : "text-slate-300 hover:bg-white/[0.04] hover:text-white"
+              }`}
+              key={phase.id}
+              title={phase.description}
+              type="button"
+              onClick={() => onPhaseChange(phase.id)}
+            >
+              {phase.label}
+              {badge ? (
+                <span className="ml-1.5 inline-flex min-w-4 items-center justify-center rounded-full bg-warning/20 px-1.5 text-[10px] text-warning">
+                  {badge}
+                </span>
+              ) : null}
+            </button>
+          );
+        })}
       </nav>
       <div className="ml-auto flex items-center gap-3 text-sm">
         <span className="max-w-48 truncate text-slate-300">{project.projectName}</span>
-        {pendingReviewCount > 0 ? (
+        {pendingCount > 0 ? (
           <button
             className="flex items-center gap-1 rounded border border-warning/40 bg-warning/10 px-2 py-1 text-xs text-warning hover:border-warning"
             type="button"
             onClick={onOpenReviews}
           >
             <GitCompareArrows className="h-3.5 w-3.5" />
-            {pendingReviewCount} review{pendingReviewCount === 1 ? "" : "s"}
+            {pendingCount} pending
           </button>
         ) : null}
         <span className="rounded border border-line px-2 py-1 text-xs text-muted">

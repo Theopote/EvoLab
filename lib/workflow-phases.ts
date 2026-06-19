@@ -1,9 +1,11 @@
 import type { WorkspaceTab } from "@/lib/project-types";
 
-export type WorkflowPhase = "brief_site" | "scheme" | "analyze" | "quantify" | "deliver";
+export type WorkflowPhase = "brief_site" | "scheme" | "analyze" | "quantify" | "review" | "deliver";
 
+export type BriefSiteSubview = "site" | "program" | "intake";
 export type SchemeSubview = "plan" | "massing" | "model";
 export type AnalyzeSubview = "analysis" | "systems";
+export type QuantifySubview = "quantity" | "schedules" | "compliance";
 export type DeliverSubview = "sheets" | "export" | "render";
 
 export interface WorkflowPhaseDefinition {
@@ -16,8 +18,8 @@ export interface WorkflowPhaseDefinition {
 export const workflowPhaseDefinitions: WorkflowPhaseDefinition[] = [
   {
     id: "brief_site",
-    label: "Brief & Site",
-    description: "Program brief, site outline, GIS context, zoning envelope",
+    label: "Intake",
+    description: "Site outline, functional program, and drawing import",
     defaultTab: "Plan"
   },
   {
@@ -35,7 +37,13 @@ export const workflowPhaseDefinitions: WorkflowPhaseDefinition[] = [
   {
     id: "quantify",
     label: "Quantify",
-    description: "Areas, compliance checks and cost ROM",
+    description: "Areas, schedules, compliance checks and cost ROM",
+    defaultTab: "Quantity"
+  },
+  {
+    id: "review",
+    label: "Review",
+    description: "Approve change sets and Copilot proposals",
     defaultTab: "Quantity"
   },
   {
@@ -139,7 +147,23 @@ export function defaultTabForPhase(phase: WorkflowPhase): WorkspaceTab {
   return workflowPhaseDefinitions.find((item) => item.id === phase)?.defaultTab ?? "Plan";
 }
 
+export function defaultBriefSiteSubview(): BriefSiteSubview {
+  return "site";
+}
+
+export function defaultQuantifySubview(): QuantifySubview {
+  return "quantity";
+}
+
 export function resolvePhaseTab(phase: WorkflowPhase, currentTab: WorkspaceTab): WorkspaceTab {
+  if (phase === "review") {
+    return currentTab;
+  }
+
+  if (phase === "brief_site") {
+    return "Plan";
+  }
+
   if (phaseForTab(currentTab) === phase || (phase === "scheme" && currentTab === "Plan")) {
     return currentTab;
   }
@@ -150,6 +174,10 @@ export function resolvePhaseTab(phase: WorkflowPhase, currentTab: WorkspaceTab):
 
   if (phase === "analyze") {
     return tabForAnalyzeSubview(analyzeSubviewForTab(currentTab) ?? "analysis");
+  }
+
+  if (phase === "quantify") {
+    return "Quantity";
   }
 
   if (phase === "deliver") {

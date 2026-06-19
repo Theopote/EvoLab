@@ -66,8 +66,13 @@ import type {
   Wall,
   WorkspaceTab
 } from "@/lib/project-types";
-import type { WorkflowPhase } from "@/lib/workflow-phases";
-import { phaseForTab, resolvePhaseTab } from "@/lib/workflow-phases";
+import type { WorkflowPhase, BriefSiteSubview, QuantifySubview } from "@/lib/workflow-phases";
+import {
+  defaultBriefSiteSubview,
+  defaultQuantifySubview,
+  phaseForTab,
+  resolvePhaseTab
+} from "@/lib/workflow-phases";
 
 const defaultOutline: Point[] = [
   [0, 0],
@@ -114,6 +119,8 @@ interface EvoProjectStore {
   showEnvironmentOverlay: boolean;
   brief: DesignBrief;
   workflowPhase: WorkflowPhase;
+  briefSiteSubview: BriefSiteSubview;
+  quantifySubview: QuantifySubview;
   compareVersionIds: string[];
   activeTab: WorkspaceTab;
   activeAnalysisLayers: AnalysisLayerId[];
@@ -143,6 +150,8 @@ interface EvoProjectStore {
   updateScoringConfig: (patch: Partial<ScoringConfig>) => void;
   resetScoringConfig: () => void;
   setWorkflowPhase: (phase: WorkflowPhase) => void;
+  setBriefSiteSubview: (subview: BriefSiteSubview) => void;
+  setQuantifySubview: (subview: QuantifySubview) => void;
   toggleCompareVersion: (versionId: string) => void;
   setActiveAnalysisLayers: (layers: AnalysisLayerId[]) => void;
   setActiveMepLayers: (layers: MepLayerId[]) => void;
@@ -539,6 +548,8 @@ function createInitialState(): Omit<
   | "updateScoringConfig"
   | "resetScoringConfig"
   | "setWorkflowPhase"
+  | "setBriefSiteSubview"
+  | "setQuantifySubview"
   | "toggleCompareVersion"
   | "setActiveAnalysisLayers"
   | "setActiveMepLayers"
@@ -609,6 +620,8 @@ function createInitialState(): Omit<
     showEnvironmentOverlay: true,
     brief: defaultBrief,
     workflowPhase: "brief_site",
+    briefSiteSubview: defaultBriefSiteSubview(),
+    quantifySubview: defaultQuantifySubview(),
     compareVersionIds: [],
     activeTab: "Plan",
     activeAnalysisLayers: ["function_zones", "primary_flow", "egress_path", "daylight"],
@@ -821,6 +834,30 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
       produce<EvoProjectStore>((state) => {
         state.workflowPhase = phase;
         state.activeTab = resolvePhaseTab(phase, state.activeTab);
+
+        if (phase === "brief_site") {
+          state.briefSiteSubview = state.briefSiteSubview ?? defaultBriefSiteSubview();
+        }
+
+        if (phase === "quantify") {
+          state.quantifySubview = state.quantifySubview ?? defaultQuantifySubview();
+        }
+      })
+    ),
+  setBriefSiteSubview: (subview) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        state.workflowPhase = "brief_site";
+        state.briefSiteSubview = subview;
+        state.activeTab = "Plan";
+      })
+    ),
+  setQuantifySubview: (subview) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        state.workflowPhase = "quantify";
+        state.quantifySubview = subview;
+        state.activeTab = "Quantity";
       })
     ),
   toggleCompareVersion: (versionId) =>

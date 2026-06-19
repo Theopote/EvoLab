@@ -1,6 +1,5 @@
 "use client";
 
-import { Loader2, RefreshCcw } from "lucide-react";
 import { useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { BottomPanel } from "@/components/bottom-panel";
@@ -8,16 +7,10 @@ import { CopilotConsole } from "@/components/copilot/CopilotConsole";
 import { DiagramCanvas } from "@/components/diagrams/DiagramCanvas";
 import { DiagramLayerList } from "@/components/diagrams/DiagramLayerList";
 import { ExportPanel } from "@/components/export-panel";
-import { FloorPlan } from "@/components/floor-plan";
 import { InspectorPanel } from "@/components/inspector/InspectorPanel";
 import { MassingPanel } from "@/components/massing-panel";
 import { MepCanvas } from "@/components/mep/MepCanvas";
 import { MepLayerList } from "@/components/mep/MepLayerList";
-import { SiteContextPanel } from "@/components/site/SiteContextPanel";
-import { BriefForm } from "@/components/plan-editor/BriefForm";
-import { OutlineCanvas } from "@/components/plan-editor/OutlineCanvas";
-import { PlanResultGrid } from "@/components/plan-editor/PlanResultGrid";
-import { ChangeSetApprovalPanel } from "@/components/quantity/ChangeSetApprovalPanel";
 import { ComplianceChecklist } from "@/components/quantity/ComplianceChecklist";
 import { ProgramCompliancePanel } from "@/components/quantity/ProgramCompliancePanel";
 import { QuantityTable } from "@/components/quantity/QuantityTable";
@@ -32,9 +25,15 @@ import { ExplodeSlider } from "@/components/viewer-3d/ExplodeSlider";
 import { VersionSplitCompare } from "@/components/workflow/VersionSplitCompare";
 import { ViewportKpiHud } from "@/components/workflow/ViewportKpiHud";
 import { WorkflowLeftSidebar } from "@/components/workflow/WorkflowLeftSidebar";
+import { IntakeWorkspace } from "@/components/workflow/IntakeWorkspace";
+import { ProgramWorkspace } from "@/components/workflow/ProgramWorkspace";
+import { ReviewWorkspace } from "@/components/workflow/ReviewWorkspace";
+import { ScheduleWorkspace } from "@/components/workflow/ScheduleWorkspace";
+import { SiteWorkspace } from "@/components/workflow/SiteWorkspace";
+import { PlanResultGrid } from "@/components/plan-editor/PlanResultGrid";
 import { useCopilotTimelineStore } from "@/lib/copilot-timeline-store";
 import { Scene } from "@/components/viewer-3d/Scene";
-import { tabForDeliverSubview } from "@/lib/workflow-phases";
+import { tabForDeliverSubview, tabForSchemeSubview } from "@/lib/workflow-phases";
 import { useEvoProject } from "@/lib/project-store";
 
 export function EvoLabWorkspace() {
@@ -51,6 +50,8 @@ export function EvoLabWorkspace() {
     environmentSurrogate,
     activeTab,
     workflowPhase,
+    briefSiteSubview,
+    quantifySubview,
     compareVersionIds,
     activeAnalysisLayers,
     activeMepLayers,
@@ -100,6 +101,8 @@ export function EvoLabWorkspace() {
       environmentSurrogate: state.environmentSurrogate,
       activeTab: state.activeTab,
       workflowPhase: state.workflowPhase,
+      briefSiteSubview: state.briefSiteSubview,
+      quantifySubview: state.quantifySubview,
       compareVersionIds: state.compareVersionIds,
       activeAnalysisLayers: state.activeAnalysisLayers,
       activeMepLayers: state.activeMepLayers,
@@ -145,10 +148,7 @@ export function EvoLabWorkspace() {
         project={project}
         workflowPhase={workflowPhase}
         onPhaseChange={setWorkflowPhase}
-        onOpenReviews={() => {
-          setWorkflowPhase("scheme");
-          setActiveTab("Quantity");
-        }}
+        onOpenReviews={() => setWorkflowPhase("review")}
       />
       <PhaseSubNav phase={workflowPhase} activeTab={activeTab} onTabChange={setActiveTab} />
       <section className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_auto_218px] overflow-hidden">
@@ -181,16 +181,7 @@ export function EvoLabWorkspace() {
           </section>
 
           <aside className="min-h-0 overflow-auto border-l border-line bg-[#0d141d] p-4">
-            {workflowPhase === "brief_site" && activeTab === "Plan" ? (
-              <div className="space-y-4">
-                <SiteContextPanel />
-                <BriefForm value={brief} onChange={updateBrief} />
-              </div>
-            ) : null}
-
-            <div className={workflowPhase === "brief_site" && activeTab === "Plan" ? "mt-4" : ""}>
-              <InspectorPanel />
-            </div>
+            <InspectorPanel />
           </aside>
         </div>
         <CopilotConsole
@@ -229,6 +220,66 @@ export function EvoLabWorkspace() {
   );
 
   function renderMainViewport() {
+    if (workflowPhase === "review") {
+      return (
+        <ReviewWorkspace
+          changeSets={project.domain.changeSets}
+          copilotProposals={project.domain.copilotProposals}
+          versions={project.versions}
+          selectedChangeSetId={selectedChangeSetId}
+          lockedElementIds={project.domain.lockedElementIds}
+          onSelectChangeSet={selectChangeSet}
+          onApproveChangeSet={approveChangeSet}
+          onRejectChangeSet={rejectChangeSet}
+          onToggleElementLock={toggleElementLock}
+        />
+      );
+    }
+
+    if (workflowPhase === "brief_site") {
+      if (briefSiteSubview === "program") {
+        return (
+          <ProgramWorkspace
+            brief={brief}
+            program={project.domain.program}
+            outline={outline}
+            outlineClosed={outlineClosed}
+            zoning={zoning}
+            versions={project.versions}
+            activeVersionId={project.activeVersionId}
+            activeVersion={activeVersion}
+            onBriefChange={updateBrief}
+            onGenerated={appendGeneratedVersions}
+            onSelectVersion={setActiveVersion}
+          />
+        );
+      }
+
+      if (briefSiteSubview === "intake") {
+        return (
+          <IntakeWorkspace
+            onContinueToScheme={() => {
+              setWorkflowPhase("scheme");
+              setActiveTab(tabForSchemeSubview("plan"));
+            }}
+          />
+        );
+      }
+
+      return (
+        <SiteWorkspace
+          outline={outline}
+          outlineClosed={outlineClosed}
+          outlineStale={outlineStale}
+          isRelayouting={isRelayouting}
+          relayoutError={relayoutError}
+          onOutlineChange={setOutline}
+          onOutlineClosedChange={setOutlineClosed}
+          onRelayout={() => void relayoutActiveVersion()}
+        />
+      );
+    }
+
     if (activeTab === "Model") {
       return <ModelWorkspace />;
     }
@@ -277,27 +328,14 @@ export function EvoLabWorkspace() {
       );
     }
 
-    if (activeTab === "Quantity") {
-      return (
-        <section className="grid min-h-full grid-cols-[minmax(0,1.15fr)_minmax(380px,0.85fr)] gap-4">
-          {quantities ? (
-            <QuantityTable quantities={quantities} activeSchedule={activeSchedule} />
-          ) : (
-            <div className="grid min-h-[520px] place-items-center rounded border border-dashed border-line bg-panel/60 text-sm text-muted">
-              Select or generate a plan version to calculate quantities.
-            </div>
-          )}
-          <div className="grid min-h-0 grid-rows-[minmax(0,1fr)_auto_auto] gap-4">
-            <ChangeSetApprovalPanel
-              changeSets={project.domain.changeSets}
-              versions={project.versions}
-              selectedChangeSetId={selectedChangeSetId}
-              lockedElementIds={project.domain.lockedElementIds}
-              onSelectChangeSet={selectChangeSet}
-              onApprove={approveChangeSet}
-              onReject={rejectChangeSet}
-              onToggleElementLock={toggleElementLock}
-            />
+    if (activeTab === "Quantity" && workflowPhase === "quantify") {
+      if (quantifySubview === "schedules") {
+        return <ScheduleWorkspace activeSchedule={activeSchedule} />;
+      }
+
+      if (quantifySubview === "compliance") {
+        return (
+          <section className="grid min-h-full grid-cols-[minmax(0,1fr)_minmax(380px,0.85fr)] gap-4">
             <ProgramCompliancePanel program={project.domain.program} activeVersion={activeVersion} />
             <ComplianceChecklist
               items={complianceItems}
@@ -306,8 +344,16 @@ export function EvoLabWorkspace() {
               scoringConfig={project.domain.scoringConfig}
               onApplyRevision={handleInpaintRevision}
             />
-          </div>
-        </section>
+          </section>
+        );
+      }
+
+      return quantities ? (
+        <QuantityTable quantities={quantities} activeSchedule={activeSchedule} includeSchedules={false} />
+      ) : (
+        <div className="grid min-h-[520px] place-items-center rounded border border-dashed border-line bg-panel/60 text-sm text-muted">
+          Select or generate a plan version to calculate quantities.
+        </div>
       );
     }
 
@@ -348,7 +394,7 @@ export function EvoLabWorkspace() {
       );
     }
 
-    return <PlanWorkspace />;
+    return <SchemeWorkspace />;
   }
 
   function ModelWorkspace() {
@@ -432,92 +478,15 @@ export function EvoLabWorkspace() {
     }
   }
 
-  function PlanWorkspace() {
-    if (workflowPhase === "scheme") {
-      return (
-        <section className="grid min-h-full grid-rows-[minmax(560px,1fr)_minmax(280px,0.8fr)] gap-4">
-          <SchemeSplitViewport
-            activeVersion={activeVersion}
-            activeLevelId={activeLevelId}
-            onLevelChange={setActiveLevel}
-            onInpaintRevision={handleInpaintRevision}
-          />
-          <PlanResultGrid
-            outline={outline}
-            closed={outlineClosed}
-            brief={brief}
-            program={project.domain.program}
-            zoning={zoning}
-            versions={project.versions}
-            activeVersionId={project.activeVersionId}
-            onGenerated={appendGeneratedVersions}
-            onSelectVersion={setActiveVersion}
-          />
-        </section>
-      );
-    }
-
+  function SchemeWorkspace() {
     return (
-      <section className="grid min-h-full grid-rows-[minmax(360px,0.9fr)_minmax(320px,1fr)] gap-4">
-        <div className="grid min-h-0 grid-cols-[360px_minmax(0,1fr)] gap-4">
-          <OutlineCanvas
-            points={outline}
-            closed={outlineClosed}
-            onChange={setOutline}
-            onClosedChange={setOutlineClosed}
-          />
-          <section className="rounded border border-line bg-panel/90 p-3">
-            <div className="mb-3 flex items-center justify-between">
-              <div>
-                <h1 className="text-base font-semibold text-white">Plan Workspace</h1>
-                <p className="mt-1 text-xs text-muted">
-                  Active version is the shared data source for plan, model, analysis, MEP and quantity.
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                {outlineStale && activeVersion ? (
-                  <button
-                    className="flex h-8 items-center gap-2 rounded border border-warning/50 bg-warning/10 px-2 text-xs text-warning hover:border-warning"
-                    type="button"
-                    onClick={() => void relayoutActiveVersion()}
-                    disabled={isRelayouting}
-                  >
-                    {isRelayouting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCcw className="h-3.5 w-3.5" />}
-                    Relayout active plan
-                  </button>
-                ) : null}
-                {activeVersion?.levels.length ? (
-                  <select
-                    className="h-8 rounded border border-line bg-[#0b1118] px-2 text-xs text-slate-100"
-                    value={activeLevelId ?? activeVersion.levels[0]?.id}
-                    onChange={(event) => setActiveLevel(event.target.value)}
-                  >
-                    {activeVersion.levels.map((level) => (
-                      <option key={level.id} value={level.id}>
-                        {level.name}
-                      </option>
-                    ))}
-                  </select>
-                ) : null}
-                <span className="rounded border border-success/30 px-2 py-1 text-xs text-success">
-                  {outlineClosed ? "Outline closed" : "Outline open"}
-                </span>
-                {outlineStale ? (
-                  <span className="rounded border border-warning/40 px-2 py-1 text-xs text-warning">Outline changed</span>
-                ) : null}
-              </div>
-            </div>
-            {relayoutError ? (
-              <div className="mb-3 rounded border border-danger/40 bg-danger/10 p-2 text-xs text-danger">{relayoutError}</div>
-            ) : null}
-            <FloorPlan
-              levelId={activeLevelId}
-              version={activeVersion}
-              onInpaintRevision={handleInpaintRevision}
-            />
-          </section>
-        </div>
-
+      <section className="grid min-h-full grid-rows-[minmax(560px,1fr)_minmax(280px,0.8fr)] gap-4">
+        <SchemeSplitViewport
+          activeVersion={activeVersion}
+          activeLevelId={activeLevelId}
+          onLevelChange={setActiveLevel}
+          onInpaintRevision={handleInpaintRevision}
+        />
         <PlanResultGrid
           outline={outline}
           closed={outlineClosed}

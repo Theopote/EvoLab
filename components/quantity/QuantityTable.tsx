@@ -7,9 +7,10 @@ import type { QuantityResult } from "@/lib/quantity-engine";
 interface QuantityTableProps {
   quantities: QuantityResult;
   activeSchedule?: ScheduleBundle;
+  includeSchedules?: boolean;
 }
 
-export function QuantityTable({ quantities, activeSchedule }: QuantityTableProps) {
+export function QuantityTable({ quantities, activeSchedule, includeSchedules = true }: QuantityTableProps) {
   const roomSchedule = activeSchedule?.tables.find((table) => table.kind === "room");
   const openingSchedule = activeSchedule?.tables.find((table) => table.kind === "door_window");
 
@@ -62,7 +63,7 @@ export function QuantityTable({ quantities, activeSchedule }: QuantityTableProps
       </div>
       </section>
 
-      {roomSchedule ? (
+      {includeSchedules && roomSchedule ? (
         <SchedulePanel
           title={roomSchedule.title}
           columns={roomSchedule.columns}
@@ -71,7 +72,7 @@ export function QuantityTable({ quantities, activeSchedule }: QuantityTableProps
         />
       ) : null}
 
-      {openingSchedule ? (
+      {includeSchedules && openingSchedule ? (
         <SchedulePanel
           title={openingSchedule.title}
           columns={openingSchedule.columns}
