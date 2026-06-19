@@ -12,6 +12,7 @@ import { RoomFillLayer } from "@/components/floor-plan/layers/RoomFillLayer";
 import { SelectionLayer } from "@/components/floor-plan/layers/SelectionLayer";
 import { InpaintMaskLayer } from "@/components/floor-plan/layers/InpaintMaskLayer";
 import { InpaintToolbar } from "@/components/floor-plan/InpaintToolbar";
+import { ParametricOpeningToolbar } from "@/components/floor-plan/ParametricOpeningToolbar";
 import { WallLayer } from "@/components/floor-plan/layers/WallLayer";
 import { getViewBox } from "@/components/floor-plan/floor-plan-utils";
 import { useEvoProject } from "@/lib/project-store";
@@ -62,6 +63,7 @@ export function FloorPlanCanvas({
     selectOpening,
     clearSelection,
     applyLevelRoomsGeometry,
+    addParametricOpening,
     updateOpening,
     lockedElementIds
   } = useEvoProject(
@@ -75,6 +77,7 @@ export function FloorPlanCanvas({
       selectOpening: state.selectOpening,
       clearSelection: state.clearSelection,
       applyLevelRoomsGeometry: state.applyLevelRoomsGeometry,
+      addParametricOpening: state.addParametricOpening,
       updateOpening: state.updateOpening,
       lockedElementIds: state.project.domain.lockedElementIds
     }))
@@ -172,6 +175,8 @@ export function FloorPlanCanvas({
     activeTool === "select" &&
     Boolean(selectedWallId) &&
     Boolean(selectedWall && !selectedWall.roomIds.some((roomId) => lockedElementIds.includes(roomId)));
+  const parametricOpeningEnabled =
+    interactive && activeTool === "select" && Boolean(selectedWall) && wallDragEnabled;
   const openingEditEnabled =
     interactive &&
     activeTool === "select" &&
@@ -206,6 +211,14 @@ export function FloorPlanCanvas({
     <div className={className}>
       {inpaintEnabled && onInpaintRevision ? (
         <InpaintToolbar version={version} onInpaintRevision={onInpaintRevision} />
+      ) : null}
+      {parametricOpeningEnabled && selectedWall ? (
+        <ParametricOpeningToolbar
+          rooms={rooms}
+          wall={selectedWall}
+          walls={previewWalls}
+          onAddOpening={addParametricOpening}
+        />
       ) : null}
       <div className="relative min-h-[420px] overflow-hidden rounded border border-line bg-[#081018] shadow-insetGrid">
         <div className="pointer-events-none absolute inset-0 cad-grid opacity-70" />

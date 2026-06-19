@@ -1,5 +1,6 @@
 import { normalizePlanVersion, type PlanVersionDraft } from "@/lib/architecture-model";
 import type { CodeContext, ProgramModel } from "@/lib/building-domain";
+import { enforceOpeningConstraintsOnVersion } from "@/lib/opening-constraints";
 import type { PlanVersion, Point, Room } from "@/lib/project-types";
 import { calculateScores } from "@/lib/plan-scoring";
 import { polygonArea, validatePlanVersion } from "@/lib/plan-validation";
@@ -100,11 +101,12 @@ export interface PostProcessOptions {
 
 export function postProcessPlanVersion(draft: PlanVersionDraft, options: PostProcessOptions = {}): PlanVersion {
   const firstPass = normalizePlanVersion(draft);
-  const initialValidation = validatePlanVersion(firstPass, {
+  const openingEnforced = enforceOpeningConstraintsOnVersion(firstPass);
+  const initialValidation = validatePlanVersion(openingEnforced.version, {
     codeContext: options.codeContext,
     projectType: options.projectType
   });
-  const repaired = repairPlanVersion(firstPass);
+  const repaired = repairPlanVersion(openingEnforced.version);
   const normalized = normalizePlanVersion(repaired.version);
   const finalValidation = validatePlanVersion(normalized, {
     codeContext: options.codeContext,
@@ -113,7 +115,7 @@ export function postProcessPlanVersion(draft: PlanVersionDraft, options: PostPro
   const allIssues = [...initialValidation.issues, ...finalValidation.issues];
   const scores = calculateScores(normalized, allIssues, options);
   const validationWarnings = Array.from(new Set(allIssues.map((issue) => issue.message)));
-  const repairs = Array.from(new Set(repaired.repairs));
+  const repairs = Array.from(new Set([...openingEnforced.repairs, ...repaired.repairs]));
 
   return {
     ...normalized,

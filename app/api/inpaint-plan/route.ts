@@ -5,6 +5,7 @@ import { createMockModifiedVersion } from "@/lib/mock-api";
 import { postProcessPlanVersion } from "@/lib/plan-postprocess";
 import { inpaintPlanPrompt } from "@/lib/prompts/inpaintPlanPrompt";
 import { enforceRegionLock } from "@/lib/region-lock";
+import { enforceOpeningConstraintsOnVersion } from "@/lib/opening-constraints";
 import { ModifyPlanToolInputSchema } from "@/lib/schemas/plan-version-schema";
 import type { CopilotFinding, PlanVersion } from "@/lib/project-types";
 
@@ -66,14 +67,28 @@ export async function POST(request: Request) {
       allowedIds.size > 0
         ? enforceRegionLock(body.currentVersion.rooms, data.version.rooms, allowedIds)
         : data.version.rooms;
+    const openingEnforced = enforceOpeningConstraintsOnVersion({
+      ...data.version,
+      rooms: lockedRooms
+    });
 
     return NextResponse.json({
       ...data,
       version: postProcessPlanVersion({
         ...data.version,
-        rooms: lockedRooms,
-        parentVersionId: data.version.parentVersionId ?? body.currentVersion.id
-      })
+        rooms: openingEnforced.version.rooms,
+        levels: openingEnforced.version.levels,
+        building: openingEnforced.version.building,
+        parentVersionId: data.version.parentVersionId ?? body.currentVersion.id,
+        metadata: {
+          ...data.version.metadata,
+          repairs: [
+            ...(data.version.metadata?.repairs ?? []),
+            ...openingEnforced.repairs
+          ]
+        }
+      }),
+      openingRepairs: openingEnforced.repairs
     });
   } catch (error) {
     return NextResponse.json({

@@ -28,6 +28,8 @@ import {
 import { calculateQuantities, checkCompliance, type ComplianceItem, type QuantityResult } from "@/lib/quantity-engine";
 import { rescoreVersions, scoringInputFromDomain } from "@/lib/rules/resolve-version-scoring";
 import { createDefaultScoringConfig, normalizeScoringConfig } from "@/lib/rules/scoring-config";
+import { applyPlanOperations } from "@/lib/plan-change-engine";
+import type { PlanOperation } from "@/lib/schemas/plan-change-proposal-schema";
 import { computeBuildableEnvelope } from "@/lib/buildable-envelope";
 import type { BuildableEnvelope, EnvironmentSurrogate, SiteContext, ZoningConstraints } from "@/lib/site-types";
 import { computeEnvironmentSurrogate } from "@/lib/environment-surrogate";
@@ -136,6 +138,13 @@ interface EvoProjectStore {
   updateRoom: (roomId: string, patch: Partial<Room>) => void;
   updateRoomGeometry: (roomId: string, patch: Partial<Room>) => void;
   applyLevelRoomsGeometry: (rooms: Room[]) => void;
+  addParametricOpening: (input: {
+    roomId: string;
+    kind: "door" | "window";
+    wall: Room["doors"][number]["wall"];
+    position?: number;
+    width?: number;
+  }) => void;
   updateWall: (wallId: string, patch: Partial<Wall>) => void;
   updateOpening: (openingId: string, patch: Partial<OpeningElement>) => void;
   replaceVersions: (versions: PlanVersion[], projectType?: string) => void;
@@ -504,6 +513,7 @@ function createInitialState(): Omit<
   | "updateRoom"
   | "updateRoomGeometry"
   | "applyLevelRoomsGeometry"
+  | "addParametricOpening"
   | "updateWall"
   | "updateOpening"
   | "replaceVersions"
@@ -1044,6 +1054,41 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
           false,
           true,
           "Updated shared room geometry",
+          "user"
+        );
+      })
+    ),
+  addParametricOpening: (input) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        if (!state.activeVersion) {
+          return;
+        }
+
+        if (isElementLocked(state, input.roomId)) {
+          return;
+        }
+
+        const normalized = normalizePlanVersion(state.activeVersion);
+        const operation: PlanOperation = {
+          id: `op-${input.kind}-${Date.now()}`,
+          type: "add_opening",
+          label: `Add ${input.kind}`,
+          targetRoomIds: [input.roomId],
+          roomId: input.roomId,
+          openingKind: input.kind,
+          wall: input.wall,
+          position: input.position ?? 0.5,
+          width: input.width ?? (input.kind === "door" ? 1 : 1.2)
+        };
+        const nextVersion = applyPlanOperations(normalized, [operation], { skipPostProcess: true });
+
+        commitNormalizedVersionDraft(
+          state,
+          normalizePlanVersion(nextVersion),
+          false,
+          true,
+          `Added ${input.kind} to ${input.roomId}`,
           "user"
         );
       })

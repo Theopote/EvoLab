@@ -145,7 +145,12 @@ export function PlanChangeProposalPanel({
 
           {report.skippedOperations.length ? (
             <div className="rounded border border-warning/30 bg-warning/5 p-2 text-[11px] text-warning">
-              {report.skippedOperations.length} operation(s) skipped because target elements are locked.
+              {report.skippedOperations.map((item) => (
+                <div key={item.operationId}>
+                  {item.label}
+                  {item.reason ? ` — ${item.reason}` : " skipped because target elements are locked."}
+                </div>
+              ))}
             </div>
           ) : null}
 

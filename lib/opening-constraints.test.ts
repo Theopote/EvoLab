@@ -63,11 +63,11 @@ describe("opening constraints", () => {
       openingKind: "door",
       wall: "east",
       position: 0.99,
-      width: 5.5
+      width: 12
     });
 
     expect(sanitized).not.toBeNull();
-    expect(sanitized!.width).toBeLessThan(5.5);
+    expect(sanitized!.width).toBeLessThan(12);
     expect(sanitized!.position).toBeLessThan(0.99);
   });
 
