@@ -73,6 +73,14 @@ export interface ScoringConfig {
     "egress-distance"?: number;
     "stair-count"?: number;
   };
+  gfaExemption?: {
+    bayWindow?: {
+      maxDepthM?: number;
+      minSillHeightM?: number;
+      minHeadroomM?: number;
+      notice?: string;
+    };
+  };
 }
 
 export interface ProgramAdjacencyRule {

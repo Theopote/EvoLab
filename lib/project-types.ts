@@ -111,6 +111,20 @@ export interface TopologyGraph {
   edges: TopologyGraphEdge[];
 }
 
+export interface RoomProtrusion {
+  id: string;
+  type: "bay_window" | "niche" | "balcony";
+  footprint: Point[];
+  depthM: number;
+  widthM?: number;
+  sillHeightM?: number;
+  headroomM?: number;
+  positionOnEdge?: number;
+  centerOnWall?: Point;
+  gfaExempt?: boolean;
+  gfaExemptBasis?: string;
+}
+
 export interface Room {
   id: string;
   levelId?: string;
@@ -128,6 +142,7 @@ export interface Room {
   needsDaylight?: boolean;
   needsPlumbing?: boolean;
   adjacents?: string[];
+  protrusions?: RoomProtrusion[];
 }
 
 export type RoomType =
