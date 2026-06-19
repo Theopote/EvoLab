@@ -1,6 +1,9 @@
+import { pointsNear, quantizePoint } from "@/lib/geometry/cluster-endpoints";
 import type { Point, Room } from "@/lib/project-types";
 import { polygonArea } from "@/lib/plan-validation";
 import { polygonEdges } from "@/lib/wall-extractor";
+
+export { pointsNear, quantizePoint };
 export const HIT_THRESHOLD_M = 0.35;
 export const MIN_ROOM_WIDTH = 0.6;
 
@@ -29,16 +32,6 @@ export interface WallEdge {
 export interface WallGraph {
   nodes: WallNode[];
   edges: WallEdge[];
-}
-
-export function pointsNear(a: Point, b: Point, tolerance = WALL_GRAPH_TOLERANCE) {
-  return Math.hypot(a[0] - b[0], a[1] - b[1]) <= tolerance;
-}
-
-export function quantizePoint(point: Point, tolerance = WALL_GRAPH_TOLERANCE): string {
-  const x = Math.round(point[0] / tolerance) * tolerance;
-  const y = Math.round(point[1] / tolerance) * tolerance;
-  return `${x},${y}`;
 }
 
 export function wallIdToEdgeKey(wallId: string) {
