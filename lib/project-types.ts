@@ -417,6 +417,7 @@ export interface AnalysisLayer {
 
 export type CopilotActionId =
   | "optimize-egress"
+  | "apply-compliance-fix"
   | "generate-flow-diagram"
   | "layout-shafts"
   | "generate-massing"

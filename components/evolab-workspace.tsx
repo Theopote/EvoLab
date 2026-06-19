@@ -299,7 +299,13 @@ export function EvoLabWorkspace() {
               onToggleElementLock={toggleElementLock}
             />
             <ProgramCompliancePanel program={project.domain.program} activeVersion={activeVersion} />
-            <ComplianceChecklist items={complianceItems} />
+            <ComplianceChecklist
+              items={complianceItems}
+              activeVersion={activeVersion}
+              projectType={project.projectType}
+              scoringConfig={project.domain.scoringConfig}
+              onApplyRevision={handleInpaintRevision}
+            />
           </div>
         </section>
       );

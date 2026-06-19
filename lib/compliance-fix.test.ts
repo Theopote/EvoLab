@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { defaultHealthcareCodeContext } from "@/lib/building-domain";
 import {
   buildComplianceFixPackageById,
+  isComplianceFixAction,
   listFixableComplianceResults
 } from "@/lib/compliance-fix";
 import { initialProjectData } from "@/lib/evolab-data";
@@ -73,5 +74,36 @@ describe("compliance-fix", () => {
     expect(fixPackage?.levelId).toBe("level-01");
     expect(fixPackage?.structuralConstraints?.lockedPositions?.length).toBeGreaterThan(0);
     expect(fixPackage?.userRequest).toMatch(/do not move the structural position/i);
+  });
+
+  it("builds corridor and daylight fix packages when those rules warn", () => {
+    const fixable = listFixableComplianceResults(baseVersion, {
+      buildingType: "healthcare",
+      rulePack
+    });
+
+    const corridorResult = fixable.find((item) => item.ruleId === "corridor-width");
+    if (corridorResult) {
+      const corridorFix = buildComplianceFixPackageById(baseVersion, corridorResult.id, {
+        buildingType: "healthcare",
+        rulePack
+      });
+      expect(corridorFix?.userRequest).toMatch(/widen narrow corridor/i);
+    }
+
+    const daylightResult = fixable.find((item) => item.ruleId === "daylight");
+    if (daylightResult) {
+      const daylightFix = buildComplianceFixPackageById(baseVersion, daylightResult.id, {
+        buildingType: "healthcare",
+        rulePack
+      });
+      expect(daylightFix?.userRequest).toMatch(/daylight/i);
+    }
+  });
+
+  it("routes compliance fix actions through a shared action id", () => {
+    expect(isComplianceFixAction({ id: "apply-compliance-fix", label: "Widen corridors" })).toBe(true);
+    expect(isComplianceFixAction({ id: "optimize-egress", label: "Optimize egress" })).toBe(true);
+    expect(isComplianceFixAction({ id: "switch-tab", label: "Open model" })).toBe(false);
   });
 });

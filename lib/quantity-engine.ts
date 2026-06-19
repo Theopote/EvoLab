@@ -7,7 +7,7 @@ import {
   type ComplianceSeverity,
   type ComplianceScope
 } from "@/lib/compliance-rules";
-import type { FunctionZone, OpeningElement, PlanVersion, Point, Room, RoomType, Wall } from "@/lib/project-types";
+import type { FunctionZone, OpeningElement, PlanVersion, Point, Room, RoomType, Wall, CopilotActionId } from "@/lib/project-types";
 import { resolveLevelRooms } from "@/lib/level-rooms";
 import { resolveRulePack } from "@/lib/rules/rule-pack";
 import type { RulePack } from "@/lib/rules/types";
@@ -58,6 +58,7 @@ export interface ComplianceItem {
   severity?: ComplianceSeverity;
   scope?: ComplianceScope;
   affectedFloorIds?: string[];
+  fixActionId?: CopilotActionId;
 }
 
 function toComplianceItem(result: ComplianceResult): ComplianceItem {
@@ -73,7 +74,8 @@ function toComplianceItem(result: ComplianceResult): ComplianceItem {
     levelName: result.levelName,
     severity: result.severity,
     scope: result.scope,
-    affectedFloorIds: result.affectedFloorIds
+    affectedFloorIds: result.affectedFloorIds,
+    fixActionId: result.fixActionId
   };
 }
 

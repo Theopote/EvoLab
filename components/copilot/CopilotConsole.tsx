@@ -6,12 +6,8 @@ import { AiTimelinePanel } from "@/components/copilot/AiTimelinePanel";
 import { CopilotProposalHistoryPanel } from "@/components/copilot/CopilotProposalHistoryPanel";
 import { PlanChangeProposalPanel } from "@/components/copilot/PlanChangeProposalPanel";
 import { DiffPreviewOverlay } from "@/components/floor-plan/DiffPreviewOverlay";
+import { useComplianceFixAction } from "@/components/copilot/useComplianceFixAction";
 import type { ModifyPlanResponse } from "@/lib/copilot-modify-types";
-import {
-  buildComplianceFixPackageById,
-  requestComplianceFixPreview,
-  type ComplianceFixPreview
-} from "@/lib/compliance-fix";
 import { useEvoProject } from "@/lib/project-store";
 import type {
   CopilotAction,
@@ -67,8 +63,6 @@ export function CopilotConsole({
   const [pinnedFiles, setPinnedFiles] = useState<CopilotPinnedFile[]>([]);
   const [pendingProposalId, setPendingProposalId] = useState<string | null>(null);
   const [pendingPlan, setPendingPlan] = useState<CopilotPlan | null>(null);
-  const [pendingComplianceFix, setPendingComplianceFix] = useState<ComplianceFixPreview | null>(null);
-  const [isComplianceFixing, setIsComplianceFixing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const {
     copilotProposals,
@@ -97,6 +91,41 @@ export function CopilotConsole({
   );
   const insightQueue = useEvoProject((state) => state.project.domain.copilotInsightQueue);
   const pendingInsights = pendingInsightCount(insightQueue);
+  const appendAssistantMessage = (content: string) => {
+    setMessages((current) => [
+      ...current,
+      {
+        id: `assistant-${Date.now()}`,
+        role: "assistant",
+        content
+      }
+    ]);
+  };
+  const {
+    pendingComplianceFix,
+    handleComplianceAction,
+    acceptComplianceFixPreview,
+    rejectComplianceFixPreview
+  } = useComplianceFixAction({
+    activeVersion,
+    projectType,
+    scoringConfig,
+    onBeforeFix: () => onTabChange("Plan"),
+    onApplyPreview: (preview) => {
+      if (!activeVersion) {
+        return;
+      }
+
+      onCopilotRevision(preview.version, preview.prompt, activeVersion);
+      refreshCopilotInsights();
+      appendAssistantMessage(
+        preview.warning
+          ? `Applied compliance fix with note: ${preview.warning}`
+          : "Applied compliance fix as a new scheme version."
+      );
+    },
+    onNotice: appendAssistantMessage
+  });
   const pendingProposal = useMemo(() => {
     if (!pendingProposalId) {
       return null;
@@ -482,92 +511,9 @@ export function CopilotConsole({
       return;
     }
 
-    if (action.id === "optimize-egress" && action.payload && activeVersion) {
-      void runComplianceFixAction(action.payload);
-    }
-  }
-
-  async function runComplianceFixAction(violationId: string) {
-    if (!activeVersion || isComplianceFixing) {
+    if (handleComplianceAction(action)) {
       return;
     }
-
-    const fixPackage = buildComplianceFixPackageById(activeVersion, violationId, {
-      buildingType: projectType,
-      scoringConfig
-    });
-
-    if (!fixPackage) {
-      setMessages((current) => [
-        ...current,
-        {
-          id: `assistant-fix-miss-${Date.now()}`,
-          role: "assistant",
-          content: "This compliance issue cannot be auto-fixed yet. Try a manual inpaint edit on the affected floor."
-        }
-      ]);
-      return;
-    }
-
-    setIsComplianceFixing(true);
-    onTabChange("Plan");
-
-    try {
-      const preview = await requestComplianceFixPreview(activeVersion, fixPackage);
-      setPendingComplianceFix(preview);
-      setMessages((current) => [
-        ...current,
-        {
-          id: `assistant-fix-preview-${Date.now()}`,
-          role: "assistant",
-          content: `Prepared a localized fix preview for ${fixPackage.floorName}. Review before accepting.`
-        }
-      ]);
-    } catch (error) {
-      setMessages((current) => [
-        ...current,
-        {
-          id: `assistant-fix-error-${Date.now()}`,
-          role: "assistant",
-          content: error instanceof Error ? error.message : "Compliance fix request failed."
-        }
-      ]);
-    } finally {
-      setIsComplianceFixing(false);
-    }
-  }
-
-  function acceptComplianceFixPreview() {
-    if (!pendingComplianceFix || !activeVersion) {
-      return;
-    }
-
-    const preview = pendingComplianceFix;
-    onCopilotRevision(preview.version, preview.prompt, activeVersion);
-    setPendingComplianceFix(null);
-    refreshCopilotInsights();
-    setMessages((current) => [
-      ...current,
-      {
-        id: `assistant-fix-applied-${Date.now()}`,
-        role: "assistant",
-        content: preview.warning
-          ? `Applied compliance fix with note: ${preview.warning}`
-          : "Applied compliance fix as a new scheme version."
-      }
-    ]);
-  }
-
-  function rejectComplianceFixPreview() {
-    setPendingComplianceFix(null);
-    setMessages((current) => [
-      ...current,
-      {
-        id: `assistant-fix-rejected-${Date.now()}`,
-        role: "assistant",
-        content: "Compliance fix preview rejected."
-      }
-    ]);
   }
 
   return (

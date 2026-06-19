@@ -138,13 +138,24 @@ function resultBase(
   };
 }
 
-function fixActionForRule(ruleId: string): CopilotActionId | undefined {
+function fixActionForRule(ruleId: string, fixScope?: ComplianceFixScope): CopilotActionId | undefined {
+  if (ruleId === "vertical_alignment" && fixScope !== "single_floor") {
+    return undefined;
+  }
+
   if (ruleId === "egress-distance" || ruleId === "stair-egress-width") {
     return "optimize-egress";
   }
 
-  if (ruleId === "vertical_alignment") {
-    return "optimize-egress";
+  if (
+    ruleId === "corridor-width" ||
+    ruleId === "daylight" ||
+    ruleId === "plumbing-proximity" ||
+    ruleId === "stair-count" ||
+    ruleId === "equipment-shaft-alignment" ||
+    ruleId === "vertical_alignment"
+  ) {
+    return "apply-compliance-fix";
   }
 
   return undefined;
@@ -178,7 +189,8 @@ function checkCorridorWidthRule(ctx: ComplianceContext, levelId?: string): Compl
         levelId: resolvedLevelId,
         levelName,
         affectedFloorIds: [resolvedLevelId],
-        fixScope: "single_floor"
+        fixScope: "single_floor",
+        fixActionId: fixActionForRule("corridor-width", "single_floor")
       }
     )
   ];
@@ -225,7 +237,7 @@ function checkEgressDistanceRule(ctx: ComplianceContext, levelId?: string): Comp
         levelName,
         affectedFloorIds: [resolvedLevelId],
         fixScope: "single_floor",
-        fixActionId: fixActionForRule("egress-distance")
+        fixActionId: fixActionForRule("egress-distance", "single_floor")
       }
     )
   ];
@@ -257,7 +269,8 @@ function checkDaylightRule(ctx: ComplianceContext, levelId?: string): Compliance
         levelId: resolvedLevelId,
         levelName,
         affectedFloorIds: [resolvedLevelId],
-        fixScope: "single_floor"
+        fixScope: "single_floor",
+        fixActionId: fixActionForRule("daylight", "single_floor")
       }
     )
   ];
@@ -289,7 +302,8 @@ function checkPlumbingProximityRule(ctx: ComplianceContext, levelId?: string): C
         levelId: resolvedLevelId,
         levelName,
         affectedFloorIds: [resolvedLevelId],
-        fixScope: "single_floor"
+        fixScope: "single_floor",
+        fixActionId: fixActionForRule("plumbing-proximity", "single_floor")
       }
     )
   ];
@@ -319,7 +333,8 @@ function checkStairCountRule(ctx: ComplianceContext, levelId?: string): Complian
         levelId: resolvedLevelId,
         levelName,
         affectedFloorIds: [resolvedLevelId],
-        fixScope: "single_floor"
+        fixScope: "single_floor",
+        fixActionId: fixActionForRule("stair-count", "single_floor")
       }
     )
   ];
@@ -356,7 +371,8 @@ function checkEquipmentShaftAlignmentRule(ctx: ComplianceContext, levelId?: stri
         levelId: resolvedLevelId,
         levelName,
         affectedFloorIds: [resolvedLevelId],
-        fixScope: "single_floor"
+        fixScope: "single_floor",
+        fixActionId: fixActionForRule("equipment-shaft-alignment", "single_floor")
       }
     )
   ];
@@ -412,7 +428,7 @@ function checkStairEgressWidthRule(ctx: ComplianceContext): ComplianceResult[] {
       {
         affectedFloorIds: ctx.version.levels.map((level) => level.id),
         fixScope: "building_wide",
-        fixActionId: fixActionForRule("stair-egress-width")
+        fixActionId: fixActionForRule("stair-egress-width", "building_wide")
       }
     )
   ];
@@ -460,7 +476,7 @@ function checkVerticalAlignmentRule(ctx: ComplianceContext): ComplianceResult[] 
         levelName: issue.floorName,
         affectedFloorIds: [issue.floorId],
         fixScope: "single_floor",
-        fixActionId: fixActionForRule("vertical_alignment")
+        fixActionId: fixActionForRule("vertical_alignment", "single_floor")
       }
     )
   );
@@ -622,7 +638,7 @@ export function resolveComplianceFix(result: ComplianceResult): ComplianceFix {
   };
 }
 
-function fixLabelForResult(result: ComplianceResult) {
+export function fixLabelForResult(result: ComplianceResult) {
   if (result.ruleId === "vertical_alignment" && result.fixScope === "single_floor") {
     return "Adjust floor layout";
   }
@@ -631,7 +647,46 @@ function fixLabelForResult(result: ComplianceResult) {
     return "Optimize egress";
   }
 
+  if (result.ruleId === "corridor-width") {
+    return "Widen corridors";
+  }
+
+  if (result.ruleId === "daylight") {
+    return "Improve daylight";
+  }
+
+  if (result.ruleId === "plumbing-proximity") {
+    return "Align wet rooms";
+  }
+
+  if (result.ruleId === "equipment-shaft-alignment") {
+    return "Align equipment";
+  }
+
+  if (result.ruleId === "stair-count") {
+    return "Add vertical core";
+  }
+
   return "Apply fix";
+}
+
+export function complianceFixLabel(ruleId: string, fixScope?: ComplianceFixScope) {
+  return fixLabelForResult({
+    id: ruleId,
+    ruleId,
+    title: ruleId,
+    code: ruleId,
+    status: "warning",
+    severity: "medium",
+    scope: fixScope === "building_wide" ? "building_wide" : "per_floor",
+    message: "",
+    basis: "",
+    fixScope
+  });
+}
+
+function fixLabelForInsight(result: ComplianceResult) {
+  return fixLabelForResult(result);
 }
 
 export function generateComplianceInsights(results: ComplianceResult[]): CopilotFinding[] {
@@ -646,7 +701,7 @@ export function generateComplianceInsights(results: ComplianceResult[]): Copilot
         ? [
             {
               id: result.fixActionId,
-              label: fixLabelForResult(result),
+              label: fixLabelForInsight(result),
               payload: result.id
             }
           ]
