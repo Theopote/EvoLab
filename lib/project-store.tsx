@@ -122,6 +122,7 @@ interface EvoProjectStore {
   briefSiteSubview: BriefSiteSubview;
   quantifySubview: QuantifySubview;
   compareVersionIds: string[];
+  compareModeOpen: boolean;
   activeTab: WorkspaceTab;
   activeAnalysisLayers: AnalysisLayerId[];
   activeMepLayers: MepLayerId[];
@@ -153,6 +154,7 @@ interface EvoProjectStore {
   setBriefSiteSubview: (subview: BriefSiteSubview) => void;
   setQuantifySubview: (subview: QuantifySubview) => void;
   toggleCompareVersion: (versionId: string) => void;
+  setCompareModeOpen: (open: boolean) => void;
   setActiveAnalysisLayers: (layers: AnalysisLayerId[]) => void;
   setActiveMepLayers: (layers: MepLayerId[]) => void;
   setActiveLevel: (levelId: string) => void;
@@ -551,6 +553,7 @@ function createInitialState(): Omit<
   | "setBriefSiteSubview"
   | "setQuantifySubview"
   | "toggleCompareVersion"
+  | "setCompareModeOpen"
   | "setActiveAnalysisLayers"
   | "setActiveMepLayers"
   | "setActiveLevel"
@@ -623,6 +626,7 @@ function createInitialState(): Omit<
     briefSiteSubview: defaultBriefSiteSubview(),
     quantifySubview: defaultQuantifySubview(),
     compareVersionIds: [],
+    compareModeOpen: false,
     activeTab: "Plan",
     activeAnalysisLayers: ["function_zones", "primary_flow", "egress_path", "daylight"],
     activeMepLayers: ["hvac", "plumbing_supply", "plumbing_drain", "electrical", "shafts", "equipment_rooms"],
@@ -869,6 +873,16 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
         }
 
         state.compareVersionIds = [...state.compareVersionIds, versionId].slice(-2);
+
+        if (state.compareVersionIds.length >= 2) {
+          state.compareModeOpen = true;
+        }
+      })
+    ),
+  setCompareModeOpen: (open) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        state.compareModeOpen = open;
       })
     ),
   setActiveAnalysisLayers: (layers) =>

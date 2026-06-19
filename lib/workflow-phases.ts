@@ -3,7 +3,7 @@ import type { WorkspaceTab } from "@/lib/project-types";
 export type WorkflowPhase = "brief_site" | "scheme" | "analyze" | "quantify" | "review" | "deliver";
 
 export type BriefSiteSubview = "site" | "program" | "intake";
-export type SchemeSubview = "plan" | "massing" | "model";
+export type SchemeSubview = "plan" | "massing" | "model" | "structure" | "facade";
 export type AnalyzeSubview = "analysis" | "systems";
 export type QuantifySubview = "quantity" | "schedules" | "compliance";
 export type DeliverSubview = "sheets" | "export" | "render";
@@ -58,6 +58,8 @@ const tabToPhase: Record<WorkspaceTab, WorkflowPhase> = {
   Plan: "brief_site",
   Massing: "scheme",
   Model: "scheme",
+  Structure: "scheme",
+  Facade: "scheme",
   Analysis: "analyze",
   Systems: "analyze",
   Quantity: "quantify",
@@ -69,7 +71,9 @@ const tabToPhase: Record<WorkspaceTab, WorkflowPhase> = {
 const schemeTabMap: Record<SchemeSubview, WorkspaceTab> = {
   plan: "Plan",
   massing: "Massing",
-  model: "Model"
+  model: "Model",
+  structure: "Structure",
+  facade: "Facade"
 };
 
 const analyzeTabMap: Record<AnalyzeSubview, WorkspaceTab> = {
@@ -98,6 +102,14 @@ export function schemeSubviewForTab(tab: WorkspaceTab): SchemeSubview | undefine
 
   if (tab === "Model") {
     return "model";
+  }
+
+  if (tab === "Structure") {
+    return "structure";
+  }
+
+  if (tab === "Facade") {
+    return "facade";
   }
 
   return undefined;

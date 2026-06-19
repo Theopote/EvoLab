@@ -13,6 +13,8 @@ export const workspaceTabs = [
   "Plan",
   "Massing",
   "Model",
+  "Structure",
+  "Facade",
   "Analysis",
   "Systems",
   "Quantity",
