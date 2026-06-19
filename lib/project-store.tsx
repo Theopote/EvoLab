@@ -4,6 +4,11 @@ import { produce } from "immer";
 import { type ReactNode } from "react";
 import { create } from "zustand";
 import { normalizePlanVersion, normalizeProjectVersions } from "@/lib/architecture-model";
+import {
+  applyLevelRoomsToVersion,
+  applyRoomPatchToVersion,
+  getResolvedLevel
+} from "@/lib/level-rooms";
 import type { ScheduleBundle, StoredCopilotProposal, ScoringConfig } from "@/lib/building-domain";
 import {
   addCopilotProposalComment as addCopilotProposalCommentInDomain,
@@ -40,7 +45,6 @@ import { computeBuildableEnvelope } from "@/lib/buildable-envelope";
 import type { BuildableEnvelope, EnvironmentSurrogate, SiteContext, ZoningConstraints } from "@/lib/site-types";
 import { computeEnvironmentSurrogate } from "@/lib/environment-surrogate";
 import { isOutlineStale } from "@/lib/outline-sync";
-import { polygonArea } from "@/lib/plan-validation";
 import { defaultZoningConstraints } from "@/lib/site-types";
 import type {
   AnalysisLayerId,
@@ -226,7 +230,10 @@ function validateSelectionDraft(state: EvoProjectStore) {
   }
 
   if (state.selectionType === "room") {
-    const rooms = level?.rooms.length ? level.rooms : version.rooms;
+    const rooms =
+      version && level
+        ? (getResolvedLevel(version, level.id)?.rooms ?? version.rooms)
+        : version?.rooms ?? [];
     if (!state.selectedRoomId || !rooms.some((room) => room.id === state.selectedRoomId)) {
       clearSelectionDraft(state);
     }
@@ -394,12 +401,14 @@ function rescoreProjectVersions(state: EvoProjectStore) {
 
 function refreshDerivedDraft(state: EvoProjectStore) {
   const activeVersion = getActiveVersion(state.project);
-  const activeLevel = getLevel(activeVersion, state.activeLevelId);
+  const rawLevel = getLevel(activeVersion, state.activeLevelId);
+  const activeLevel =
+    activeVersion && rawLevel ? getResolvedLevel(activeVersion, rawLevel.id) : rawLevel;
   const codeContext = getCodeContext(state.project.domain);
   const rulePack = getRulePack(state.project.domain, state.project.projectType);
 
   state.activeVersion = activeVersion;
-  state.activeLevelId = activeLevel?.id;
+  state.activeLevelId = rawLevel?.id;
   state.activeLevel = activeLevel;
   state.quantities = activeVersion ? calculateQuantities(activeVersion, { scope: "building" }) : undefined;
   state.levelQuantities =
@@ -407,9 +416,7 @@ function refreshDerivedDraft(state: EvoProjectStore) {
       ? calculateQuantities(activeVersion, { levelId: activeLevel.id, scope: "level" })
       : undefined;
   state.complianceItems = activeVersion ? checkCompliance(activeVersion, codeContext, rulePack) : [];
-  state.selectedRoom = (activeLevel?.rooms.length ? activeLevel.rooms : activeVersion?.rooms)?.find(
-    (room) => room.id === state.selectedRoomId
-  );
+  state.selectedRoom = activeLevel?.rooms.find((room) => room.id === state.selectedRoomId);
   state.selectedWall = activeLevel?.walls.find((wall) => wall.id === state.selectedWallId);
   state.selectedOpening = activeLevel?.openings.find((opening) => opening.id === state.selectedOpeningId);
 
@@ -432,7 +439,11 @@ function patchTouchesGeometry<T extends object>(patch: Partial<T>, geometryKeys:
 }
 
 function refreshQuantitiesDraft(state: EvoProjectStore) {
-  const activeLevel = getLevel(state.activeVersion, state.activeLevelId);
+  const rawLevel = getLevel(state.activeVersion, state.activeLevelId);
+  const activeLevel =
+    state.activeVersion && rawLevel
+      ? getResolvedLevel(state.activeVersion, rawLevel.id)
+      : rawLevel;
   const codeContext = getCodeContext(state.project.domain);
 
   state.quantities = state.activeVersion
@@ -444,70 +455,6 @@ function refreshQuantitiesDraft(state: EvoProjectStore) {
       : undefined;
   state.complianceItems = state.activeVersion ? checkCompliance(state.activeVersion, codeContext, getRulePack(state.project.domain, state.project.projectType)) : [];
   refreshDomainDraft(state);
-}
-
-function applyRoomPatchToVersion(
-  version: PlanVersion,
-  levelId: string | undefined,
-  roomId: string,
-  patch: Partial<Room>
-): PlanVersion | undefined {
-  const level = getLevel(version, levelId);
-
-  if (!level?.rooms.some((room) => room.id === roomId)) {
-    return undefined;
-  }
-
-  const nextLevels = version.levels.map((item) => ({
-    ...item,
-    rooms: item.rooms.map((room) => {
-      if (room.id !== roomId) {
-        return room;
-      }
-
-      const nextRoom = { ...room, ...patch, id: room.id };
-
-      if (patch.polygon) {
-        nextRoom.areaSqm = Number(polygonArea(patch.polygon).toFixed(1));
-      }
-
-      return nextRoom;
-    })
-  }));
-
-  return {
-    ...version,
-    rooms: nextLevels.flatMap((item) => item.rooms),
-    levels: nextLevels,
-    building: {
-      ...version.building,
-      levels: nextLevels
-    }
-  };
-}
-
-function applyLevelRoomsToVersion(
-  version: PlanVersion,
-  levelId: string | undefined,
-  rooms: Room[]
-): PlanVersion | undefined {
-  const level = getLevel(version, levelId);
-
-  if (!level) {
-    return undefined;
-  }
-
-  const nextLevels = version.levels.map((item) => (item.id === level.id ? { ...item, rooms } : item));
-
-  return {
-    ...version,
-    rooms: nextLevels.flatMap((item) => item.rooms),
-    levels: nextLevels,
-    building: {
-      ...version.building,
-      levels: nextLevels
-    }
-  };
 }
 
 function commitNormalizedVersionDraft(
@@ -602,7 +549,9 @@ function createInitialState(): Omit<
   | "returnToPlanGeneration"
 > {
   const activeVersion = getActiveVersion(initialProjectData);
-  const activeLevel = getLevel(activeVersion, undefined);
+  const rawLevel = getLevel(activeVersion, undefined);
+  const activeLevel =
+    activeVersion && rawLevel ? getResolvedLevel(activeVersion, rawLevel.id) : rawLevel;
 
   return {
     project: initialProjectData,

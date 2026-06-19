@@ -1,6 +1,7 @@
 import type { CodeContext } from "@/lib/building-domain";
 import { defaultHealthcareCodeContext } from "@/lib/building-domain";
 import type { FunctionZone, OpeningElement, PlanVersion, Point, Room, RoomType, Wall } from "@/lib/project-types";
+import { resolveLevelRooms } from "@/lib/level-rooms";
 import { computeEgressPathMetrics, computeWetCorePathMetrics, egressMethodLabel } from "@/lib/rules/path-metrics";
 import { measureCorridorsClearWidth } from "@/lib/rules/metrics/corridor-width";
 import { checkDaylightCompliance } from "@/lib/rules/metrics/daylight-compliance";
@@ -122,7 +123,7 @@ function roomsForQuantities(version: PlanVersion, levelId: string | undefined, s
   }
 
   const level = activeLevel(version, levelId);
-  return level?.rooms ?? version.rooms;
+  return level ? resolveLevelRooms(level, version.standardFloorGroups) : version.rooms;
 }
 
 function wallsForQuantities(version: PlanVersion, levelId: string | undefined, scope: QuantityScope) {

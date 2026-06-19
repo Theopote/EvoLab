@@ -32,6 +32,15 @@ export interface DesignBrief {
   orientationPreference: string;
 }
 
+/** Shared layout for standard (typical) floors — the group is the source of truth. */
+export interface StandardFloorGroup {
+  id: string;
+  label?: string;
+  rooms: Room[];
+  outline: Point[];
+  memberFloorIds: string[];
+}
+
 export interface PlanVersion {
   id: string;
   label: string;
@@ -48,6 +57,8 @@ export interface PlanVersion {
   };
   scores?: VersionScores;
   mep?: MepLayout;
+  /** Typical-floor groups; member levels reference via standardFloorGroupId. */
+  standardFloorGroups?: StandardFloorGroup[];
 }
 
 export interface PlanVersionMetadata {
@@ -187,8 +198,16 @@ export interface Level {
   name: string;
   elevation: number;
   height: number;
+  /** Sort key for elevation computation; B1 = -1, 1F = 1. Defaults from level order. */
+  floorNumber?: number;
   levelType?: LevelType;
   floorProgram?: FloorProgram;
+  /** When set, rooms/outline resolve from the matching StandardFloorGroup. */
+  standardFloorGroupId?: string;
+  /** Populated when a level is detached from a standard-floor group. */
+  localOverrideRooms?: Room[];
+  /** Marks a transfer floor where vertical structure may change. */
+  isTransferFloor?: boolean;
   rooms: Room[];
   walls: Wall[];
   openings: OpeningElement[];

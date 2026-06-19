@@ -1,5 +1,7 @@
 import { normalizePlanVersion, type PlanVersionDraft } from "@/lib/architecture-model";
-import type { Building, Core, FloorProgram, Level, LevelType, PlanVersion, Room, RoomType } from "@/lib/project-types";
+import { resolveLevelRooms } from "@/lib/level-rooms";
+import { createStandardFloorGroup } from "@/lib/standard-floor-group";
+import type { Building, Core, FloorProgram, Level, LevelType, PlanVersion, Room, RoomType, StandardFloorGroup } from "@/lib/project-types";
 
 const CORE_ROOM_TYPES = new Set<RoomType>(["stair", "elevator", "shaft"]);
 
@@ -82,7 +84,7 @@ function adaptRoomForFloorProgram(room: Room, program: FloorProgram): Room {
   }
 }
 
-function cloneRoomsForLevel(
+function cloneRoomsForLocalLevel(
   templateRooms: Room[],
   levelId: string,
   levelIndex: number,
@@ -118,9 +120,27 @@ function cloneRoomsForLevel(
   });
 }
 
-function mergeVerticalCores(building: Building): Building {
+function createTypicalGroupRooms(templateRooms: Room[]): Room[] {
+  const idMap = new Map(templateRooms.map((room) => [room.id, room.id]));
+
+  return templateRooms.map((room) => {
+    const cloned: Room = {
+      ...room,
+      id: idMap.get(room.id)!,
+      adjacents: (room.adjacents ?? []).map((adjacentId) => idMap.get(adjacentId) ?? adjacentId),
+      doors: room.doors.map((door) => ({ ...door })),
+      windows: room.windows.map((window) => ({ ...window })),
+      wallIds: undefined,
+      openingIds: undefined
+    };
+
+    return adaptRoomForFloorProgram(cloned, "typical");
+  });
+}
+
+function mergeVerticalCores(building: Building, groups: StandardFloorGroup[]): Building {
   const coreRooms = building.levels.flatMap((level) =>
-    level.rooms.filter((room) => CORE_ROOM_TYPES.has(room.type))
+    resolveLevelRooms(level, groups).filter((room) => CORE_ROOM_TYPES.has(room.type))
   );
 
   if (coreRooms.length === 0) {
@@ -166,8 +186,9 @@ export function expandPlanVersionToFloors(version: PlanVersion, floorCount: numb
 
   const levelHeight = templateLevel?.height ?? Math.max(3, ...templateRooms.map((room) => room.ceilingHeight));
   const levels: Level[] = [];
-  let elevation = 0;
   const floorPrograms: Array<{ levelIndex: number; program: FloorProgram }> = [];
+  const standardFloorGroups: StandardFloorGroup[] = [];
+  let typicalGroup: StandardFloorGroup | undefined;
 
   for (let index = 0; index < targetFloors; index += 1) {
     const levelIndex = index + 1;
@@ -175,24 +196,52 @@ export function expandPlanVersionToFloors(version: PlanVersion, floorCount: numb
     const program = resolveFloorProgram(levelIndex, targetFloors);
     floorPrograms.push({ levelIndex, program });
 
-    levels.push({
-      id: levelId,
-      name: levelLabel(levelIndex, targetFloors, program),
-      elevation,
-      height: levelHeight,
-      levelType: resolveLevelType(program),
-      floorProgram: program,
-      rooms: cloneRoomsForLevel(templateRooms, levelId, levelIndex, targetFloors),
-      walls: [],
-      openings: []
-    });
+    if (program === "typical") {
+      if (!typicalGroup) {
+        typicalGroup = createStandardFloorGroup({
+          id: `std-group-${normalized.id}`,
+          label: "Typical inpatient floors",
+          rooms: createTypicalGroupRooms(templateRooms),
+          outline: normalized.outline,
+          memberFloorIds: []
+        });
+        standardFloorGroups.push(typicalGroup);
+      }
 
-    elevation += levelHeight;
+      typicalGroup.memberFloorIds.push(levelId);
+      levels.push({
+        id: levelId,
+        name: levelLabel(levelIndex, targetFloors, program),
+        floorNumber: levelIndex,
+        elevation: 0,
+        height: levelHeight,
+        levelType: resolveLevelType(program),
+        floorProgram: program,
+        standardFloorGroupId: typicalGroup.id,
+        rooms: [],
+        walls: [],
+        openings: []
+      });
+    } else {
+      levels.push({
+        id: levelId,
+        name: levelLabel(levelIndex, targetFloors, program),
+        floorNumber: levelIndex,
+        elevation: 0,
+        height: levelHeight,
+        levelType: resolveLevelType(program),
+        floorProgram: program,
+        rooms: cloneRoomsForLocalLevel(templateRooms, levelId, levelIndex, targetFloors),
+        walls: [],
+        openings: []
+      });
+    }
   }
 
   const expanded = normalizePlanVersion({
     ...normalized,
     levels,
+    standardFloorGroups,
     rooms: levels.flatMap((level) => level.rooms),
     metadata: {
       ...normalized.metadata,
@@ -205,7 +254,7 @@ export function expandPlanVersionToFloors(version: PlanVersion, floorCount: numb
 
   return {
     ...expanded,
-    building: mergeVerticalCores(expanded.building)
+    building: mergeVerticalCores(expanded.building, expanded.standardFloorGroups ?? [])
   };
 }
 

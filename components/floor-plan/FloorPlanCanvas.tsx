@@ -22,6 +22,7 @@ import { ParametricOpeningToolbar } from "@/components/floor-plan/ParametricOpen
 import { RoomTopologyToolbar } from "@/components/floor-plan/RoomTopologyToolbar";
 import { WallLayer } from "@/components/floor-plan/layers/WallLayer";
 import { getViewBox } from "@/components/floor-plan/floor-plan-utils";
+import { getResolvedLevel } from "@/lib/level-rooms";
 import { useEvoProject } from "@/lib/project-store";
 import { useInteractionStore } from "@/lib/interaction-store";
 import { createSetbackBoundary } from "@/lib/polygon-offset";
@@ -169,7 +170,8 @@ export function FloorPlanCanvas({
 
   const levelId = levelIdProp ?? (interactive ? activeLevelId : undefined);
   const level = version?.levels.find((item) => item.id === levelId) ?? version?.levels[0];
-  const sourceRooms = level?.rooms.length ? level.rooms : version?.rooms ?? [];
+  const resolvedLevel = version && level ? getResolvedLevel(version, level.id) : undefined;
+  const sourceRooms = resolvedLevel?.rooms ?? version?.rooms ?? [];
   const rooms = previewRooms ?? sourceRooms;
   const wallGraph = useMemo(() => deriveWallGraph(sourceRooms), [sourceRooms]);
   const previewWalls = useMemo(() => {

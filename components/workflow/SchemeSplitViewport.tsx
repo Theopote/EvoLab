@@ -3,6 +3,7 @@
 import { FloorPlan } from "@/components/floor-plan";
 import { ExplodeSlider } from "@/components/viewer-3d/ExplodeSlider";
 import { Scene } from "@/components/viewer-3d/Scene";
+import { isLevelLinkedToStandardGroup, standardFloorGroupLabel } from "@/lib/standard-floor-group";
 import type { PlanVersion } from "@/lib/project-types";
 
 interface SchemeSplitViewportProps {
@@ -25,6 +26,12 @@ export function SchemeSplitViewport({
       </div>
     );
   }
+
+  const activeLevel = activeVersion.levels.find((level) => level.id === activeLevelId) ?? activeVersion.levels[0];
+  const linkedGroup =
+    activeLevel && isLevelLinkedToStandardGroup(activeLevel)
+      ? activeVersion.standardFloorGroups?.find((group) => group.id === activeLevel.standardFloorGroupId)
+      : undefined;
 
   return (
     <section className="grid min-h-[560px] grid-rows-[auto_minmax(0,1fr)] gap-3 rounded border border-line bg-panel/90 p-3">
@@ -50,6 +57,12 @@ export function SchemeSplitViewport({
           <span className="rounded border border-accent/40 px-2 py-1 text-xs text-accent">{activeVersion.label}</span>
         </div>
       </div>
+      {linkedGroup ? (
+        <p className="rounded border border-info/40 bg-info/10 px-3 py-2 text-xs text-slate-200">
+          Editing standard floor group: {standardFloorGroupLabel(linkedGroup, activeVersion.levels)}. Changes sync to all
+          member floors.
+        </p>
+      ) : null}
 
       <div className="grid min-h-0 gap-3 lg:grid-cols-2">
         <article className="min-h-[420px] overflow-hidden rounded border border-line bg-[#0b1118] p-2">

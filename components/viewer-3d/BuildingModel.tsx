@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { Text } from "@react-three/drei";
 import { useLayoutEffect, useMemo, useRef } from "react";
 import type { OpeningElement, PlanVersion, Point, Room, Wall } from "@/lib/project-types";
+import { resolveLevelRooms } from "@/lib/level-rooms";
 import {
   getGridColumnPositions,
   shouldRenderRoomLabels
@@ -80,8 +81,12 @@ function LevelStack({
   explodeFactor: number;
   columnPositions: Array<[number, number]>;
 }) {
+  const rooms = useMemo(
+    () => resolveLevelRooms(level, version.standardFloorGroups),
+    [level, version.standardFloorGroups]
+  );
   const outlineShape = useMemo(() => createRoomShape({ polygon: version.outline } as Room), [version.outline]);
-  const showLabels = shouldRenderRoomLabels(level.rooms.length);
+  const showLabels = shouldRenderRoomLabels(rooms.length);
 
   const slabColor =
     level.floorProgram === "ground"
@@ -97,9 +102,9 @@ function LevelStack({
         <meshStandardMaterial color={slabColor} opacity={0.22} transparent />
       </mesh>
 
-      <RoomMassMeshes rooms={level.rooms} buildingOutline={version.outline} explodeFactor={explodeFactor} />
+      <RoomMassMeshes rooms={rooms} buildingOutline={version.outline} explodeFactor={explodeFactor} />
       {showLabels ? (
-        <RoomLabels rooms={level.rooms} buildingOutline={version.outline} explodeFactor={explodeFactor} />
+        <RoomLabels rooms={rooms} buildingOutline={version.outline} explodeFactor={explodeFactor} />
       ) : null}
 
       <InstancedWalls walls={level.walls} />
