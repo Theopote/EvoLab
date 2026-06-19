@@ -1,12 +1,19 @@
 import { NextResponse } from "next/server";
 import { requestAnthropicTool } from "@/lib/anthropic-tool";
 import { normalizeImageInputs } from "@/lib/image-input";
+import { commitLevelRoomsToVersion, resolveLevelRooms } from "@/lib/level-rooms";
 import { createMockModifiedVersion } from "@/lib/mock-api";
 import { postProcessPlanVersion } from "@/lib/plan-postprocess";
 import { inpaintPlanPrompt } from "@/lib/prompts/inpaintPlanPrompt";
 import { enforceRegionLock } from "@/lib/region-lock";
 import { enforceOpeningConstraintsOnVersion } from "@/lib/opening-constraints";
 import { ModifyPlanToolInputSchema } from "@/lib/schemas/plan-version-schema";
+import { StructuralConstraintSetSchema } from "@/lib/schemas/structural-constraints-schema";
+import {
+  enrichUserRequestWithStructuralConstraints,
+  validateStructuralConstraints,
+  type StructuralConstraintSet
+} from "@/lib/structural-constraints";
 import type { CopilotFinding, PlanVersion } from "@/lib/project-types";
 
 interface InpaintPlanRequest {
@@ -15,6 +22,39 @@ interface InpaintPlanRequest {
   baseImage?: string;
   maskImage?: string;
   allowedRoomIds?: string[];
+  levelId?: string;
+  structuralConstraints?: StructuralConstraintSet;
+}
+
+function mergeInpaintResult(
+  baseVersion: PlanVersion,
+  aiVersion: PlanVersion,
+  options: {
+    allowedRoomIds: Set<string>;
+    levelId?: string;
+  }
+) {
+  if (options.levelId) {
+    const level = baseVersion.levels.find((item) => item.id === options.levelId);
+
+    if (!level) {
+      return baseVersion;
+    }
+
+    const originalLevelRooms = resolveLevelRooms(level, baseVersion.standardFloorGroups);
+    const allowedOnLevel = new Set(
+      [...options.allowedRoomIds].filter((roomId) => originalLevelRooms.some((room) => room.id === roomId))
+    );
+    const aiLevelRooms = aiVersion.rooms.filter((room) => allowedOnLevel.has(room.id));
+    const mergedLevelRooms = enforceRegionLock(originalLevelRooms, aiLevelRooms, allowedOnLevel);
+
+    return commitLevelRoomsToVersion(baseVersion, options.levelId, mergedLevelRooms);
+  }
+
+  return {
+    ...aiVersion,
+    rooms: enforceRegionLock(baseVersion.rooms, aiVersion.rooms, options.allowedRoomIds)
+  };
 }
 
 export async function POST(request: Request) {
@@ -28,7 +68,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "userRequest is required for inpaint-plan." }, { status: 400 });
   }
 
-  const fallback = createMockModifiedVersion(body.currentVersion, body.userRequest);
+  const constraintResult = body.structuralConstraints
+    ? StructuralConstraintSetSchema.safeParse(body.structuralConstraints)
+    : undefined;
+
+  if (body.structuralConstraints && !constraintResult?.success) {
+    return NextResponse.json({ error: "Invalid structuralConstraints payload." }, { status: 400 });
+  }
+
+  const structuralConstraints = constraintResult?.success ? constraintResult.data : undefined;
+  const userRequest = enrichUserRequestWithStructuralConstraints(body.userRequest, structuralConstraints, {
+    floorName: body.levelId
+      ? body.currentVersion.levels.find((level) => level.id === body.levelId)?.name
+      : undefined
+  });
+  const fallback = createMockModifiedVersion(body.currentVersion, userRequest);
 
   try {
     const images = normalizeImageInputs([
@@ -44,7 +98,9 @@ export async function POST(request: Request) {
       system: inpaintPlanPrompt,
       input: {
         currentVersion: body.currentVersion,
-        userRequest: body.userRequest,
+        userRequest,
+        structuralConstraints,
+        levelId: body.levelId,
         hasBaseImage: true,
         hasMaskImage: true
       },
@@ -63,32 +119,33 @@ export async function POST(request: Request) {
     }
 
     const allowedIds = new Set(body.allowedRoomIds ?? []);
-    const lockedRooms =
-      allowedIds.size > 0
-        ? enforceRegionLock(body.currentVersion.rooms, data.version.rooms, allowedIds)
-        : data.version.rooms;
-    const openingEnforced = enforceOpeningConstraintsOnVersion({
-      ...data.version,
-      rooms: lockedRooms
+    const mergedVersion = mergeInpaintResult(body.currentVersion, data.version, {
+      allowedRoomIds: allowedIds,
+      levelId: body.levelId
     });
+    const openingEnforced = enforceOpeningConstraintsOnVersion(mergedVersion);
+    const processed = postProcessPlanVersion({
+      ...openingEnforced.version,
+      parentVersionId: data.version.parentVersionId ?? body.currentVersion.id,
+      metadata: {
+        ...openingEnforced.version.metadata,
+        repairs: [...(openingEnforced.version.metadata?.repairs ?? []), ...openingEnforced.repairs]
+      }
+    });
+
+    const structuralViolations = structuralConstraints
+      ? validateStructuralConstraints(processed, body.levelId ?? body.currentVersion.levels[0]?.id ?? "level-01", structuralConstraints)
+      : [];
 
     return NextResponse.json({
       ...data,
-      version: postProcessPlanVersion({
-        ...data.version,
-        rooms: openingEnforced.version.rooms,
-        levels: openingEnforced.version.levels,
-        building: openingEnforced.version.building,
-        parentVersionId: data.version.parentVersionId ?? body.currentVersion.id,
-        metadata: {
-          ...data.version.metadata,
-          repairs: [
-            ...(data.version.metadata?.repairs ?? []),
-            ...openingEnforced.repairs
-          ]
-        }
-      }),
-      openingRepairs: openingEnforced.repairs
+      version: processed,
+      openingRepairs: openingEnforced.repairs,
+      structuralViolations,
+      warning:
+        structuralViolations.length > 0
+          ? `Inpaint applied, but structural constraints remain: ${structuralViolations.join(" ")}`
+          : undefined
     });
   } catch (error) {
     return NextResponse.json({

@@ -1,6 +1,7 @@
 import { normalizePlanVersion } from "@/lib/architecture-model";
 import { addProtrusion, createProtrusionPlacement } from "@/lib/add-protrusion";
 import type { BoundarySpanSelection } from "@/lib/boundary-span-select";
+import { getResolvedLevel } from "@/lib/level-rooms";
 import { resolveBayWindowGfaThresholds } from "@/lib/gfa-exemption";
 import { enforceOpeningConstraintsOnVersion } from "@/lib/opening-constraints";
 import { postProcessPlanVersion } from "@/lib/plan-postprocess";
@@ -27,7 +28,7 @@ export function buildReshapedPreviewVersion(
 ) {
   const level =
     baseVersion.levels.find((item) => item.id === options?.levelId) ?? baseVersion.levels[0];
-  const rooms = level?.rooms.length ? level.rooms : baseVersion.rooms;
+  const rooms = level ? (getResolvedLevel(baseVersion, level.id)?.rooms ?? baseVersion.rooms) : baseVersion.rooms;
   const room = rooms.find((item) => item.id === span.roomId);
 
   if (!room) {
@@ -97,7 +98,7 @@ export function buildProtrusionPreviewVersion(
 ) {
   const level =
     baseVersion.levels.find((item) => item.id === options?.levelId) ?? baseVersion.levels[0];
-  const rooms = level?.rooms.length ? level.rooms : baseVersion.rooms;
+  const rooms = level ? (getResolvedLevel(baseVersion, level.id)?.rooms ?? baseVersion.rooms) : baseVersion.rooms;
   const room = rooms.find((item) => item.id === roomId);
 
   if (!room) {

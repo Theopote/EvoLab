@@ -1,5 +1,6 @@
 import type { ComplianceItem, QuantityResult } from "@/lib/quantity-engine";
 import { createIfcExportPayload } from "@/lib/ifc-export-contract";
+import { getResolvedLevel } from "@/lib/level-rooms";
 import type { PlanVersion, ProjectData, Room } from "@/lib/project-types";
 
 const zoneColors: Record<Room["zone"], string> = {
@@ -47,12 +48,13 @@ function polygonPoints(points: [number, number][]) {
   return points.map(([x, y]) => `${x},${y}`).join(" ");
 }
 
-export function createPlanSvg(version: PlanVersion) {
+export function createPlanSvg(version: PlanVersion, levelId?: string) {
   const padding = 8;
   const width = version.overallBounds.width + padding * 2;
   const height = version.overallBounds.height + padding * 2;
   const viewBox = `${-padding} ${-padding} ${width} ${height}`;
-  const rooms = version.rooms
+  const resolvedLevel = levelId ? getResolvedLevel(version, levelId) : undefined;
+  const rooms = (resolvedLevel?.rooms ?? version.rooms)
     .map((room) => {
       const center = centroid(room);
       return `
@@ -63,7 +65,7 @@ export function createPlanSvg(version: PlanVersion) {
   </g>`;
     })
     .join("\n");
-  const level = version.levels[0];
+  const level = resolvedLevel ?? version.levels.find((item) => item.id === levelId) ?? version.levels[0];
   const walls = level?.walls
     .map(
       (wall) =>

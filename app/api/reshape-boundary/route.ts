@@ -8,6 +8,12 @@ import {
   BoundarySpanSelectionSchema,
   ReshapeBoundaryToolInputSchema
 } from "@/lib/schemas/local-form-edit-schema";
+import { StructuralConstraintSetSchema } from "@/lib/schemas/structural-constraints-schema";
+import {
+  enrichUserRequestWithStructuralConstraints,
+  validateStructuralConstraints,
+  type StructuralConstraintSet
+} from "@/lib/structural-constraints";
 import type { CopilotFinding, PlanVersion } from "@/lib/project-types";
 
 interface ReshapeBoundaryRequest {
@@ -16,6 +22,7 @@ interface ReshapeBoundaryRequest {
   userRequest?: string;
   openingPolicy?: "preserve" | "remove";
   levelId?: string;
+  structuralConstraints?: StructuralConstraintSet;
 }
 
 export async function POST(request: Request) {
@@ -35,8 +42,24 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "userRequest is required." }, { status: 400 });
   }
 
+  const constraintResult = body.structuralConstraints
+    ? StructuralConstraintSetSchema.safeParse(body.structuralConstraints)
+    : undefined;
+
+  if (body.structuralConstraints && !constraintResult?.success) {
+    return NextResponse.json({ error: "Invalid structuralConstraints payload." }, { status: 400 });
+  }
+
+  const structuralConstraints = constraintResult?.success ? constraintResult.data : undefined;
+  const levelId = body.levelId ?? body.currentVersion.levels[0]?.id;
+  const userRequest = enrichUserRequestWithStructuralConstraints(body.userRequest, structuralConstraints, {
+    floorName: levelId
+      ? body.currentVersion.levels.find((level) => level.id === levelId)?.name
+      : undefined
+  });
+
   const span = spanResult.data;
-  let points = mockReshapePoints(span, body.userRequest);
+  let points = mockReshapePoints(span, userRequest);
   let warning: string | undefined;
   let findings: CopilotFinding[] = [];
 
@@ -46,7 +69,8 @@ export async function POST(request: Request) {
         system: reshapeBoundaryPrompt,
         input: {
           span,
-          userRequest: body.userRequest
+          userRequest,
+          structuralConstraints
         },
         toolName: "reshape_boundary",
         toolDescription: "Return replacement boundary points for the selected span.",
@@ -57,7 +81,7 @@ export async function POST(request: Request) {
       findings = data.findings ?? [];
     } catch (error) {
       warning = error instanceof Error ? error.message : "reshape-boundary fell back to local arc approximation.";
-      points = mockReshapePoints(span, body.userRequest);
+      points = mockReshapePoints(span, userRequest);
     }
   } else {
     warning = "ANTHROPIC_API_KEY is not configured. Using local arc approximation.";
@@ -66,13 +90,24 @@ export async function POST(request: Request) {
   try {
     const preview = buildReshapedPreviewVersion(body.currentVersion, span, points, {
       openingPolicy: body.openingPolicy,
-      levelId: body.levelId
+      levelId
     });
+
+    const structuralViolations = structuralConstraints
+      ? validateStructuralConstraints(preview.version, levelId ?? "level-01", structuralConstraints)
+      : [];
+
+    if (structuralViolations.length > 0) {
+      warning = [warning, `Structural constraints remain: ${structuralViolations.join(" ")}`]
+        .filter(Boolean)
+        .join(" ");
+    }
 
     return NextResponse.json({
       points,
       findings,
       warning,
+      structuralViolations,
       affectedOpeningIds: preview.affectedOpeningIds,
       openingRepairs: preview.openingRepairs,
       version: preview.version
