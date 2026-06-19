@@ -66,3 +66,39 @@ export async function requestAnthropicJson<T>({
 
   return JSON.parse(extractJsonText(text)) as T;
 }
+
+export async function requestAnthropicText({
+  system,
+  prompt,
+  maxTokens = 4096
+}: {
+  system: string;
+  prompt: string;
+  maxTokens?: number;
+}): Promise<string> {
+  if (!hasAnthropicKey()) {
+    throw new Error("ANTHROPIC_API_KEY is not configured.");
+  }
+
+  const client = new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY
+  });
+
+  const message = await client.messages.create({
+    model: MODEL,
+    max_tokens: maxTokens,
+    system,
+    messages: [
+      {
+        role: "user",
+        content: prompt
+      }
+    ]
+  });
+
+  return message.content
+    .filter((block) => block.type === "text")
+    .map((block) => block.text)
+    .join("\n")
+    .trim();
+}

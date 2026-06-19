@@ -22,5 +22,5 @@ The server will:
 3. Validate all geometry with Zod, spatial validation, and zoning envelope checks.
 4. Ask for a corrected topology if geometry or envelope validation fails.
 
-Return three distinct options aligned with typologyPack.strategies when possible. Do not include chain-of-thought, markdown, or explanatory text outside tool input.
+Return three distinct options. When assignedStrategy is provided, return exactly versionCount topologies (default 3) and make each option follow its assigned strategy emphasis. When priorSchemeNote is present, the new option must differ in organization logic from prior schemes — not just local reshaping. Do not include chain-of-thought, markdown, or explanatory text outside tool input.
 `;

@@ -18,6 +18,14 @@ import {
 } from "@/lib/schemas/plan-version-schema";
 import { expandPlanVersionToFloors } from "@/lib/multi-floor";
 import {
+  applyStrategyLabel,
+  buildPriorSchemeNote,
+  SCHEME_STRATEGIES,
+  strategyForIndex,
+  type SchemeStrategy
+} from "@/lib/scheme-strategies";
+import { rescoreVersions, scoringInputFromDomain } from "@/lib/rules/resolve-version-scoring";
+import {
   programTopologyErrorSummary,
   programVersionErrorSummary,
   resolveProgramForGeneration,
@@ -116,7 +124,12 @@ function topologyInput(
   body: GeneratePlanRequest,
   constraints: GeneratePlanConstraints,
   program: ReturnType<typeof resolveProgramForGeneration>,
-  correction?: unknown
+  options?: {
+    correction?: unknown;
+    assignedStrategy?: SchemeStrategy;
+    priorSchemeNote?: string;
+    versionCount?: number;
+  }
 ) {
   const pack = resolveTypologyPack(body.projectType);
   return {
@@ -128,6 +141,10 @@ function topologyInput(
     projectType: body.projectType,
     floors: constraints.floors,
     buildableEnvelope: constraints.envelope,
+    schemeStrategies: SCHEME_STRATEGIES,
+    assignedStrategy: options?.assignedStrategy,
+    priorSchemeNote: options?.priorSchemeNote,
+    versionCount: options?.versionCount ?? 3,
     typologyPack: {
       id: pack.id,
       label: pack.label,
@@ -138,7 +155,7 @@ function topologyInput(
       wetRoomTypes: pack.topology.wetRoomTypes,
       guidance: getTopologyPromptContext(pack)
     },
-    correction
+    correction: options?.correction
   };
 }
 
@@ -146,11 +163,16 @@ async function requestTopologyPlan(
   body: GeneratePlanRequest,
   constraints: GeneratePlanConstraints,
   program: ReturnType<typeof resolveProgramForGeneration>,
-  correction?: unknown
+  options?: {
+    correction?: unknown;
+    assignedStrategy?: SchemeStrategy;
+    priorSchemeNote?: string;
+    versionCount?: number;
+  }
 ) {
   return requestAnthropicTool({
     system: generatePlanTopologyPrompt,
-    input: topologyInput(body, constraints, program, correction),
+    input: topologyInput(body, constraints, program, options),
     toolName: "generate_plan_topology",
     toolDescription:
       "Return EvoLab architectural room topology, target areas, and adjacency graph without final geometry.",
@@ -158,6 +180,40 @@ async function requestTopologyPlan(
     maxTokens: 8192,
     maxValidationRetries: 2
   });
+}
+
+async function requestStrategicTopologies(
+  body: GeneratePlanRequest,
+  constraints: GeneratePlanConstraints,
+  program: ReturnType<typeof resolveProgramForGeneration>
+) {
+  const collected: PlanTopologyVersion[] = [];
+
+  for (let index = 0; index < SCHEME_STRATEGIES.length; index += 1) {
+    const strategy = strategyForIndex(index);
+    const priorSchemeNote = buildPriorSchemeNote(collected);
+    const response = await requestTopologyPlan(body, constraints, program, {
+      assignedStrategy: strategy,
+      priorSchemeNote: priorSchemeNote || undefined,
+      versionCount: 1,
+      correction: {
+        instruction: `Return exactly one topology for strategy "${strategy.label}". Emphasis: ${strategy.emphasis}`,
+        priorSchemeNote
+      }
+    });
+
+    const topology = response.versions[0];
+
+    if (topology) {
+      collected.push({
+        ...topology,
+        label: `Scheme ${String.fromCharCode(65 + index)} · ${strategy.label}`,
+        strategy: strategy.id
+      });
+    }
+  }
+
+  return { versions: collected };
 }
 
 async function requestGeometryRefinement(
@@ -322,7 +378,7 @@ export async function runGeneratePlanPipeline(body: GeneratePlanRequest): Promis
     warnings.push(`Functional program active: ${program.spaces.length} spaces, ${program.spaces.filter((space) => space.priority === "required").length} required.`);
   }
 
-  let topologyData = await requestTopologyPlan(body, constraints, program);
+  let topologyData = await requestStrategicTopologies(body, constraints, program);
   meta.phases.topology = true;
 
   let versions = topologiesToPlanVersions(topologyData.versions, layoutOptions);
@@ -340,20 +396,23 @@ export async function runGeneratePlanPipeline(body: GeneratePlanRequest): Promis
     programGeometryErrors.length > 0
   ) {
     topologyData = await requestTopologyPlan(body, constraints, program, {
-      reason: "Previous topology produced geometry outside spatial, zoning, or program constraints.",
-      errors: [...geometryErrors, ...envelopeErrors, ...programTopologyErrors, ...programGeometryErrors],
-      instruction: constraints.envelope
-        ? "Reduce target areas and room count to fit inside buildableEnvelope footprint and floor-area cap."
-        : "Return corrected topology only. Honor program.required spaces, area bounds, and must-adjacency rules.",
-      programRequirements: program.spaces
-        .filter((space) => space.priority === "required")
-        .map((space) => ({
-          name: space.name,
-          roomType: space.roomType,
-          minAreaSqm: space.minAreaSqm,
-          maxAreaSqm: space.maxAreaSqm,
-          targetAreaSqm: space.targetAreaSqm
-        }))
+      correction: {
+        reason: "Previous topology produced geometry outside spatial, zoning, or program constraints.",
+        errors: [...geometryErrors, ...envelopeErrors, ...programTopologyErrors, ...programGeometryErrors],
+        instruction: constraints.envelope
+          ? "Reduce target areas and room count to fit inside buildableEnvelope footprint and floor-area cap."
+          : "Return corrected topology only. Honor program.required spaces, area bounds, and must-adjacency rules.",
+        programRequirements: program.spaces
+          .filter((space) => space.priority === "required")
+          .map((space) => ({
+            name: space.name,
+            roomType: space.roomType,
+            minAreaSqm: space.minAreaSqm,
+            maxAreaSqm: space.maxAreaSqm,
+            targetAreaSqm: space.targetAreaSqm
+          }))
+      },
+      versionCount: topologyData.versions.length
     });
     versions = topologiesToPlanVersions(topologyData.versions, layoutOptions);
     geometryErrors = versionErrorSummary(versions);
@@ -420,32 +479,45 @@ export async function runGeneratePlanPipeline(body: GeneratePlanRequest): Promis
     return { versions: [], meta };
   }
 
-  return {
-    versions: finalValidation.versions.map((version, index) => {
+  const scoringInput = {
+    program,
+    projectType: body.projectType,
+    orientationDeg: resolveOrientationDeg(body)
+  };
+
+  const expanded = finalValidation.versions.map((version, index) => {
       const pair = pairs.find((item) => item.version.id === version.id) ?? pairs[index];
       const topologyGraph = pair
         ? topologyGraphFromTopology(pair.topology)
         : version.metadata?.topologyGraph;
 
       const programValidation = validateVersionAgainstProgram(version, program);
+      const strategy = strategyForIndex(index);
 
-      const stamped = {
-        ...version,
-        metadata: {
-          ...version.metadata,
-          topologyGraph,
-          zoningApplied: Boolean(constraints.envelope),
-          envelopeCompliant: true,
-          programCompliant: programValidation.valid,
-          programValidationWarnings: programValidation.issues
-            .filter((issue) => issue.severity === "warning")
-            .map((issue) => issue.message),
-          pipelinePhases: meta.phases
-        }
-      };
+      const stamped = applyStrategyLabel(
+        {
+          ...version,
+          metadata: {
+            ...version.metadata,
+            topologyGraph,
+            zoningApplied: Boolean(constraints.envelope),
+            envelopeCompliant: true,
+            programCompliant: programValidation.valid,
+            programValidationWarnings: programValidation.issues
+              .filter((issue) => issue.severity === "warning")
+              .map((issue) => issue.message),
+            pipelinePhases: meta.phases
+          }
+        },
+        strategy,
+        String.fromCharCode(65 + index)
+      );
 
       return expandPlanVersionToFloors(stamped, constraints.floors);
-    }),
+    });
+
+  return {
+    versions: rescoreVersions(expanded, scoringInput),
     meta
   };
 }
