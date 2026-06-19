@@ -7,6 +7,7 @@ import { ImportPreviewPanel } from "@/components/workflow/import/ImportPreviewPa
 import { readCopilotUpload, type CopilotPinnedFile } from "@/lib/copilot-upload";
 import { analyzePlanDrawing } from "@/lib/plan-import/analyze-plan-client";
 import type { AnalyzePlanClientResult } from "@/lib/plan-import/analyze-plan-client";
+import { resolveImportReferencePreview } from "@/lib/import-reference-preview-resolver";
 import type { PlanImportSource } from "@/lib/plan-import/types";
 import type { PlanVersion } from "@/lib/project-types";
 
@@ -51,6 +52,7 @@ export interface ImportWizardResult {
   version: PlanVersion;
   analysis: AnalyzePlanClientResult;
   file: CopilotPinnedFile;
+  referencePreviewUrl?: string;
   openTrace: boolean;
 }
 
@@ -67,6 +69,7 @@ export function ImportWizard({ onImportComplete, onContinueToTrace }: ImportWiza
   const [analysis, setAnalysis] = useState<AnalyzePlanClientResult | undefined>();
   const [recognizedVersion, setRecognizedVersion] = useState<PlanVersion | undefined>();
   const [draftVersion, setDraftVersion] = useState<PlanVersion | undefined>();
+  const [referencePreviewUrl, setReferencePreviewUrl] = useState<string | undefined>();
   const [error, setError] = useState<string | undefined>();
   const [isDragging, setIsDragging] = useState(false);
 
@@ -86,6 +89,7 @@ export function ImportWizard({ onImportComplete, onContinueToTrace }: ImportWiza
       setAnalysis(result);
       setRecognizedVersion(result.version);
       setDraftVersion(result.version);
+      setReferencePreviewUrl(await resolveImportReferencePreview(file, result));
       setStep("review");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Import failed.");
@@ -122,6 +126,7 @@ export function ImportWizard({ onImportComplete, onContinueToTrace }: ImportWiza
     setAnalysis(undefined);
     setRecognizedVersion(undefined);
     setDraftVersion(undefined);
+    setReferencePreviewUrl(undefined);
     setError(undefined);
   }
 
@@ -137,6 +142,7 @@ export function ImportWizard({ onImportComplete, onContinueToTrace }: ImportWiza
         version: draftVersion
       },
       file: pinnedFile,
+      referencePreviewUrl,
       openTrace
     });
 
@@ -317,6 +323,7 @@ export function ImportWizard({ onImportComplete, onContinueToTrace }: ImportWiza
                 setAnalysis(undefined);
                 setRecognizedVersion(undefined);
                 setDraftVersion(undefined);
+                setReferencePreviewUrl(undefined);
                 setStep(pinnedFile.sourceType === "image" ? "correct" : "upload");
               }}
             >

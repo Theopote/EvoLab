@@ -72,3 +72,7 @@ export function encodeCanvasToDataUrl(
 export function quadToPixelCoordinates(quad: PerspectiveQuad, width: number, height: number): PerspectiveQuad {
   return quad.map(([x, y]) => [x * width, y * height]) as PerspectiveQuad;
 }
+
+export function clampPerspectiveQuad(quad: PerspectiveQuad): PerspectiveQuad {
+  return quad.map(([x, y]) => [Math.min(1, Math.max(0, x)), Math.min(1, Math.max(0, y))]) as PerspectiveQuad;
+}

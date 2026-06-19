@@ -19,6 +19,7 @@ import {
   removeImportReviewRoom,
   resolveImportReviewRooms
 } from "@/lib/import-review-utils";
+import { buildVersionWallPreviewDataUrl } from "@/lib/import-reference-preview";
 import type { PlanVersion } from "@/lib/project-types";
 import type { PlanImportSource } from "@/lib/plan-import/types";
 
@@ -64,6 +65,13 @@ export function ImportPreviewPanel({
   const [referenceOpacity, setReferenceOpacity] = useState(0.45);
 
   const rooms = resolveImportReviewRooms(draftVersion);
+  const effectiveReferencePreviewUrl = useMemo(() => {
+    if (sourceType === "dxf") {
+      return buildVersionWallPreviewDataUrl(draftVersion);
+    }
+
+    return referencePreviewUrl;
+  }, [draftVersion, referencePreviewUrl, sourceType]);
   const wallCount = draftVersion.levels.reduce((total, level) => total + level.walls.length, 0);
   const openingCount = draftVersion.levels.reduce((total, level) => total + level.openings.length, 0);
   const confidencePercent = Math.round(confidence * 100);
@@ -110,10 +118,10 @@ export function ImportPreviewPanel({
           className="min-h-[420px]"
           mode={mode}
           referenceImage={
-            referencePreviewUrl
+            effectiveReferencePreviewUrl
               ? {
                   opacity: referenceOpacity,
-                  previewUrl: referencePreviewUrl
+                  previewUrl: effectiveReferencePreviewUrl
                 }
               : undefined
           }
@@ -155,7 +163,7 @@ export function ImportPreviewPanel({
               </span>
             </button>
           </div>
-          {referencePreviewUrl ? (
+          {effectiveReferencePreviewUrl ? (
             <label className="mt-4 flex items-center gap-2 text-xs text-muted">
               <span>Reference</span>
               <input

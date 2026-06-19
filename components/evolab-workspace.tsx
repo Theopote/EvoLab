@@ -535,7 +535,7 @@ export function EvoLabWorkspace() {
       versionId: enrichedVersion.id,
       fileName: result.file.fileName,
       sourceType: result.analysis.sourceType,
-      previewUrl: result.file.previewUrl,
+      previewUrl: result.referencePreviewUrl ?? result.file.previewUrl,
       opacity: result.file.sourceType === "image" ? 0.45 : 0.35
     });
 
