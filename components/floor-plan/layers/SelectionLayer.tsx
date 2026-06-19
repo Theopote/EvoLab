@@ -3,6 +3,7 @@
 import { useRef } from "react";
 import type { OpeningElement, Point, Room, Wall } from "@/lib/project-types";
 import { clientToSvgPoint, openingSegment, polygonPoints, snapPlanCoordinate } from "@/components/floor-plan/floor-plan-utils";
+import { openingCenterFromDragPoint } from "@/lib/opening-wall-utils";
 
 const VERTEX_R = 0.55;
 const MIDPOINT_R = 0.38;
@@ -86,6 +87,70 @@ function ControlPoints({
   );
 }
 
+function OpeningPositionHandle({
+  opening,
+  wall,
+  svgRef,
+  enabled,
+  onCenterChange
+}: {
+  opening: OpeningElement;
+  wall: Wall;
+  svgRef?: React.RefObject<SVGSVGElement | null>;
+  enabled: boolean;
+  onCenterChange?: (openingId: string, center: Point) => void;
+}) {
+  const draggingRef = useRef(false);
+
+  function handlePointerMove(event: React.PointerEvent<SVGCircleElement>) {
+    const svgElement = svgRef?.current;
+
+    if (!draggingRef.current || !svgElement || !onCenterChange) {
+      return;
+    }
+
+    const [x, y] = clientToSvgPoint(svgElement, event.clientX, event.clientY);
+    const nextCenter = openingCenterFromDragPoint(wall, opening.width, [snapPlanCoordinate(x), snapPlanCoordinate(y)]);
+
+    if (!nextCenter) {
+      return;
+    }
+
+    onCenterChange(opening.id, nextCenter);
+  }
+
+  function endDrag() {
+    draggingRef.current = false;
+  }
+
+  return (
+    <circle
+      cx={opening.center[0]}
+      cy={opening.center[1]}
+      r={0.55}
+      fill="#fde68a"
+      stroke="#f59e0b"
+      strokeWidth="0.16"
+      style={{ cursor: enabled ? "grab" : "default" }}
+      onPointerDown={(event) => {
+        if (!enabled || !onCenterChange) {
+          return;
+        }
+
+        draggingRef.current = true;
+        event.currentTarget.setPointerCapture(event.pointerId);
+        event.stopPropagation();
+      }}
+      onPointerMove={handlePointerMove}
+      onPointerUp={(event) => {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+        endDrag();
+      }}
+      onPointerCancel={endDrag}
+    />
+  );
+}
+
 interface SelectionLayerProps {
   rooms: Room[];
   walls: Wall[];
@@ -94,8 +159,10 @@ interface SelectionLayerProps {
   selectedWallId?: string;
   selectedOpeningId?: string;
   traceEnabled?: boolean;
+  openingEditEnabled?: boolean;
   svgRef?: React.RefObject<SVGSVGElement | null>;
   onRoomPolygonChange?: (roomId: string, polygon: Point[]) => void;
+  onOpeningCenterChange?: (openingId: string, center: Point) => void;
 }
 
 export function SelectionLayer({
@@ -106,8 +173,10 @@ export function SelectionLayer({
   selectedWallId,
   selectedOpeningId,
   traceEnabled = false,
+  openingEditEnabled = false,
   svgRef,
-  onRoomPolygonChange
+  onRoomPolygonChange,
+  onOpeningCenterChange
 }: SelectionLayerProps) {
   const selectedRoom = rooms.find((room) => room.id === selectedRoomId);
   const selectedWall = walls.find((wall) => wall.id === selectedWallId);
@@ -162,15 +231,26 @@ export function SelectionLayer({
       ) : null}
 
       {openingSelection ? (
-        <line
-          x1={openingSelection.start[0]}
-          y1={openingSelection.start[1]}
-          x2={openingSelection.end[0]}
-          y2={openingSelection.end[1]}
-          stroke="#fde68a"
-          strokeWidth="0.42"
-          strokeLinecap="round"
-        />
+        <>
+          <line
+            x1={openingSelection.start[0]}
+            y1={openingSelection.start[1]}
+            x2={openingSelection.end[0]}
+            y2={openingSelection.end[1]}
+            stroke="#fde68a"
+            strokeWidth="0.42"
+            strokeLinecap="round"
+          />
+          {selectedOpening && selectedOpeningWall ? (
+            <OpeningPositionHandle
+              enabled={openingEditEnabled}
+              opening={selectedOpening}
+              svgRef={svgRef}
+              wall={selectedOpeningWall}
+              onCenterChange={onOpeningCenterChange}
+            />
+          ) : null}
+        </>
       ) : null}
     </g>
   );

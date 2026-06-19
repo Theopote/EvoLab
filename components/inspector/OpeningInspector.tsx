@@ -8,11 +8,14 @@ import {
 } from "@/components/floor-plan/floor-plan-utils";
 import {
   openingCenterFromPosition,
-  openingFitsOnWall,
+  openingHeightRange,
   openingPositionLimits,
-  openingPositionOnWall
+  openingPositionOnWall,
+  openingSillHeightRange,
+  validateOpeningDraft
 } from "@/lib/opening-wall-utils";
 import { useEvoProject } from "@/lib/project-store";
+import type { Point } from "@/lib/project-types";
 
 export function OpeningInspector() {
   const { selectedOpening, activeLevel, lockedElementIds, updateOpening } = useEvoProject(
@@ -31,7 +34,9 @@ export function OpeningInspector() {
   const [copied, setCopied] = useState<string | null>(null);
   const [draft, setDraft] = useState({
     width: "0",
-    position: "0.5"
+    position: "0.5",
+    height: "2.1",
+    sillHeight: "0"
   });
 
   const wall = selectedOpening && activeLevel ? findOpeningWall(selectedOpening, activeLevel.walls) : undefined;
@@ -41,7 +46,7 @@ export function OpeningInspector() {
       (selectedOpening!.roomIds ?? []).some((roomId) => lockedElementIds.includes(roomId)));
 
   useEffect(() => {
-    if (!selectedOpening || !wall) {
+    if (!selectedOpening) {
       return;
     }
 
@@ -52,7 +57,9 @@ export function OpeningInspector() {
 
     setDraft({
       width: selectedOpening.width.toFixed(2),
-      position: openingPositionOnWall(selectedOpening, wall).toFixed(3)
+      position: wall ? openingPositionOnWall(selectedOpening, wall).toFixed(3) : "0.5",
+      height: selectedOpening.height.toFixed(2),
+      sillHeight: (selectedOpening.sillHeight ?? 0).toFixed(2)
     });
     lastCommittedRef.current = "";
     lastCommittedOpeningRef.current = selectedOpening.id;
@@ -72,52 +79,93 @@ export function OpeningInspector() {
 
   const parsedWidth = Number(draft.width);
   const parsedPosition = Number(draft.position);
+  const parsedHeight = Number(draft.height);
+  const parsedSillHeight = Number(draft.sillHeight);
   const wallLengthMeters = wall ? wallLength(wall) : 0;
+  const wallHeight = wall?.height ?? activeLevel?.height ?? 3;
   const positionLimits = wall ? openingPositionLimits(wall, parsedWidth) : undefined;
+  const heightRange = selectedOpening ? openingHeightRange(selectedOpening.type, wallHeight) : undefined;
+  const sillRange =
+    selectedOpening && heightRange
+      ? openingSillHeightRange(selectedOpening.type, wallHeight, parsedHeight)
+      : undefined;
+  const errors = selectedOpening
+    ? validateOpeningDraft({
+        openingType: selectedOpening.type,
+        wall,
+        wallHeight,
+        width: parsedWidth,
+        position: parsedPosition,
+        height: parsedHeight,
+        sillHeight: parsedSillHeight
+      })
+    : {};
 
-  const errors = {
-    width:
-      Number.isFinite(parsedWidth) && parsedWidth >= 0.4 && parsedWidth <= 6
-        ? wall && parsedWidth > wallLengthMeters - 0.1
-          ? `width must fit on wall (${wallLengthMeters.toFixed(2)} m)`
-          : undefined
-        : "width must be between 0.4 and 6 m",
-    position:
-      Number.isFinite(parsedPosition) && parsedPosition >= 0.05 && parsedPosition <= 0.95
-        ? wall && !openingFitsOnWall(wall, parsedWidth, parsedPosition)
-          ? positionLimits
-            ? `position must be ${positionLimits.min.toFixed(2)}–${positionLimits.max.toFixed(2)} for this width`
-            : "opening does not fit on wall"
-          : undefined
-        : "position must be between 0.05 and 0.95"
-  };
+  const hasErrors = Boolean(errors.width || errors.position || errors.height || errors.sillHeight);
 
-  const hasErrors = Boolean(errors.width || errors.position || !wall);
+  const committedPosition = wall && selectedOpening ? openingPositionOnWall(selectedOpening, wall).toFixed(3) : "";
+  const committedSillHeight = (selectedOpening?.sillHeight ?? 0).toFixed(2);
 
-  const hasChanges =
-    Boolean(selectedOpening && wall) &&
-    (draft.width !== selectedOpening!.width.toFixed(2) ||
-      draft.position !== openingPositionOnWall(selectedOpening!, wall!).toFixed(3));
+  const hasChanges = Boolean(
+    selectedOpening &&
+      (draft.width !== selectedOpening.width.toFixed(2) ||
+        (wall ? draft.position !== committedPosition : false) ||
+        draft.height !== selectedOpening.height.toFixed(2) ||
+        draft.sillHeight !== committedSillHeight)
+  );
 
   const dirty = {
     width: draft.width !== (selectedOpening?.width.toFixed(2) ?? ""),
-    position:
-      Boolean(selectedOpening && wall) &&
-      draft.position !== openingPositionOnWall(selectedOpening!, wall!).toFixed(3)
+    position: Boolean(selectedOpening && wall) && draft.position !== committedPosition,
+    height: draft.height !== (selectedOpening?.height.toFixed(2) ?? ""),
+    sillHeight: draft.sillHeight !== committedSillHeight
   };
 
   const canSave = hasChanges && !hasErrors && !isLocked;
 
   const patch = useMemo(() => {
-    if (!wall) {
+    if (!selectedOpening) {
       return null;
     }
 
-    return {
-      width: parsedWidth,
-      center: openingCenterFromPosition(wall, parsedPosition)
-    };
-  }, [parsedPosition, parsedWidth, wall]);
+    const next: {
+      width?: number;
+      center?: Point;
+      height?: number;
+      sillHeight?: number;
+    } = {};
+
+    if (draft.width !== selectedOpening.width.toFixed(2)) {
+      next.width = parsedWidth;
+    }
+
+    if (wall && draft.position !== committedPosition) {
+      next.center = openingCenterFromPosition(wall, parsedPosition);
+    }
+
+    if (draft.height !== selectedOpening.height.toFixed(2)) {
+      next.height = parsedHeight;
+    }
+
+    if (draft.sillHeight !== committedSillHeight) {
+      next.sillHeight = selectedOpening.type === "door" ? 0 : parsedSillHeight;
+    }
+
+    return Object.keys(next).length > 0 ? next : null;
+  }, [
+    committedPosition,
+    committedSillHeight,
+    draft.height,
+    draft.position,
+    draft.sillHeight,
+    draft.width,
+    parsedHeight,
+    parsedPosition,
+    parsedSillHeight,
+    parsedWidth,
+    selectedOpening,
+    wall
+  ]);
 
   function setIdleDelayed() {
     if (idleRef.current) {
@@ -207,13 +255,11 @@ export function OpeningInspector() {
   }
 
   function handleReset() {
-    if (!wall) {
-      return;
-    }
-
     setDraft({
       width: opening.width.toFixed(2),
-      position: openingPositionOnWall(opening, wall).toFixed(3)
+      position: wall ? openingPositionOnWall(opening, wall).toFixed(3) : "0.5",
+      height: opening.height.toFixed(2),
+      sillHeight: (opening.sillHeight ?? 0).toFixed(2)
     });
   }
 
@@ -311,8 +357,36 @@ export function OpeningInspector() {
           onBlur={handleAutoSaveOnBlur}
         />
         {errors.position ? <FieldError message={errors.position} /> : null}
-        <ReadOnlyField label="height" value={`${opening.height.toFixed(2)} m`} />
-        <ReadOnlyField label="sillHeight" value={`${(opening.sillHeight ?? 0).toFixed(2)} m`} />
+        <NumberField
+          label="height (m)"
+          value={draft.height}
+          step={0.05}
+          min={heightRange?.min ?? 0.4}
+          max={heightRange?.max ?? 3.6}
+          dirty={dirty.height}
+          disabled={isLocked}
+          onChange={(value) => setDraft((current) => ({ ...current, height: value }))}
+          onBlur={handleAutoSaveOnBlur}
+        />
+        {errors.height ? <FieldError message={errors.height} /> : null}
+        {opening.type === "door" ? (
+          <ReadOnlyField label="sillHeight (m)" value="0 — not used for doors" />
+        ) : (
+          <>
+            <NumberField
+              label="sillHeight (m)"
+              value={draft.sillHeight}
+              step={0.05}
+              min={sillRange?.min ?? 0}
+              max={sillRange?.max ?? 2.5}
+              dirty={dirty.sillHeight}
+              disabled={isLocked}
+              onChange={(value) => setDraft((current) => ({ ...current, sillHeight: value }))}
+              onBlur={handleAutoSaveOnBlur}
+            />
+            {errors.sillHeight ? <FieldError message={errors.sillHeight} /> : null}
+          </>
+        )}
       </div>
     </section>
   );

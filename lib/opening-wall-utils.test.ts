@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  openingCenterFromDragPoint,
   openingCenterFromPosition,
   openingFitsOnWall,
   openingPositionLimits,
-  openingPositionOnWall
+  openingPositionOnWall,
+  validateOpeningDraft
 } from "@/lib/opening-wall-utils";
 import type { OpeningElement, Wall } from "@/lib/project-types";
 
@@ -47,5 +49,39 @@ describe("opening wall parameters", () => {
   it("accepts centered openings that fit", () => {
     expect(openingFitsOnWall(wall, 1.2, 0.5)).toBe(true);
     expect(openingFitsOnWall(wall, 1.2, 0.02)).toBe(false);
+  });
+
+  it("projects drag points onto the wall with width limits", () => {
+    const clamped = openingCenterFromDragPoint(wall, 1.2, [12, 4]);
+
+    expect(clamped?.[0]).toBeCloseTo(8.9, 3);
+    expect(clamped?.[1]).toBeCloseTo(0, 3);
+    expect(openingCenterFromDragPoint(wall, 1.2, [5, 0])).toEqual([5, 0]);
+  });
+
+  it("validates vertical parameters", () => {
+    expect(
+      validateOpeningDraft({
+        openingType: "window",
+        wall,
+        wallHeight: 3,
+        width: 1.2,
+        position: 0.5,
+        height: 1.5,
+        sillHeight: 0.9
+      })
+    ).toEqual({});
+
+    expect(
+      validateOpeningDraft({
+        openingType: "door",
+        wall,
+        wallHeight: 3,
+        width: 1.2,
+        position: 0.5,
+        height: 2.1,
+        sillHeight: 0.5
+      }).sillHeight
+    ).toBe("doors use sill height 0");
   });
 });

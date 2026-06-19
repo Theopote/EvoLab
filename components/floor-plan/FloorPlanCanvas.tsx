@@ -46,7 +46,9 @@ export function FloorPlanCanvas({
     selectWall,
     selectOpening,
     clearSelection,
-    updateRoomGeometry
+    updateRoomGeometry,
+    updateOpening,
+    lockedElementIds
   } = useEvoProject(
     useShallow((state) => ({
       selectedRoomId: state.selectedRoomId,
@@ -57,7 +59,9 @@ export function FloorPlanCanvas({
       selectWall: state.selectWall,
       selectOpening: state.selectOpening,
       clearSelection: state.clearSelection,
-      updateRoomGeometry: state.updateRoomGeometry
+      updateRoomGeometry: state.updateRoomGeometry,
+      updateOpening: state.updateOpening,
+      lockedElementIds: state.project.domain.lockedElementIds
     }))
   );
   const selectedRoomId = interactive ? selectedRoomIdProp ?? roomSelectionFromStore : selectedRoomIdProp;
@@ -86,6 +90,16 @@ export function FloorPlanCanvas({
     : undefined;
   const traceEnabled = interactive && activeTool === "trace";
   const inpaintEnabled = interactive && activeTool === "inpaint";
+  const openingEditEnabled =
+    interactive &&
+    activeTool === "select" &&
+    !inpaintEnabled &&
+    Boolean(selectedOpeningId) &&
+    Boolean(
+      selectedOpening &&
+        !lockedElementIds.includes(selectedOpening.id) &&
+        !(selectedOpening.roomIds ?? []).some((roomId) => lockedElementIds.includes(roomId))
+    );
   const hud = selectedRoom
     ? {
         type: "ROOM",
@@ -152,8 +166,10 @@ export function FloorPlanCanvas({
             selectedWallId={selectedWallId}
             selectedOpeningId={selectedOpeningId}
             traceEnabled={traceEnabled}
+            openingEditEnabled={openingEditEnabled}
             svgRef={svgRef}
             onRoomPolygonChange={(roomId, polygon: Point[]) => updateRoomGeometry(roomId, { polygon })}
+            onOpeningCenterChange={(openingId, center) => updateOpening(openingId, { center })}
           />
           <InpaintMaskLayer svgRef={svgRef} version={version} enabled={inpaintEnabled} />
         </svg>
@@ -161,6 +177,7 @@ export function FloorPlanCanvas({
           1 grid = 1 m / {version.label}
           {traceEnabled ? " / Trace vertices" : ""}
           {inpaintEnabled ? " / Inpaint mask" : ""}
+          {openingEditEnabled ? " / Drag opening along wall" : ""}
         </div>
         {interactive && hud ? (
           <div className="absolute bottom-3 right-3 rounded border border-accent/35 bg-[#081018]/95 px-3 py-2 text-xs">
