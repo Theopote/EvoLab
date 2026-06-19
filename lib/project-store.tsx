@@ -1043,6 +1043,10 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
           return;
         }
 
+        if (isElementLocked(state, openingId)) {
+          return;
+        }
+
         const normalized = normalizePlanVersion(state.activeVersion);
         const level = getLevel(normalized, state.activeLevelId);
 
