@@ -474,7 +474,9 @@ export function normalizeProjectDomain(domain?: ProjectDomain, input?: ProjectDo
       schedules: domain.schedules ?? [],
       changeSets: domain.changeSets ?? [],
       copilotProposals: domain.copilotProposals ?? [],
-      lockedElementIds: domain.lockedElementIds ?? []
+      lockedElementIds: domain.lockedElementIds ?? [],
+      designDecisions: domain.designDecisions ?? [],
+      copilotInsightQueue: domain.copilotInsightQueue
     };
   }
 
