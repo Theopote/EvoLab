@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { FileImage, FileSpreadsheet, FileType2, Loader2, Upload, Wand2 } from "lucide-react";
+import { ImportImageCorrectionPanel } from "@/components/workflow/import/ImportImageCorrectionPanel";
 import { ImportPreviewPanel } from "@/components/workflow/import/ImportPreviewPanel";
 import { readCopilotUpload, type CopilotPinnedFile } from "@/lib/copilot-upload";
 import { analyzePlanDrawing } from "@/lib/plan-import/analyze-plan-client";
@@ -9,7 +10,7 @@ import type { AnalyzePlanClientResult } from "@/lib/plan-import/analyze-plan-cli
 import type { PlanImportSource } from "@/lib/plan-import/types";
 import type { PlanVersion } from "@/lib/project-types";
 
-type ImportWizardStep = "home" | "upload" | "analyzing" | "review";
+type ImportWizardStep = "home" | "upload" | "correct" | "analyzing" | "review";
 type ImportKind = PlanImportSource;
 
 const importKinds: Array<{
@@ -26,7 +27,7 @@ const importKinds: Array<{
     description: "Photos, scans, or raster exports. Vision recognition with optional trace correction.",
     icon: FileImage,
     accept: ".png,.jpg,.jpeg,.gif,.webp,image/*",
-    pipeline: "Upload → recognize → trace refine"
+    pipeline: "Upload → correct → recognize → review"
   },
   {
     id: "pdf",
@@ -64,27 +65,47 @@ export function ImportWizard({ onImportComplete, onContinueToTrace }: ImportWiza
   const [selectedKind, setSelectedKind] = useState<ImportKind>("image");
   const [pinnedFile, setPinnedFile] = useState<CopilotPinnedFile | undefined>();
   const [analysis, setAnalysis] = useState<AnalyzePlanClientResult | undefined>();
+  const [recognizedVersion, setRecognizedVersion] = useState<PlanVersion | undefined>();
+  const [draftVersion, setDraftVersion] = useState<PlanVersion | undefined>();
   const [error, setError] = useState<string | undefined>();
   const [isDragging, setIsDragging] = useState(false);
 
   const selectedKindConfig = importKinds.find((kind) => kind.id === selectedKind) ?? importKinds[0];
 
-  async function processFile(file: File) {
+  async function recognizePinnedFile(file: CopilotPinnedFile) {
     setError(undefined);
     setStep("analyzing");
+
+    try {
+      const result = await analyzePlanDrawing({
+        fileBase64: file.base64,
+        fileName: file.fileName,
+        sourceType: file.sourceType
+      });
+
+      setAnalysis(result);
+      setRecognizedVersion(result.version);
+      setDraftVersion(result.version);
+      setStep("review");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Import failed.");
+      setStep(file.sourceType === "image" ? "correct" : "upload");
+    }
+  }
+
+  async function processFile(file: File) {
+    setError(undefined);
 
     try {
       const pinned = await readCopilotUpload(file);
       setPinnedFile(pinned);
 
-      const result = await analyzePlanDrawing({
-        fileBase64: pinned.base64,
-        fileName: pinned.fileName,
-        sourceType: pinned.sourceType
-      });
+      if (pinned.sourceType === "image") {
+        setStep("correct");
+        return;
+      }
 
-      setAnalysis(result);
-      setStep("review");
+      await recognizePinnedFile(pinned);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Import failed.");
       setStep("upload");
@@ -99,17 +120,22 @@ export function ImportWizard({ onImportComplete, onContinueToTrace }: ImportWiza
     setStep("home");
     setPinnedFile(undefined);
     setAnalysis(undefined);
+    setRecognizedVersion(undefined);
+    setDraftVersion(undefined);
     setError(undefined);
   }
 
   function confirmImport(openTrace: boolean) {
-    if (!pinnedFile || !analysis) {
+    if (!pinnedFile || !analysis || !draftVersion) {
       return;
     }
 
     onImportComplete({
-      version: analysis.version,
-      analysis,
+      version: draftVersion,
+      analysis: {
+        ...analysis,
+        version: draftVersion
+      },
       file: pinnedFile,
       openTrace
     });
@@ -122,10 +148,10 @@ export function ImportWizard({ onImportComplete, onContinueToTrace }: ImportWiza
       <header className="mb-4">
         <h1 className="text-lg font-semibold text-white">Import & Trace</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted">
-          Bring existing drawings into EvoLab as editable scheme versions. Choose a source type, review recognition
-          results, then refine boundaries in trace mode.
+          Bring existing drawings into EvoLab as editable scheme versions. Correct scans, review recognition, refine
+          geometry, then create a traceable scheme version.
         </p>
-        <WizardSteps step={step} />
+        <WizardSteps selectedKind={selectedKind} step={step} />
       </header>
 
       <input
@@ -243,6 +269,17 @@ export function ImportWizard({ onImportComplete, onContinueToTrace }: ImportWiza
         </div>
       ) : null}
 
+      {step === "correct" && pinnedFile ? (
+        <ImportImageCorrectionPanel
+          file={pinnedFile}
+          onBack={() => setStep("upload")}
+          onContinue={(file) => {
+            setPinnedFile(file);
+            void recognizePinnedFile(file);
+          }}
+        />
+      ) : null}
+
       {step === "analyzing" ? (
         <div className="grid flex-1 place-items-center rounded border border-line bg-panel/60 p-10 text-center">
           <Loader2 className="h-8 w-8 animate-spin text-accent" />
@@ -257,16 +294,19 @@ export function ImportWizard({ onImportComplete, onContinueToTrace }: ImportWiza
         </div>
       ) : null}
 
-      {step === "review" && analysis && pinnedFile ? (
+      {step === "review" && analysis && pinnedFile && draftVersion && recognizedVersion ? (
         <div className="flex min-h-0 flex-1 flex-col gap-4">
           <ImportPreviewPanel
             confidence={analysis.confidence}
+            draftVersion={draftVersion}
             fallback={analysis.fallback}
             fileName={pinnedFile.fileName}
             importPath={analysis.importPath}
+            recognizedVersion={recognizedVersion}
+            referencePreviewUrl={pinnedFile.sourceType === "image" ? pinnedFile.previewUrl : undefined}
             sourceType={analysis.sourceType}
-            version={analysis.version}
             warnings={analysis.warnings}
+            onDraftVersionChange={setDraftVersion}
           />
 
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
@@ -275,7 +315,9 @@ export function ImportWizard({ onImportComplete, onContinueToTrace }: ImportWiza
               type="button"
               onClick={() => {
                 setAnalysis(undefined);
-                setStep("upload");
+                setRecognizedVersion(undefined);
+                setDraftVersion(undefined);
+                setStep(pinnedFile.sourceType === "image" ? "correct" : "upload");
               }}
             >
               Upload another file
@@ -304,10 +346,11 @@ export function ImportWizard({ onImportComplete, onContinueToTrace }: ImportWiza
   );
 }
 
-function WizardSteps({ step }: { step: ImportWizardStep }) {
+function WizardSteps({ step, selectedKind }: { step: ImportWizardStep; selectedKind: ImportKind }) {
   const steps = [
     { id: "home", label: "Choose source" },
     { id: "upload", label: "Upload" },
+    { id: "correct", label: "Correct" },
     { id: "analyzing", label: "Recognize" },
     { id: "review", label: "Review" }
   ] as const;
@@ -319,15 +362,18 @@ function WizardSteps({ step }: { step: ImportWizardStep }) {
       {steps.map((entry, index) => {
         const isActive = index === activeIndex;
         const isComplete = index < activeIndex;
+        const isSkipped = entry.id === "correct" && selectedKind !== "image";
 
         return (
           <li
             className={`rounded border px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] ${
               isActive
                 ? "border-accent/50 bg-accent/10 text-accent"
-                : isComplete
-                  ? "border-line text-slate-200"
-                  : "border-line/70 text-muted"
+                : isSkipped
+                  ? "border-line/40 text-muted/60 line-through"
+                  : isComplete
+                    ? "border-line text-slate-200"
+                    : "border-line/70 text-muted"
             }`}
             key={entry.id}
           >
