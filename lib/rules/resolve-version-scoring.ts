@@ -11,6 +11,7 @@ export interface VersionScoringInput {
   codeContext?: CodeContext;
   program?: ProgramModel;
   projectType?: string;
+  scoringConfig?: ProjectDomain["scoringConfig"];
   orientationDeg?: number;
   rulePack?: RulePack;
   programGoals?: ProgramGoals;
@@ -23,6 +24,7 @@ export function scoringInputFromDomain(domain?: ProjectDomain, projectType?: str
     codeContext: resolved.codeContext,
     program: domain?.program,
     projectType: projectType ?? domain?.program.projectType,
+    scoringConfig: domain?.scoringConfig,
     orientationDeg: domain?.site.orientationDeg,
     rulePack: resolved.rulePack,
     programGoals: resolved.programGoals

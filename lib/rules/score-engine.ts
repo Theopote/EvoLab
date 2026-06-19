@@ -1,4 +1,4 @@
-import { codeContextFromRulePack, resolveRulePack } from "@/lib/rules/rule-pack";
+import { resolveRulePack } from "@/lib/rules/rule-pack";
 import { normalizeGoalWeights, resolveProgramGoalsFromContext } from "@/lib/rules/program-goals";
 import { scoreAreaEfficiency } from "@/lib/rules/metrics/area-efficiency";
 import { scoreCirculation } from "@/lib/rules/metrics/circulation";
@@ -13,8 +13,8 @@ import type {
   ScoreBreakdown,
   ScoringContext
 } from "@/lib/rules/types";
-import { checkCompliance } from "@/lib/quantity-engine";
-import type { CodeContext, ProgramModel } from "@/lib/building-domain";
+import { buildComplianceContext, computeRiskCount, runComplianceCheck } from "@/lib/compliance-rules";
+import type { CodeContext, ProgramModel, ScoringConfig } from "@/lib/building-domain";
 import type { PlanVersion, VersionScores } from "@/lib/project-types";
 import type { PlanValidationIssue } from "@/lib/plan-validation";
 import { computeTotalScore } from "@/lib/rules/version-total-score";
@@ -24,6 +24,7 @@ export interface ScoreEngineOptions {
   codeContext?: CodeContext;
   program?: ProgramModel;
   projectType?: string;
+  scoringConfig?: ScoringConfig;
   orientationDeg?: number;
   levelId?: string;
   rulePack?: RulePack;
@@ -71,11 +72,13 @@ export const calculateVersionScores = (
   const egress = scoreEgress(context);
   const structureFit = scoreStructureFit(context);
 
-  const complianceWarnings = checkCompliance(version, codeContextFromRulePack(rulePack)).filter(
-    (item) => item.status === "warning"
-  ).length;
+  const complianceContext = buildComplianceContext(version, rulePack, {
+    buildingType: options.projectType ?? options.program?.projectType ?? "healthcare",
+    scoringConfig: options.scoringConfig
+  });
+  const complianceResults = runComplianceCheck(complianceContext);
   const validationErrors = (options.issues ?? []).filter((issue) => issue.severity === "error").length;
-  const riskCount = validationErrors + complianceWarnings;
+  const riskCount = computeRiskCount(complianceResults, validationErrors);
 
   const scores: VersionScores = {
     areaEfficiency: area.score,

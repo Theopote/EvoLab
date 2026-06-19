@@ -1,8 +1,9 @@
 import type { ProjectDomain } from "@/lib/building-domain";
 import type { CopilotFinding, PlanVersion } from "@/lib/project-types";
-import { calculateQuantities, checkCompliance } from "@/lib/quantity-engine";
+import { buildComplianceContext, generateComplianceInsights, runComplianceCheck } from "@/lib/compliance-rules";
+import { calculateQuantities } from "@/lib/quantity-engine";
+import { resolveRulePack } from "@/lib/rules/rule-pack";
 import { ensureVersionScores, scoringInputFromDomain } from "@/lib/rules/resolve-version-scoring";
-import { buildVerticalAlignmentReport } from "@/lib/vertical-alignment";
 
 export interface CopilotInsightQueue {
   pending: CopilotFinding[];
@@ -20,36 +21,23 @@ export function buildCopilotInsightsFromEngines(
 ): CopilotFinding[] {
   const scored = ensureVersionScores(version, scoringInputFromDomain(domain, projectType));
   const quantities = calculateQuantities(scored);
-  const compliance = checkCompliance(scored, domain.codeContext);
-  const alignment = buildVerticalAlignmentReport(scored);
-  const findings: CopilotFinding[] = [];
-
-  const warnings = compliance.filter((item) => item.status === "warning");
-
-  warnings.slice(0, 4).forEach((item) => {
-    findings.push({
-      id: findingId("compliance"),
-      tone: "warning",
-      text: item.message,
-      sub: "From compliance-rules engine"
-    });
+  const rulePack = resolveRulePack({
+    codeContext: domain.codeContext,
+    projectType: projectType ?? domain.program?.projectType
   });
+  const complianceContext = buildComplianceContext(scored, rulePack, {
+    buildingType: projectType ?? domain.program?.projectType ?? "healthcare",
+    scoringConfig: domain.scoringConfig
+  });
+  const complianceResults = runComplianceCheck(complianceContext);
+  const findings: CopilotFinding[] = generateComplianceInsights(complianceResults).slice(0, 6);
 
-  if ((scored.scores?.riskCount ?? 0) > 0) {
+  if ((scored.scores?.riskCount ?? 0) > 0 && findings.length === 0) {
     findings.push({
       id: findingId("risk"),
       tone: "warning",
       text: `${scored.scores?.riskCount ?? 0} validation or compliance risk(s) on the active scheme.`,
       sub: "From plan validation + compliance engine"
-    });
-  }
-
-  if (!alignment.aligned) {
-    findings.push({
-      id: findingId("vertical"),
-      tone: "warning",
-      text: `${alignment.issues.length} vertical alignment issue(s) across floors.`,
-      sub: "From vertical-alignment engine"
     });
   }
 

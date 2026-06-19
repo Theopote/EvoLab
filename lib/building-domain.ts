@@ -83,6 +83,11 @@ export interface ScoringConfig {
       notice?: string;
     };
   };
+  egressWidth?: {
+    widthPer100PersonsM?: number;
+    areaPerOccupantSqm?: number;
+    notice?: string;
+  };
 }
 
 export interface ProgramAdjacencyRule {

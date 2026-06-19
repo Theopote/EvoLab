@@ -431,7 +431,12 @@ function refreshDerivedDraft(state: EvoProjectStore) {
     activeVersion && activeLevel
       ? calculateQuantities(activeVersion, { levelId: activeLevel.id, scope: "level" })
       : undefined;
-  state.complianceItems = activeVersion ? checkCompliance(activeVersion, codeContext, rulePack) : [];
+  state.complianceItems = activeVersion
+    ? checkCompliance(activeVersion, codeContext, rulePack, {
+        buildingType: state.project.projectType,
+        scoringConfig: state.project.domain.scoringConfig
+      })
+    : [];
   state.selectedRoom = activeLevel?.rooms.find((room) => room.id === state.selectedRoomId);
   state.selectedWall = activeLevel?.walls.find((wall) => wall.id === state.selectedWallId);
   state.selectedOpening = activeLevel?.openings.find((opening) => opening.id === state.selectedOpeningId);
@@ -469,7 +474,12 @@ function refreshQuantitiesDraft(state: EvoProjectStore) {
     state.activeVersion && activeLevel
       ? calculateQuantities(state.activeVersion, { levelId: activeLevel.id, scope: "level" })
       : undefined;
-  state.complianceItems = state.activeVersion ? checkCompliance(state.activeVersion, codeContext, getRulePack(state.project.domain, state.project.projectType)) : [];
+  state.complianceItems = state.activeVersion
+    ? checkCompliance(state.activeVersion, codeContext, getRulePack(state.project.domain, state.project.projectType), {
+        buildingType: state.project.projectType,
+        scoringConfig: state.project.domain.scoringConfig
+      })
+    : [];
   refreshDomainDraft(state);
 }
 
@@ -614,7 +624,11 @@ function createInitialState(): Omit<
       ? checkCompliance(
           activeVersion,
           getCodeContext(initialProjectData.domain),
-          getRulePack(initialProjectData.domain, initialProjectData.projectType)
+          getRulePack(initialProjectData.domain, initialProjectData.projectType),
+          {
+            buildingType: initialProjectData.projectType,
+            scoringConfig: initialProjectData.domain.scoringConfig
+          }
         )
       : [],
     activeSchedule: getActiveSchedule(initialProjectData.domain, activeVersion?.id),
