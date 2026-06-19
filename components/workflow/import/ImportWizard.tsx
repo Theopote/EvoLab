@@ -27,7 +27,7 @@ const importKinds: Array<{
     description: "Photos, scans, or raster exports. Vision recognition with optional trace correction.",
     icon: FileImage,
     accept: ".png,.jpg,.jpeg,.gif,.webp,image/*",
-    pipeline: "Upload → correct → recognize → review"
+    pipeline: "Upload → perspective → recognize → review"
   },
   {
     id: "pdf",

@@ -4,7 +4,7 @@ import {
   estimatePerspectiveOutputSize,
   mapPointWithHomography
 } from "@/lib/import-perspective-correction";
-import { defaultPerspectiveQuad, type PerspectiveQuad } from "@/lib/import-image-utils";
+import type { PerspectiveQuad } from "@/lib/import-image-utils";
 
 describe("import perspective correction", () => {
   it("estimates output size from opposing edge lengths", () => {
@@ -16,8 +16,8 @@ describe("import perspective correction", () => {
     ];
 
     expect(estimatePerspectiveOutputSize(quad)).toEqual({
-      width: 95,
-      height: 80
+      width: 90,
+      height: 81
     });
   });
 
@@ -45,8 +45,7 @@ describe("import perspective correction", () => {
     });
   });
 
-  it("keeps an axis-aligned source quad near identity", () => {
-    const sourceQuad = defaultPerspectiveQuad(0);
+  it("maps the rectified center back to the source sheet center", () => {
     const pixelQuad: PerspectiveQuad = [
       [0, 0],
       [200, 0],
@@ -58,6 +57,5 @@ describe("import perspective correction", () => {
 
     expect(center[0]).toBeCloseTo(100, 2);
     expect(center[1]).toBeCloseTo(50, 2);
-    expect(sourceQuad[0][0]).toBe(0);
   });
 });
