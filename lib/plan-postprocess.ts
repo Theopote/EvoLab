@@ -38,7 +38,7 @@ function repairRoom(room: Room, width: number, height: number) {
   };
 }
 
-function createAutoCore(version: PlanVersion, levelId: string, levelName: string, rooms: Room[]): Room {
+function createAutoCore(version: PlanVersion, levelId: string, rooms: Room[]): Room {
   const width = Math.max(4, Math.min(8, version.overallBounds.width * 0.12));
   const height = Math.max(5, Math.min(9, version.overallBounds.height * 0.18));
   const x = Math.max(0, version.overallBounds.width - width - 2);
@@ -76,7 +76,7 @@ function repairMissingCore(version: PlanVersion) {
       return;
     }
 
-    const core = createAutoCore(next, level.id, level.name, rooms);
+    const core = createAutoCore(next, level.id, rooms);
     const updated = applyLevelRoomsToVersion(next, level.id, [...rooms, core]);
 
     if (updated) {
