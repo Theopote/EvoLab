@@ -1,5 +1,6 @@
 "use client";
 
+import { GitCompareArrows } from "lucide-react";
 import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { formatCost, calculateCostEstimate } from "@/lib/cost-engine";
@@ -15,18 +16,22 @@ function polygonArea(points: Array<[number, number]>) {
   }, 0);
 
   return Math.abs(area) / 2;
-};
+}
 
 export function ViewportKpiHud() {
-  const { project, activeVersion, outline, zoning, buildableEnvelope } = useEvoProject(
-    useShallow((state) => ({
-      project: state.project,
-      activeVersion: state.activeVersion,
-      outline: state.outline,
-      zoning: state.zoning,
-      buildableEnvelope: state.buildableEnvelope
-    }))
-  );
+  const { project, activeVersion, outline, zoning, buildableEnvelope, compareModeOpen, compareVersionIds, setCompareModeOpen } =
+    useEvoProject(
+      useShallow((state) => ({
+        project: state.project,
+        activeVersion: state.activeVersion,
+        outline: state.outline,
+        zoning: state.zoning,
+        buildableEnvelope: state.buildableEnvelope,
+        compareModeOpen: state.compareModeOpen,
+        compareVersionIds: state.compareVersionIds,
+        setCompareModeOpen: state.setCompareModeOpen
+      }))
+    );
 
   const metrics = useMemo(() => {
     if (!activeVersion) {
@@ -48,20 +53,29 @@ export function ViewportKpiHud() {
         tone: far !== undefined && far > farLimit ? ("warning" as const) : ("default" as const)
       },
       { label: "ROM", value: formatCost(cost.totalCost, cost.currency), tone: "default" as const },
-      { label: "Score", value: String(computeTotalScore(activeVersion.scores ?? {
-        areaEfficiency: 0,
-        circulationScore: 0,
-        daylightScore: 0,
-        mepAlignmentScore: 0,
-        riskCount: 0
-      }, getProgramGoals(project.domain))), tone: "default" as const },
+      {
+        label: "Score",
+        value: String(
+          computeTotalScore(
+            activeVersion.scores ?? {
+              areaEfficiency: 0,
+              circulationScore: 0,
+              daylightScore: 0,
+              mepAlignmentScore: 0,
+              riskCount: 0
+            },
+            getProgramGoals(project.domain)
+          )
+        ),
+        tone: "default" as const
+      },
       {
         label: "Envelope",
         value: buildableEnvelope?.valid ? "OK" : "—",
         tone: buildableEnvelope?.valid ? ("success" as const) : ("default" as const)
       }
     ];
-  }, [activeVersion, buildableEnvelope?.valid, outline, project.projectType, zoning.maxFar]);
+  }, [activeVersion, buildableEnvelope?.valid, outline, project.domain, project.projectType, zoning.maxFar]);
 
   if (!metrics) {
     return null;
@@ -69,6 +83,21 @@ export function ViewportKpiHud() {
 
   return (
     <div className="pointer-events-none absolute right-4 top-4 z-20 flex flex-wrap justify-end gap-2">
+      <button
+        className={`pointer-events-auto flex h-auto items-center gap-2 rounded-lg border px-3 py-2 text-xs shadow-lg backdrop-blur ${
+          compareModeOpen
+            ? "border-accent/60 bg-accent/15 text-accent"
+            : "border-line/80 bg-[#0b1118]/92 text-slate-200 hover:border-accent/50"
+        }`}
+        type="button"
+        onClick={() => setCompareModeOpen(!compareModeOpen)}
+      >
+        <GitCompareArrows className="h-3.5 w-3.5" />
+        Compare
+        {compareVersionIds.length > 0 ? (
+          <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px]">{compareVersionIds.length}</span>
+        ) : null}
+      </button>
       {metrics.map((metric) => (
         <div
           className="pointer-events-auto rounded-lg border border-line/80 bg-[#0b1118]/92 px-3 py-2 shadow-lg backdrop-blur"

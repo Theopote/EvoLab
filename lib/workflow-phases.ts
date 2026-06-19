@@ -25,7 +25,7 @@ export const workflowPhaseDefinitions: WorkflowPhaseDefinition[] = [
   {
     id: "scheme",
     label: "Scheme",
-    description: "Generate options, edit plan, massing and 3D model",
+    description: "Generate options, edit plan, massing, structure, facade and 3D model",
     defaultTab: "Plan"
   },
   {

@@ -35,7 +35,9 @@ const briefSiteItems: { id: BriefSiteSubview; label: string }[] = [
 const schemeItems: { id: SchemeSubview; label: string }[] = [
   { id: "plan", label: "Plan" },
   { id: "massing", label: "Massing" },
-  { id: "model", label: "3D Model" }
+  { id: "model", label: "3D Model" },
+  { id: "structure", label: "Structure" },
+  { id: "facade", label: "Facade" }
 ];
 
 const analyzeItems: { id: AnalyzeSubview; label: string }[] = [

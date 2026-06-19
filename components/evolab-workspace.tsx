@@ -30,6 +30,9 @@ import { ProgramWorkspace } from "@/components/workflow/ProgramWorkspace";
 import { ReviewWorkspace } from "@/components/workflow/ReviewWorkspace";
 import { ScheduleWorkspace } from "@/components/workflow/ScheduleWorkspace";
 import { SiteWorkspace } from "@/components/workflow/SiteWorkspace";
+import { StructureWorkspace } from "@/components/workflow/StructureWorkspace";
+import { FacadeWorkspace } from "@/components/workflow/FacadeWorkspace";
+import { CompareWorkspace } from "@/components/workflow/CompareWorkspace";
 import { PlanResultGrid } from "@/components/plan-editor/PlanResultGrid";
 import { useCopilotTimelineStore } from "@/lib/copilot-timeline-store";
 import { Scene } from "@/components/viewer-3d/Scene";
@@ -53,6 +56,7 @@ export function EvoLabWorkspace() {
     briefSiteSubview,
     quantifySubview,
     compareVersionIds,
+    compareModeOpen,
     activeAnalysisLayers,
     activeMepLayers,
     isGeneratingMep,
@@ -68,6 +72,7 @@ export function EvoLabWorkspace() {
     setActiveTab,
     setWorkflowPhase,
     toggleCompareVersion,
+    setCompareModeOpen,
     setActiveLevel,
     setOutline,
     setOutlineClosed,
@@ -104,6 +109,7 @@ export function EvoLabWorkspace() {
       briefSiteSubview: state.briefSiteSubview,
       quantifySubview: state.quantifySubview,
       compareVersionIds: state.compareVersionIds,
+      compareModeOpen: state.compareModeOpen,
       activeAnalysisLayers: state.activeAnalysisLayers,
       activeMepLayers: state.activeMepLayers,
       isGeneratingMep: state.isGeneratingMep,
@@ -119,6 +125,7 @@ export function EvoLabWorkspace() {
       setActiveTab: state.setActiveTab,
       setWorkflowPhase: state.setWorkflowPhase,
       toggleCompareVersion: state.toggleCompareVersion,
+      setCompareModeOpen: state.setCompareModeOpen,
       setActiveLevel: state.setActiveLevel,
       setOutline: state.setOutline,
       setOutlineClosed: state.setOutlineClosed,
@@ -170,12 +177,14 @@ export function EvoLabWorkspace() {
           <section className="relative min-h-0 overflow-hidden">
             <ViewportKpiHud />
             <div className="cad-grid h-full overflow-auto p-4">
-              <VersionSplitCompare
-                versions={project.versions}
-                compareVersionIds={compareVersionIds}
-                compareLevelId={compareLevelId}
-                onCompareLevelChange={setCompareLevel}
-              />
+              {!compareModeOpen ? (
+                <VersionSplitCompare
+                  versions={project.versions}
+                  compareVersionIds={compareVersionIds}
+                  compareLevelId={compareLevelId}
+                  onCompareLevelChange={setCompareLevel}
+                />
+              ) : null}
               {renderMainViewport()}
             </div>
           </section>
@@ -220,6 +229,27 @@ export function EvoLabWorkspace() {
   );
 
   function renderMainViewport() {
+    if (compareModeOpen) {
+      return (
+        <CompareWorkspace
+          versions={project.versions}
+          activeVersionId={project.activeVersionId}
+          compareVersionIds={compareVersionIds}
+          compareLevelId={compareLevelId}
+          domain={project.domain}
+          program={project.domain.program}
+          projectType={project.projectType}
+          orientationDeg={project.domain.site.orientationDeg}
+          onCompareLevelChange={setCompareLevel}
+          onSelectVersion={setActiveVersion}
+          onGenerateModel={openModelForVersion}
+          onRefineVersion={refineVersion}
+          onHybridAccepted={handleHybridAccepted}
+          onClose={() => setCompareModeOpen(false)}
+        />
+      );
+    }
+
     if (workflowPhase === "review") {
       return (
         <ReviewWorkspace
@@ -286,6 +316,32 @@ export function EvoLabWorkspace() {
 
     if (activeTab === "Massing") {
       return <MassingPanel activeVersion={activeVersion} onOpenModel={() => setActiveTab("Model")} />;
+    }
+
+    if (activeTab === "Structure") {
+      return (
+        <StructureWorkspace
+          version={activeVersion}
+          activeLevelId={activeLevelId}
+          structuralSystem={project.domain.structuralSystem}
+          storeyStack={project.domain.storeyStack}
+          verticalCirculation={project.domain.verticalCirculation}
+          onLevelChange={setActiveLevel}
+          onInpaintRevision={handleInpaintRevision}
+        />
+      );
+    }
+
+    if (activeTab === "Facade") {
+      return (
+        <FacadeWorkspace
+          version={activeVersion}
+          activeLevelId={activeLevelId}
+          facadeEnvelope={project.domain.facadeEnvelope}
+          orientationDeg={project.domain.site.orientationDeg}
+          onLevelChange={setActiveLevel}
+        />
+      );
     }
 
     if (activeTab === "Analysis") {
