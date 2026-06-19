@@ -2,6 +2,7 @@ import type { CodeContext } from "@/lib/building-domain";
 import { defaultHealthcareCodeContext } from "@/lib/building-domain";
 import type { FunctionZone, OpeningElement, PlanVersion, Point, Room, RoomType, Wall } from "@/lib/project-types";
 import { resolveLevelRooms } from "@/lib/level-rooms";
+import { buildVerticalAlignmentReport } from "@/lib/vertical-alignment";
 import { computeEgressPathMetrics, computeWetCorePathMetrics, egressMethodLabel } from "@/lib/rules/path-metrics";
 import { measureCorridorsClearWidth } from "@/lib/rules/metrics/corridor-width";
 import { checkDaylightCompliance } from "@/lib/rules/metrics/daylight-compliance";
@@ -342,7 +343,7 @@ export function calculateQuantitiesByLevel(version: PlanVersion): Record<string,
 
 function checkComplianceForLevel(version: PlanVersion, levelId: string, rulePack: RulePack): ComplianceItem[] {
   const level = activeLevel(version, levelId);
-  const rooms = level?.rooms ?? [];
+  const rooms = level ? resolveLevelRooms(level, version.standardFloorGroups) : [];
   const openings = level?.openings ?? [];
   const corridorRooms = rooms.filter((room) => room.type === "corridor");
   const stairRooms = rooms.filter((room) => room.type === "stair" || room.type === "elevator");
@@ -467,6 +468,39 @@ function checkComplianceForLevel(version: PlanVersion, levelId: string, rulePack
   ];
 }
 
+function checkVerticalAlignmentCompliance(version: PlanVersion): ComplianceItem[] {
+  if (version.levels.length <= 1) {
+    return [];
+  }
+
+  const report = buildVerticalAlignmentReport(version);
+  const items: ComplianceItem[] = [
+    {
+      id: "vertical-alignment-summary",
+      title: "Vertical structural alignment",
+      status: report.aligned ? "success" : "warning",
+      message: report.aligned
+        ? "Grid columns and vertical cores are contained on all served floors."
+        : `${report.issues.length} vertical element issue(s) across ${
+            new Set(report.issues.map((issue) => issue.floorId)).size
+          } floor(s).`,
+      basis: "Columns and cores must have a valid container room on every served floor."
+    }
+  ];
+
+  report.transferHints.forEach((hint) => {
+    items.push({
+      id: hint.id,
+      title: "Transfer floor suggested",
+      status: "warning",
+      message: hint.message,
+      basis: "Column grid shifts between unlike floor programs should use an explicit transfer floor."
+    });
+  });
+
+  return items;
+}
+
 export function checkCompliance(
   version: PlanVersion,
   codeContext: CodeContext = defaultHealthcareCodeContext,
@@ -474,7 +508,7 @@ export function checkCompliance(
 ): ComplianceItem[] {
   if (version.levels.length <= 1) {
     const levelId = version.levels[0]?.id ?? "level-01";
-    return checkComplianceForLevel(version, levelId, rulePack);
+    return [...checkComplianceForLevel(version, levelId, rulePack), ...checkVerticalAlignmentCompliance(version)];
   }
 
   const perLevel = version.levels.flatMap((level) => checkComplianceForLevel(version, level.id, rulePack));
@@ -496,5 +530,5 @@ export function checkCompliance(
     }
   });
 
-  return [...rollup.values()];
+  return [...rollup.values(), ...checkVerticalAlignmentCompliance(version)];
 }

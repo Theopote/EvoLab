@@ -16,6 +16,7 @@ import type {
 import { applyComputedElevations } from "@/lib/floor-elevation";
 import { resolveLevelOutline, resolveLevelRooms } from "@/lib/level-rooms";
 import { isLevelLinkedToStandardGroup } from "@/lib/standard-floor-group";
+import { syncVerticalElements } from "@/lib/vertical-elements";
 import { edgeKey, extractWallsFromRooms, polygonEdges } from "@/lib/wall-extractor";
 import {
   normalizeOpeningElements,
@@ -302,13 +303,13 @@ export function normalizePlanVersion(version: PlanVersionDraft): PlanVersion {
     grids: version.building?.grids?.length ? version.building.grids : [createGrid(version)]
   };
 
-  return {
+  return syncVerticalElements({
     ...version,
     standardFloorGroups: groups,
     rooms,
     levels: levelsWithElevations,
     building
-  };
+  });
 }
 
 export function normalizeProjectVersions(versions: PlanVersionDraft[]) {

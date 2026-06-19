@@ -59,6 +59,40 @@ export interface PlanVersion {
   mep?: MepLayout;
   /** Typical-floor groups; member levels reference via standardFloorGroupId. */
   standardFloorGroups?: StandardFloorGroup[];
+  /** Derived structural vertical constraints used for alignment checks. */
+  verticalElements?: VerticalElement[];
+}
+
+export type VerticalElementKind = "column" | "shear_wall" | "mep_shaft" | "core";
+
+export interface VerticalElement {
+  id: string;
+  kind: VerticalElementKind;
+  /** Point for columns/shafts; polygon for cores and shear walls. */
+  position: Point | Point[];
+  appliesFromFloorId: string;
+  appliesToFloorId: string;
+  label?: string;
+}
+
+export type VerticalAlignmentIssueType = "no_containing_room" | "core_type_mismatch";
+
+export interface VerticalAlignmentIssue {
+  id: string;
+  floorId: string;
+  floorName: string;
+  elementId: string;
+  elementKind: VerticalElementKind;
+  type: VerticalAlignmentIssueType;
+  message: string;
+  position?: Point;
+}
+
+export interface TransferFloorHint {
+  id: string;
+  afterLevelId: string;
+  beforeLevelId: string;
+  message: string;
 }
 
 export interface PlanVersionMetadata {
