@@ -1,8 +1,8 @@
 "use client";
 
-import { useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
-import type { PlanVersion, Point } from "@/lib/project-types";
+import type { PlanVersion, Room } from "@/lib/project-types";
 import { CoreSymbolLayer } from "@/components/floor-plan/layers/CoreSymbolLayer";
 import { GridLayer } from "@/components/floor-plan/layers/GridLayer";
 import { LabelLayer } from "@/components/floor-plan/layers/LabelLayer";
@@ -17,6 +17,10 @@ import { getViewBox } from "@/components/floor-plan/floor-plan-utils";
 import { useEvoProject } from "@/lib/project-store";
 import { useInteractionStore } from "@/lib/interaction-store";
 import { createSetbackBoundary } from "@/lib/polygon-offset";
+import { useEditPreviewStore } from "@/lib/edit-preview-store";
+import { corridorComplianceRoomIds } from "@/lib/drag-compliance";
+import { normalizePlanVersion } from "@/lib/architecture-model";
+import type { GridSnapStep } from "@/lib/plan-snap";
 
 export interface FloorPlanCanvasProps {
   version?: PlanVersion;
@@ -25,6 +29,10 @@ export interface FloorPlanCanvasProps {
   selectedRoomId?: string;
   interactive?: boolean;
   onInpaintRevision?: (version: PlanVersion, prompt: string) => void;
+}
+
+function roomsGeometrySignature(rooms: Room[]) {
+  return JSON.stringify(rooms.map((room) => [room.id, room.polygon]));
 }
 
 export function FloorPlanCanvas({
@@ -36,7 +44,14 @@ export function FloorPlanCanvas({
   onInpaintRevision
 }: FloorPlanCanvasProps) {
   const svgRef = useRef<SVGSVGElement>(null);
+  const dragBaseSignatureRef = useRef<string>("");
+  const [gridStep, setGridStep] = useState<GridSnapStep>(0.1);
+  const [gridSnapEnabled, setGridSnapEnabled] = useState(true);
   const activeTool = useInteractionStore((state) => state.activeTool);
+  const previewRooms = useEditPreviewStore((state) => state.previewRooms);
+  const complianceRoomIds = useEditPreviewStore((state) => state.complianceRoomIds);
+  const setPreviewRooms = useEditPreviewStore((state) => state.setPreviewRooms);
+  const clearPreview = useEditPreviewStore((state) => state.clearPreview);
   const {
     selectedRoomId: roomSelectionFromStore,
     selectedWallId: wallSelectionFromStore,
@@ -46,7 +61,7 @@ export function FloorPlanCanvas({
     selectWall,
     selectOpening,
     clearSelection,
-    updateRoomGeometry,
+    applyLevelRoomsGeometry,
     updateOpening,
     lockedElementIds
   } = useEvoProject(
@@ -59,7 +74,7 @@ export function FloorPlanCanvas({
       selectWall: state.selectWall,
       selectOpening: state.selectOpening,
       clearSelection: state.clearSelection,
-      updateRoomGeometry: state.updateRoomGeometry,
+      applyLevelRoomsGeometry: state.applyLevelRoomsGeometry,
       updateOpening: state.updateOpening,
       lockedElementIds: state.project.domain.lockedElementIds
     }))
@@ -67,6 +82,71 @@ export function FloorPlanCanvas({
   const selectedRoomId = interactive ? selectedRoomIdProp ?? roomSelectionFromStore : selectedRoomIdProp;
   const selectedWallId = interactive ? wallSelectionFromStore : undefined;
   const selectedOpeningId = interactive ? openingSelectionFromStore : undefined;
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Alt") {
+        setGridSnapEnabled(false);
+      }
+    }
+
+    function handleKeyUp(event: KeyboardEvent) {
+      if (event.key === "Alt") {
+        setGridSnapEnabled(true);
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
+  }, []);
+
+  const handleRoomsGeometryPreview = useCallback(
+    (rooms: Room[]) => {
+      if (!dragBaseSignatureRef.current) {
+        dragBaseSignatureRef.current = roomsGeometrySignature(rooms);
+      }
+
+      setPreviewRooms(rooms, corridorComplianceRoomIds(rooms));
+    },
+    [setPreviewRooms]
+  );
+
+  const handleRoomsGeometryCommit = useCallback(
+    (rooms: Room[]) => {
+      const changed = roomsGeometrySignature(rooms) !== dragBaseSignatureRef.current;
+      dragBaseSignatureRef.current = "";
+      clearPreview();
+
+      if (changed) {
+        applyLevelRoomsGeometry(rooms);
+      }
+    },
+    [applyLevelRoomsGeometry, clearPreview]
+  );
+
+  const handleRoomsGeometryCancel = useCallback(() => {
+    dragBaseSignatureRef.current = "";
+    clearPreview();
+  }, [clearPreview]);
+
+  const levelId = levelIdProp ?? (interactive ? activeLevelId : undefined);
+  const level = version?.levels.find((item) => item.id === levelId) ?? version?.levels[0];
+  const sourceRooms = level?.rooms.length ? level.rooms : version?.rooms ?? [];
+  const rooms = previewRooms ?? sourceRooms;
+  const previewWalls = useMemo(() => {
+    if (!version || !previewRooms) {
+      return level?.walls ?? [];
+    }
+
+    const normalized = normalizePlanVersion({ ...version, rooms: previewRooms });
+    const previewLevel = normalized.levels.find((item) => item.id === levelId) ?? normalized.levels[0];
+    return previewLevel?.walls ?? [];
+  }, [level?.walls, levelId, previewRooms, version]);
 
   if (!version) {
     return (
@@ -78,18 +158,20 @@ export function FloorPlanCanvas({
     );
   }
 
-  const levelId = levelIdProp ?? (interactive ? activeLevelId : undefined);
-  const level = version.levels.find((item) => item.id === levelId) ?? version.levels[0];
-  const rooms = level?.rooms.length ? level.rooms : version.rooms;
   const visibleVersion = { ...version, rooms };
   const setback = createSetbackBoundary(version.outline, 3);
   const selectedRoom = selectedRoomId ? rooms.find((room) => room.id === selectedRoomId) : undefined;
-  const selectedWall = selectedWallId ? level?.walls.find((wall) => wall.id === selectedWallId) : undefined;
+  const selectedWall = selectedWallId ? previewWalls.find((wall) => wall.id === selectedWallId) : undefined;
   const selectedOpening = selectedOpeningId
     ? level?.openings.find((opening) => opening.id === selectedOpeningId)
     : undefined;
   const traceEnabled = interactive && activeTool === "trace";
   const inpaintEnabled = interactive && activeTool === "inpaint";
+  const wallDragEnabled =
+    interactive &&
+    activeTool === "select" &&
+    Boolean(selectedWallId) &&
+    Boolean(selectedWall && !selectedWall.roomIds.some((roomId) => lockedElementIds.includes(roomId)));
   const openingEditEnabled =
     interactive &&
     activeTool === "select" &&
@@ -107,18 +189,18 @@ export function FloorPlanCanvas({
         details: `${selectedRoom.name} / ${selectedRoom.areaSqm} sqm`
       }
     : selectedWall
-    ? {
-        type: "WALL",
-        id: selectedWall.id,
-        details: `${selectedWall.type} / ${selectedWall.thickness.toFixed(2)} m`
-      }
-    : selectedOpening
-    ? {
-        type: "OPENING",
-        id: selectedOpening.id,
-        details: `${selectedOpening.type} / ${selectedOpening.width.toFixed(2)} x ${selectedOpening.height.toFixed(2)} m`
-      }
-    : undefined;
+      ? {
+          type: "WALL",
+          id: selectedWall.id,
+          details: `${selectedWall.type} / ${selectedWall.thickness.toFixed(2)} m`
+        }
+      : selectedOpening
+        ? {
+            type: "OPENING",
+            id: selectedOpening.id,
+            details: `${selectedOpening.type} / ${selectedOpening.width.toFixed(2)} x ${selectedOpening.height.toFixed(2)} m`
+          }
+        : undefined;
 
   return (
     <div className={className}>
@@ -143,16 +225,17 @@ export function FloorPlanCanvas({
           <RoomFillLayer
             rooms={rooms}
             selectedRoomId={selectedRoomId}
+            violationRoomIds={complianceRoomIds}
             onSelectRoom={interactive && !inpaintEnabled ? selectRoom : undefined}
           />
           <WallLayer
-            walls={level?.walls ?? []}
+            walls={previewWalls}
             selectedWallId={selectedWallId}
             onSelectWall={interactive && !inpaintEnabled ? selectWall : undefined}
           />
           <OpeningLayer
             openings={level?.openings ?? []}
-            walls={level?.walls ?? []}
+            walls={previewWalls}
             selectedOpeningId={selectedOpeningId}
             onSelectOpening={interactive && !inpaintEnabled ? selectOpening : undefined}
           />
@@ -160,15 +243,20 @@ export function FloorPlanCanvas({
           <LabelLayer version={visibleVersion} />
           <SelectionLayer
             rooms={rooms}
-            walls={level?.walls ?? []}
+            walls={previewWalls}
             openings={level?.openings ?? []}
             selectedRoomId={selectedRoomId}
             selectedWallId={selectedWallId}
             selectedOpeningId={selectedOpeningId}
             traceEnabled={traceEnabled}
+            wallDragEnabled={wallDragEnabled}
             openingEditEnabled={openingEditEnabled}
+            gridSnapEnabled={gridSnapEnabled}
+            gridStep={gridStep}
             svgRef={svgRef}
-            onRoomPolygonChange={(roomId, polygon: Point[]) => updateRoomGeometry(roomId, { polygon })}
+            onRoomsGeometryCancel={handleRoomsGeometryCancel}
+            onRoomsGeometryCommit={handleRoomsGeometryCommit}
+            onRoomsGeometryPreview={handleRoomsGeometryPreview}
             onOpeningCenterChange={(openingId, center) => updateOpening(openingId, { center })}
           />
           <InpaintMaskLayer svgRef={svgRef} version={version} enabled={inpaintEnabled} />
@@ -177,7 +265,30 @@ export function FloorPlanCanvas({
           1 grid = 1 m / {version.label}
           {traceEnabled ? " / Trace vertices" : ""}
           {inpaintEnabled ? " / Inpaint mask" : ""}
+          {wallDragEnabled ? " / Drag shared wall" : ""}
           {openingEditEnabled ? " / Drag opening along wall" : ""}
+          {previewRooms ? " / Preview only — release to commit" : ""}
+        </div>
+        <div className="absolute left-3 top-3 flex items-center gap-2">
+          <button
+            className={`rounded border px-2 py-1 text-[11px] ${
+              gridStep === 0.1 ? "border-accent/50 text-accent" : "border-line text-muted"
+            }`}
+            type="button"
+            onClick={() => setGridStep(0.1)}
+          >
+            Snap 100mm
+          </button>
+          <button
+            className={`rounded border px-2 py-1 text-[11px] ${
+              gridStep === 0.3 ? "border-accent/50 text-accent" : "border-line text-muted"
+            }`}
+            type="button"
+            onClick={() => setGridStep(0.3)}
+          >
+            Snap 300mm
+          </button>
+          {!gridSnapEnabled ? <span className="text-[11px] text-warning">Grid snap off (Alt)</span> : null}
         </div>
         {interactive && hud ? (
           <div className="absolute bottom-3 right-3 rounded border border-accent/35 bg-[#081018]/95 px-3 py-2 text-xs">

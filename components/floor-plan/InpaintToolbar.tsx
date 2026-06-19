@@ -5,6 +5,7 @@ import { useState } from "react";
 import type { PlanVersion } from "@/lib/project-types";
 import { captureInpaintImages } from "@/lib/inpaint-capture";
 import { useInpaintMaskStore } from "@/lib/inpaint-mask-store";
+import { bboxFromStrokes, roomsInSelection } from "@/lib/region-lock";
 
 interface InpaintToolbarProps {
   version?: PlanVersion;
@@ -29,6 +30,8 @@ export function InpaintToolbar({ version, onInpaintRevision }: InpaintToolbarPro
 
     try {
       const { baseImage, maskImage } = await captureInpaintImages(version, strokes);
+      const bbox = bboxFromStrokes(strokes);
+      const allowedRoomIds = bbox ? [...roomsInSelection(version.rooms, bbox)] : version.rooms.map((room) => room.id);
       const response = await fetch("/api/inpaint-plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -36,7 +39,8 @@ export function InpaintToolbar({ version, onInpaintRevision }: InpaintToolbarPro
           currentVersion: version,
           userRequest: prompt.trim(),
           baseImage,
-          maskImage
+          maskImage,
+          allowedRoomIds
         })
       });
 

@@ -2,8 +2,16 @@
 
 import { useRef } from "react";
 import type { OpeningElement, Point, Room, Wall } from "@/lib/project-types";
-import { clientToSvgPoint, openingSegment, polygonPoints, snapPlanCoordinate } from "@/components/floor-plan/floor-plan-utils";
+import { clientToSvgPoint, openingSegment, polygonPoints } from "@/components/floor-plan/floor-plan-utils";
 import { openingCenterFromDragPoint } from "@/lib/opening-wall-utils";
+import { collectVertexAnchors, applyVertexDrag, applyWallDrag } from "@/lib/wall-graph";
+import {
+  constrainOrthoDelta,
+  projectDeltaOntoNormal,
+  snapPoint,
+  wallUnitNormal,
+  type GridSnapStep
+} from "@/lib/plan-snap";
 
 const VERTEX_R = 0.55;
 const MIDPOINT_R = 0.38;
@@ -12,32 +20,72 @@ function midpoint(a: Point, b: Point): Point {
   return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
 }
 
+interface GeometryDragSession {
+  pointerId: number;
+  dragStart: Point;
+  anchor?: Point;
+  vertexIndex?: number;
+  wallId?: string;
+  wallNormal?: Point;
+}
+
 function ControlPoints({
   polygon,
   traceEnabled,
+  allRooms,
   svgRef,
-  onVertexMove
+  gridStep,
+  gridEnabled,
+  onPreviewRooms,
+  onCommitRooms,
+  onCancelPreview
 }: {
   polygon: Point[];
   traceEnabled: boolean;
+  allRooms: Room[];
   svgRef?: React.RefObject<SVGSVGElement | null>;
-  onVertexMove?: (vertexIndex: number, point: Point) => void;
+  gridStep: GridSnapStep;
+  gridEnabled: boolean;
+  onPreviewRooms?: (rooms: Room[]) => void;
+  onCommitRooms?: (rooms: Room[]) => void;
+  onCancelPreview?: () => void;
 }) {
-  const dragIndexRef = useRef<number | null>(null);
+  const sessionRef = useRef<GeometryDragSession | null>(null);
+  const endpointTargets = collectVertexAnchors(allRooms);
 
-  function handlePointerMove(event: React.PointerEvent<SVGCircleElement>) {
+  function toSnappedPoint(event: React.PointerEvent<SVGCircleElement>, origin?: Point) {
     const svgElement = svgRef?.current;
 
-    if (dragIndexRef.current === null || !svgElement || !onVertexMove) {
-      return;
+    if (!svgElement) {
+      return null;
     }
 
     const [x, y] = clientToSvgPoint(svgElement, event.clientX, event.clientY);
-    onVertexMove(dragIndexRef.current, [snapPlanCoordinate(x), snapPlanCoordinate(y)]);
+    const raw: Point = [x, y];
+    const ortho = origin ? constrainOrthoDelta(origin, raw) : raw;
+    const next: Point = [origin ? origin[0] + ortho[0] : raw[0], origin ? origin[1] + ortho[1] : raw[1]];
+
+    return snapPoint(next, {
+      gridEnabled,
+      gridStep,
+      endpointTargets
+    });
   }
 
-  function endDrag() {
-    dragIndexRef.current = null;
+  function handlePointerMove(event: React.PointerEvent<SVGCircleElement>) {
+    const session = sessionRef.current;
+
+    if (!session || session.pointerId !== event.pointerId || session.anchor === undefined) {
+      return;
+    }
+
+    const next = toSnappedPoint(event, session.dragStart);
+
+    if (!next) {
+      return;
+    }
+
+    onPreviewRooms?.(applyVertexDrag(allRooms, session.anchor, next));
   }
 
   const vertices = polygon;
@@ -67,23 +115,162 @@ function ControlPoints({
           strokeWidth="0.16"
           style={{ cursor: traceEnabled ? "grab" : "default" }}
           onPointerDown={(event) => {
-            if (!traceEnabled || !onVertexMove) {
+            if (!traceEnabled || !onPreviewRooms || !onCommitRooms) {
               return;
             }
 
-            dragIndexRef.current = i;
+            sessionRef.current = {
+              pointerId: event.pointerId,
+              dragStart: [x, y],
+              anchor: [x, y],
+              vertexIndex: i
+            };
+            onPreviewRooms(allRooms);
             event.currentTarget.setPointerCapture(event.pointerId);
             event.stopPropagation();
           }}
           onPointerMove={handlePointerMove}
           onPointerUp={(event) => {
+            if (sessionRef.current?.pointerId !== event.pointerId) {
+              return;
+            }
+
+            const session = sessionRef.current;
+            const next = toSnappedPoint(event, session?.dragStart);
+
+            if (session?.anchor && next) {
+              onCommitRooms?.(applyVertexDrag(allRooms, session.anchor, next));
+            } else {
+              onCancelPreview?.();
+            }
+
+            sessionRef.current = null;
             event.currentTarget.releasePointerCapture(event.pointerId);
-            endDrag();
           }}
-          onPointerCancel={endDrag}
+          onPointerCancel={() => {
+            sessionRef.current = null;
+            onCancelPreview?.();
+          }}
         />
       ))}
     </g>
+  );
+}
+
+function WallDragHandle({
+  wall,
+  allRooms,
+  svgRef,
+  enabled,
+  gridStep,
+  gridEnabled,
+  onPreviewRooms,
+  onCommitRooms,
+  onCancelPreview
+}: {
+  wall: Wall;
+  allRooms: Room[];
+  svgRef?: React.RefObject<SVGSVGElement | null>;
+  enabled: boolean;
+  gridStep: GridSnapStep;
+  gridEnabled: boolean;
+  onPreviewRooms?: (rooms: Room[]) => void;
+  onCommitRooms?: (rooms: Room[]) => void;
+  onCancelPreview?: () => void;
+}) {
+  const sessionRef = useRef<GeometryDragSession | null>(null);
+  const center = midpoint(wall.start, wall.end);
+  const normal = wallUnitNormal(wall);
+
+  function currentDelta(event: React.PointerEvent<SVGCircleElement>) {
+    const session = sessionRef.current;
+    const svgElement = svgRef?.current;
+
+    if (!session || !svgElement) {
+      return null;
+    }
+
+    const [x, y] = clientToSvgPoint(svgElement, event.clientX, event.clientY);
+    const rawDelta: Point = [x - session.dragStart[0], y - session.dragStart[1]];
+    const projected = projectDeltaOntoNormal(rawDelta, session.wallNormal ?? normal);
+    const nextPoint = snapPoint(
+      [session.dragStart[0] + projected[0], session.dragStart[1] + projected[1]],
+      { gridEnabled, gridStep }
+    );
+
+    return [nextPoint[0] - session.dragStart[0], nextPoint[1] - session.dragStart[1]] as Point;
+  }
+
+  return (
+    <circle
+      cx={center[0]}
+      cy={center[1]}
+      r={0.62}
+      fill="#f8fafc"
+      stroke="#38bdf8"
+      strokeWidth="0.18"
+      style={{ cursor: enabled ? "grab" : "default" }}
+      onPointerDown={(event) => {
+        if (!enabled || !onPreviewRooms || !onCommitRooms) {
+          return;
+        }
+
+        const svgElement = svgRef?.current;
+
+        if (!svgElement) {
+          return;
+        }
+
+        const [x, y] = clientToSvgPoint(svgElement, event.clientX, event.clientY);
+
+        sessionRef.current = {
+          pointerId: event.pointerId,
+          dragStart: [x, y],
+          wallId: wall.id,
+          wallNormal: normal
+        };
+        onPreviewRooms(allRooms);
+        event.currentTarget.setPointerCapture(event.pointerId);
+        event.stopPropagation();
+      }}
+      onPointerMove={(event) => {
+        const session = sessionRef.current;
+
+        if (!session || session.pointerId !== event.pointerId || !session.wallId) {
+          return;
+        }
+
+        const delta = currentDelta(event);
+
+        if (!delta) {
+          return;
+        }
+
+        onPreviewRooms?.(applyWallDrag(allRooms, session.wallId, delta));
+      }}
+      onPointerUp={(event) => {
+        const session = sessionRef.current;
+
+        if (!session || session.pointerId !== event.pointerId || !session.wallId) {
+          return;
+        }
+
+        const delta = currentDelta(event);
+
+        if (delta) {
+          onCommitRooms?.(applyWallDrag(allRooms, session.wallId, delta));
+        } else {
+          onCancelPreview?.();
+        }
+
+        sessionRef.current = null;
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }}
+      onPointerCancel={() => {
+        sessionRef.current = null;
+        onCancelPreview?.();
+      }}
+    />
   );
 }
 
@@ -110,7 +297,11 @@ function OpeningPositionHandle({
     }
 
     const [x, y] = clientToSvgPoint(svgElement, event.clientX, event.clientY);
-    const nextCenter = openingCenterFromDragPoint(wall, opening.width, [snapPlanCoordinate(x), snapPlanCoordinate(y)]);
+    const nextCenter = openingCenterFromDragPoint(
+      wall,
+      opening.width,
+      snapPoint([x, y], { gridEnabled: true, gridStep: 0.1 })
+    );
 
     if (!nextCenter) {
       return;
@@ -159,9 +350,14 @@ interface SelectionLayerProps {
   selectedWallId?: string;
   selectedOpeningId?: string;
   traceEnabled?: boolean;
+  wallDragEnabled?: boolean;
   openingEditEnabled?: boolean;
+  gridStep?: GridSnapStep;
+  gridSnapEnabled?: boolean;
   svgRef?: React.RefObject<SVGSVGElement | null>;
-  onRoomPolygonChange?: (roomId: string, polygon: Point[]) => void;
+  onRoomsGeometryPreview?: (rooms: Room[]) => void;
+  onRoomsGeometryCommit?: (rooms: Room[]) => void;
+  onRoomsGeometryCancel?: () => void;
   onOpeningCenterChange?: (openingId: string, center: Point) => void;
 }
 
@@ -173,9 +369,14 @@ export function SelectionLayer({
   selectedWallId,
   selectedOpeningId,
   traceEnabled = false,
+  wallDragEnabled = false,
   openingEditEnabled = false,
+  gridStep = 0.1,
+  gridSnapEnabled = true,
   svgRef,
-  onRoomPolygonChange,
+  onRoomsGeometryPreview,
+  onRoomsGeometryCommit,
+  onRoomsGeometryCancel,
   onOpeningCenterChange
 }: SelectionLayerProps) {
   const selectedRoom = rooms.find((room) => room.id === selectedRoomId);
@@ -187,7 +388,8 @@ export function SelectionLayer({
     return null;
   }
 
-  const openingSelection = selectedOpening && selectedOpeningWall ? openingSegment(selectedOpening, selectedOpeningWall) : undefined;
+  const openingSelection =
+    selectedOpening && selectedOpeningWall ? openingSegment(selectedOpening, selectedOpeningWall) : undefined;
 
   return (
     <g data-layer="selection">
@@ -201,33 +403,42 @@ export function SelectionLayer({
             strokeWidth="0.45"
           />
           <ControlPoints
+            allRooms={rooms}
+            gridEnabled={gridSnapEnabled}
+            gridStep={gridStep}
             polygon={selectedRoom.polygon}
-            traceEnabled={traceEnabled}
             svgRef={svgRef}
-            onVertexMove={(vertexIndex, point) => {
-              if (!onRoomPolygonChange) {
-                return;
-              }
-
-              const nextPolygon = selectedRoom.polygon.map((vertex, index) =>
-                index === vertexIndex ? point : vertex
-              );
-              onRoomPolygonChange(selectedRoom.id, nextPolygon);
-            }}
+            traceEnabled={traceEnabled}
+            onCommitRooms={onRoomsGeometryCommit}
+            onCancelPreview={onRoomsGeometryCancel}
+            onPreviewRooms={onRoomsGeometryPreview}
           />
         </>
       ) : null}
 
       {selectedWall ? (
-        <line
-          x1={selectedWall.start[0]}
-          y1={selectedWall.start[1]}
-          x2={selectedWall.end[0]}
-          y2={selectedWall.end[1]}
-          stroke="#f8fafc"
-          strokeDasharray="0.5 0.35"
-          strokeWidth={Math.max(0.42, selectedWall.thickness + 0.1)}
-        />
+        <>
+          <line
+            x1={selectedWall.start[0]}
+            y1={selectedWall.start[1]}
+            x2={selectedWall.end[0]}
+            y2={selectedWall.end[1]}
+            stroke="#f8fafc"
+            strokeDasharray="0.5 0.35"
+            strokeWidth={Math.max(0.42, selectedWall.thickness + 0.1)}
+          />
+          <WallDragHandle
+            allRooms={rooms}
+            enabled={wallDragEnabled}
+            gridEnabled={gridSnapEnabled}
+            gridStep={gridStep}
+            svgRef={svgRef}
+            wall={selectedWall}
+            onCommitRooms={onRoomsGeometryCommit}
+            onCancelPreview={onRoomsGeometryCancel}
+            onPreviewRooms={onRoomsGeometryPreview}
+          />
+        </>
       ) : null}
 
       {openingSelection ? (

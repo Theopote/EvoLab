@@ -4,6 +4,7 @@ import { normalizeImageInputs } from "@/lib/image-input";
 import { createMockModifiedVersion } from "@/lib/mock-api";
 import { postProcessPlanVersion } from "@/lib/plan-postprocess";
 import { inpaintPlanPrompt } from "@/lib/prompts/inpaintPlanPrompt";
+import { enforceRegionLock } from "@/lib/region-lock";
 import { ModifyPlanToolInputSchema } from "@/lib/schemas/plan-version-schema";
 import type { CopilotFinding, PlanVersion } from "@/lib/project-types";
 
@@ -12,6 +13,7 @@ interface InpaintPlanRequest {
   userRequest?: string;
   baseImage?: string;
   maskImage?: string;
+  allowedRoomIds?: string[];
 }
 
 export async function POST(request: Request) {
@@ -59,10 +61,17 @@ export async function POST(request: Request) {
       return NextResponse.json(fallback);
     }
 
+    const allowedIds = new Set(body.allowedRoomIds ?? []);
+    const lockedRooms =
+      allowedIds.size > 0
+        ? enforceRegionLock(body.currentVersion.rooms, data.version.rooms, allowedIds)
+        : data.version.rooms;
+
     return NextResponse.json({
       ...data,
       version: postProcessPlanVersion({
         ...data.version,
+        rooms: lockedRooms,
         parentVersionId: data.version.parentVersionId ?? body.currentVersion.id
       })
     });

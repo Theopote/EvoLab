@@ -17,6 +17,8 @@ Return strict JSON only:
 Rules:
 - Change geometry primarily inside the masked region while keeping the rest of the plan stable.
 - Preserve room IDs outside the mask when possible.
+- Only return modified rooms when possible; the server will restore rooms outside the allowed region.
+- If the user asks for curved geometry, approximate curves with polygons using at least 8 vertices.
 - Rebuild walls and openings consistently for affected rooms.
 - Keep all room polygons inside outline and avoid overlap.
 - Findings should explain what changed inside the masked area.
