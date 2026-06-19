@@ -9,7 +9,7 @@ import {
   applyRoomPatchToVersion,
   getResolvedLevel
 } from "@/lib/level-rooms";
-import type { ScheduleBundle, StoredCopilotProposal, ScoringConfig, FacadeZone, StructuralSystem, FacadeEnvelope } from "@/lib/building-domain";
+import type { ScheduleBundle, StoredCopilotProposal, ScoringConfig, FacadeZone, StructuralSystem, FacadeEnvelope, FurnitureItem } from "@/lib/building-domain";
 import {
   addCopilotProposalComment as addCopilotProposalCommentInDomain,
   appendCopilotProposal,
@@ -154,6 +154,7 @@ interface EvoProjectStore {
   updateStructuralSystem: (patch: Pick<StructuralSystem, "gridSpacingMeters" | "maxSpanMeters">) => void;
   updateFacadeEnvelope: (patch: Partial<Pick<FacadeEnvelope, "defaultWindowRatio" | "orientationStrategy">>) => void;
   updateFacadeZone: (zoneId: string, patch: Partial<Pick<FacadeZone, "strategy" | "targetWindowRatio">>) => void;
+  updateFurnitureItem: (itemId: string, patch: Partial<Pick<FurnitureItem, "position" | "rotationDeg">>) => void;
   selectCopilotProposal: (proposalId?: string) => void;
   setWorkflowPhase: (phase: WorkflowPhase) => void;
   setBriefSiteSubview: (subview: BriefSiteSubview) => void;
@@ -557,6 +558,7 @@ function createInitialState(): Omit<
   | "updateStructuralSystem"
   | "updateFacadeEnvelope"
   | "updateFacadeZone"
+  | "updateFurnitureItem"
   | "selectCopilotProposal"
   | "setWorkflowPhase"
   | "setBriefSiteSubview"
@@ -882,6 +884,20 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
         state.project.domain.facadeEnvelope = {
           ...envelope,
           zones: envelope.zones.map((zone) => (zone.id === zoneId ? { ...zone, ...patch } : zone))
+        };
+      })
+    ),
+  updateFurnitureItem: (itemId, patch) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        const layout = state.project.domain.furnitureLayout;
+        if (!layout) {
+          return;
+        }
+
+        state.project.domain.furnitureLayout = {
+          ...layout,
+          items: layout.items.map((item) => (item.id === itemId ? { ...item, ...patch } : item))
         };
       })
     ),

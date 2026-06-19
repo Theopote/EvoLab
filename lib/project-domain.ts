@@ -298,7 +298,24 @@ export function mergeFurnitureLayout(derived: FurnitureLayout, existing?: Furnit
     return derived;
   }
 
-  return existing;
+  const savedById = new Map(existing.items.map((item) => [item.id, item]));
+
+  return {
+    ...derived,
+    items: derived.items.map((item) => {
+      const saved = savedById.get(item.id);
+      if (!saved) {
+        return item;
+      }
+
+      return {
+        ...item,
+        position: saved.position,
+        rotationDeg: saved.rotationDeg
+      };
+    }),
+    generatedAt: existing.generatedAt
+  };
 }
 
 export function buildVerticalCirculation(version: PlanVersion): VerticalCirculationSystem {

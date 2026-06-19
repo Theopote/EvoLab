@@ -79,6 +79,7 @@ export function EvoLabWorkspace() {
     updateStructuralSystem,
     updateFacadeEnvelope,
     updateFacadeZone,
+    updateFurnitureItem,
     setActiveLevel,
     setOutline,
     setOutlineClosed,
@@ -137,6 +138,7 @@ export function EvoLabWorkspace() {
       updateStructuralSystem: state.updateStructuralSystem,
       updateFacadeEnvelope: state.updateFacadeEnvelope,
       updateFacadeZone: state.updateFacadeZone,
+      updateFurnitureItem: state.updateFurnitureItem,
       setActiveLevel: state.setActiveLevel,
       setOutline: state.setOutline,
       setOutlineClosed: state.setOutlineClosed,
@@ -371,6 +373,7 @@ export function EvoLabWorkspace() {
           activeLevelId={activeLevelId}
           furnitureLayout={project.domain.furnitureLayout}
           onLevelChange={setActiveLevel}
+          onMoveFurnitureItem={(itemId, position) => updateFurnitureItem(itemId, { position })}
         />
       );
     }
