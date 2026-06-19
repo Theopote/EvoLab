@@ -3,7 +3,8 @@
 import { GitCompareArrows, Pin } from "lucide-react";
 import { VersionCompareGrid } from "@/components/version-compare/VersionCompareGrid";
 import { VersionSplitCompare } from "@/components/workflow/VersionSplitCompare";
-import type { ProjectDomain, ProgramModel } from "@/lib/building-domain";
+import { ProposalReviewPanel } from "@/components/workflow/ProposalReviewPanel";
+import type { ProjectDomain, ProgramModel, StoredCopilotProposal } from "@/lib/building-domain";
 import type { PlanVersion } from "@/lib/project-types";
 
 interface CompareWorkspaceProps {
@@ -15,6 +16,9 @@ interface CompareWorkspaceProps {
   program: ProgramModel;
   projectType: string;
   orientationDeg: number;
+  copilotProposals: StoredCopilotProposal[];
+  selectedProposalId?: string;
+  lockedElementIds: string[];
   onCompareLevelChange: (levelId: string) => void;
   onSelectVersion: (version: PlanVersion) => void;
   onGenerateModel: (version: PlanVersion) => void;
@@ -32,6 +36,9 @@ export function CompareWorkspace({
   program,
   projectType,
   orientationDeg,
+  copilotProposals,
+  selectedProposalId,
+  lockedElementIds,
   onCompareLevelChange,
   onSelectVersion,
   onGenerateModel,
@@ -39,6 +46,10 @@ export function CompareWorkspace({
   onHybridAccepted,
   onClose
 }: CompareWorkspaceProps) {
+  const selectedProposal = copilotProposals.find((item) => item.id === selectedProposalId);
+  const proposalBaseVersion =
+    selectedProposal?.baseVersionSnapshot ??
+    versions.find((version) => version.id === selectedProposal?.baseVersionId);
   return (
     <section className="grid min-h-full grid-rows-[auto_auto_minmax(0,1fr)] gap-4">
       <header className="flex flex-wrap items-center justify-between gap-3 rounded border border-line bg-panel/90 px-4 py-3">
@@ -59,6 +70,10 @@ export function CompareWorkspace({
           Exit compare
         </button>
       </header>
+
+      {selectedProposal && proposalBaseVersion ? (
+        <ProposalReviewPanel proposal={selectedProposal} baseVersion={proposalBaseVersion} lockedElementIds={lockedElementIds} />
+      ) : null}
 
       {compareVersionIds.length < 2 ? (
         <div className="flex items-start gap-3 rounded border border-warning/30 bg-warning/5 p-3 text-xs text-warning">

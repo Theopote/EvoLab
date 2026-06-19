@@ -193,6 +193,27 @@ export interface FacadeEnvelope {
   orientationStrategy?: string;
 }
 
+export type FurnitureCategory = "desk" | "chair" | "bed" | "table" | "sofa" | "equipment";
+
+export interface FurnitureItem {
+  id: string;
+  roomId: string;
+  levelId: string;
+  name: string;
+  category: FurnitureCategory;
+  position: Point;
+  rotationDeg: number;
+  width: number;
+  depth: number;
+}
+
+export interface FurnitureLayout {
+  id: string;
+  versionId: string;
+  items: FurnitureItem[];
+  generatedAt: string;
+}
+
 export interface StairRun {
   id: string;
   levelId: string;
@@ -332,6 +353,7 @@ export interface ProjectDomain {
   structuralSystem?: StructuralSystem;
   facadeEnvelope?: FacadeEnvelope;
   verticalCirculation?: VerticalCirculationSystem;
+  furnitureLayout?: FurnitureLayout;
   doorWindowFamilies: DoorWindowFamily[];
   schedules: ScheduleBundle[];
   changeSets: ChangeSet[];

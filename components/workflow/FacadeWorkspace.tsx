@@ -16,21 +16,28 @@ interface FacadeWorkspaceProps {
   facadeEnvelope?: FacadeEnvelope;
   orientationDeg?: number;
   onLevelChange: (levelId: string) => void;
+  onUpdateFacadeEnvelope?: (patch: Partial<Pick<FacadeEnvelope, "defaultWindowRatio" | "orientationStrategy">>) => void;
+  onUpdateFacadeZone?: (
+    zoneId: string,
+    patch: Partial<Pick<FacadeEnvelope["zones"][number], "strategy" | "targetWindowRatio">>
+  ) => void;
 }
 
-const strategyLabel: Record<FacadeEnvelope["zones"][number]["strategy"], string> = {
-  curtain_wall: "Curtain wall",
-  punched_window: "Punched window",
-  solid: "Solid",
-  mixed: "Mixed"
-};
+const strategyOptions: FacadeEnvelope["zones"][number]["strategy"][] = [
+  "curtain_wall",
+  "punched_window",
+  "solid",
+  "mixed"
+];
 
 export function FacadeWorkspace({
   version,
   activeLevelId,
   facadeEnvelope,
   orientationDeg,
-  onLevelChange
+  onLevelChange,
+  onUpdateFacadeEnvelope,
+  onUpdateFacadeZone
 }: FacadeWorkspaceProps) {
   if (!version) {
     return (
@@ -53,11 +60,31 @@ export function FacadeWorkspace({
             Facade envelope
           </h1>
           <p className="mt-1 text-xs text-muted">
-            Perimeter strategies and target glazing ratios derived from level program and room orientation.
+            Edit glazing targets and perimeter strategies. Changes persist on the domain model across syncs.
           </p>
+          <div className="mt-3 grid gap-2">
+            <label className="block text-xs text-muted">
+              Orientation strategy
+              <input
+                className="mt-1 h-8 w-full rounded border border-line bg-[#0b1118] px-2 text-sm text-slate-100"
+                value={facadeEnvelope?.orientationStrategy ?? "balanced"}
+                onChange={(event) => onUpdateFacadeEnvelope?.({ orientationStrategy: event.target.value })}
+              />
+            </label>
+            <label className="block text-xs text-muted">
+              Default window-to-wall ratio
+              <input
+                className="mt-1 h-8 w-full rounded border border-line bg-[#0b1118] px-2 text-sm text-slate-100"
+                max={1}
+                min={0}
+                step={0.05}
+                type="number"
+                value={facadeEnvelope?.defaultWindowRatio ?? 0.35}
+                onChange={(event) => onUpdateFacadeEnvelope?.({ defaultWindowRatio: Number(event.target.value) })}
+              />
+            </label>
+          </div>
           <dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
-            <Metric label="Strategy" value={facadeEnvelope?.orientationStrategy ?? "balanced"} />
-            <Metric label="Default WWR" value={`${Math.round((facadeEnvelope?.defaultWindowRatio ?? 0) * 100)}%`} />
             <Metric label="Preferred facade" value={`${orientationDeg ?? 180}°`} />
             <Metric label="Zones" value={String(facadeEnvelope?.zones.length ?? 0)} />
           </dl>
@@ -82,13 +109,39 @@ export function FacadeWorkspace({
           <div className="space-y-2">
             {zones.map((zone) => (
               <div className="rounded border border-line bg-[#0b1118] p-2 text-xs" key={zone.id}>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-medium capitalize text-slate-100">{zone.edge}</span>
-                  <span className="text-[10px] uppercase tracking-[0.1em] text-muted">{strategyLabel[zone.strategy]}</span>
-                </div>
-                <div className="mt-1 text-muted">
-                  Target WWR {zone.targetWindowRatio ? `${Math.round(zone.targetWindowRatio * 100)}%` : "—"}
-                </div>
+                <div className="mb-2 font-medium capitalize text-slate-100">{zone.edge}</div>
+                <label className="mb-2 block text-muted">
+                  Strategy
+                  <select
+                    className="mt-1 h-8 w-full rounded border border-line bg-[#0a0f15] px-2 text-slate-100"
+                    value={zone.strategy}
+                    onChange={(event) =>
+                      onUpdateFacadeZone?.(zone.id, {
+                        strategy: event.target.value as FacadeEnvelope["zones"][number]["strategy"]
+                      })
+                    }
+                  >
+                    {strategyOptions.map((strategy) => (
+                      <option key={strategy} value={strategy}>
+                        {strategy}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-muted">
+                  Target WWR
+                  <input
+                    className="mt-1 h-8 w-full rounded border border-line bg-[#0a0f15] px-2 text-slate-100"
+                    max={1}
+                    min={0}
+                    step={0.05}
+                    type="number"
+                    value={zone.targetWindowRatio ?? facadeEnvelope?.defaultWindowRatio ?? 0.35}
+                    onChange={(event) =>
+                      onUpdateFacadeZone?.(zone.id, { targetWindowRatio: Number(event.target.value) })
+                    }
+                  />
+                </label>
               </div>
             ))}
           </div>

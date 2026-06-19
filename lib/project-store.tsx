@@ -9,7 +9,7 @@ import {
   applyRoomPatchToVersion,
   getResolvedLevel
 } from "@/lib/level-rooms";
-import type { ScheduleBundle, StoredCopilotProposal, ScoringConfig } from "@/lib/building-domain";
+import type { ScheduleBundle, StoredCopilotProposal, ScoringConfig, FacadeZone, StructuralSystem, FacadeEnvelope } from "@/lib/building-domain";
 import {
   addCopilotProposalComment as addCopilotProposalCommentInDomain,
   appendCopilotProposal,
@@ -123,6 +123,7 @@ interface EvoProjectStore {
   quantifySubview: QuantifySubview;
   compareVersionIds: string[];
   compareModeOpen: boolean;
+  selectedProposalId?: string;
   activeTab: WorkspaceTab;
   activeAnalysisLayers: AnalysisLayerId[];
   activeMepLayers: MepLayerId[];
@@ -150,6 +151,10 @@ interface EvoProjectStore {
   updateBrief: (brief: DesignBrief) => void;
   updateScoringConfig: (patch: Partial<ScoringConfig>) => void;
   resetScoringConfig: () => void;
+  updateStructuralSystem: (patch: Pick<StructuralSystem, "gridSpacingMeters" | "maxSpanMeters">) => void;
+  updateFacadeEnvelope: (patch: Partial<Pick<FacadeEnvelope, "defaultWindowRatio" | "orientationStrategy">>) => void;
+  updateFacadeZone: (zoneId: string, patch: Partial<Pick<FacadeZone, "strategy" | "targetWindowRatio">>) => void;
+  selectCopilotProposal: (proposalId?: string) => void;
   setWorkflowPhase: (phase: WorkflowPhase) => void;
   setBriefSiteSubview: (subview: BriefSiteSubview) => void;
   setQuantifySubview: (subview: QuantifySubview) => void;
@@ -549,6 +554,10 @@ function createInitialState(): Omit<
   | "updateBrief"
   | "updateScoringConfig"
   | "resetScoringConfig"
+  | "updateStructuralSystem"
+  | "updateFacadeEnvelope"
+  | "updateFacadeZone"
+  | "selectCopilotProposal"
   | "setWorkflowPhase"
   | "setBriefSiteSubview"
   | "setQuantifySubview"
@@ -831,6 +840,68 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
         state.project.domain.scoringConfig = createDefaultScoringConfig(state.project.projectType);
         rescoreProjectVersions(state);
         refreshDerivedDraft(state);
+      })
+    ),
+  updateStructuralSystem: (patch) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        const current = state.project.domain.structuralSystem;
+        if (!current) {
+          return;
+        }
+
+        state.project.domain.structuralSystem = {
+          ...current,
+          ...patch,
+          maxSpanMeters: patch.maxSpanMeters ?? Math.max(patch.gridSpacingMeters * 2, current.maxSpanMeters)
+        };
+      })
+    ),
+  updateFacadeEnvelope: (patch) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        const current = state.project.domain.facadeEnvelope;
+        if (!current) {
+          return;
+        }
+
+        state.project.domain.facadeEnvelope = {
+          ...current,
+          ...patch
+        };
+      })
+    ),
+  updateFacadeZone: (zoneId, patch) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        const envelope = state.project.domain.facadeEnvelope;
+        if (!envelope) {
+          return;
+        }
+
+        state.project.domain.facadeEnvelope = {
+          ...envelope,
+          zones: envelope.zones.map((zone) => (zone.id === zoneId ? { ...zone, ...patch } : zone))
+        };
+      })
+    ),
+  selectCopilotProposal: (proposalId) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        state.selectedProposalId = proposalId;
+
+        if (!proposalId) {
+          return;
+        }
+
+        const proposal = state.project.domain.copilotProposals.find((item) => item.id === proposalId);
+        if (!proposal) {
+          return;
+        }
+
+        if (!state.compareVersionIds.includes(proposal.baseVersionId)) {
+          state.compareVersionIds = [...state.compareVersionIds, proposal.baseVersionId].slice(-2);
+        }
       })
     ),
   setWorkflowPhase: (phase) =>

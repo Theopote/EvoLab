@@ -32,6 +32,7 @@ import { ScheduleWorkspace } from "@/components/workflow/ScheduleWorkspace";
 import { SiteWorkspace } from "@/components/workflow/SiteWorkspace";
 import { StructureWorkspace } from "@/components/workflow/StructureWorkspace";
 import { FacadeWorkspace } from "@/components/workflow/FacadeWorkspace";
+import { FurnitureWorkspace } from "@/components/workflow/FurnitureWorkspace";
 import { CompareWorkspace } from "@/components/workflow/CompareWorkspace";
 import { PlanResultGrid } from "@/components/plan-editor/PlanResultGrid";
 import { useCopilotTimelineStore } from "@/lib/copilot-timeline-store";
@@ -57,6 +58,7 @@ export function EvoLabWorkspace() {
     quantifySubview,
     compareVersionIds,
     compareModeOpen,
+    selectedProposalId,
     activeAnalysisLayers,
     activeMepLayers,
     isGeneratingMep,
@@ -73,6 +75,10 @@ export function EvoLabWorkspace() {
     setWorkflowPhase,
     toggleCompareVersion,
     setCompareModeOpen,
+    selectCopilotProposal,
+    updateStructuralSystem,
+    updateFacadeEnvelope,
+    updateFacadeZone,
     setActiveLevel,
     setOutline,
     setOutlineClosed,
@@ -110,6 +116,7 @@ export function EvoLabWorkspace() {
       quantifySubview: state.quantifySubview,
       compareVersionIds: state.compareVersionIds,
       compareModeOpen: state.compareModeOpen,
+      selectedProposalId: state.selectedProposalId,
       activeAnalysisLayers: state.activeAnalysisLayers,
       activeMepLayers: state.activeMepLayers,
       isGeneratingMep: state.isGeneratingMep,
@@ -126,6 +133,10 @@ export function EvoLabWorkspace() {
       setWorkflowPhase: state.setWorkflowPhase,
       toggleCompareVersion: state.toggleCompareVersion,
       setCompareModeOpen: state.setCompareModeOpen,
+      selectCopilotProposal: state.selectCopilotProposal,
+      updateStructuralSystem: state.updateStructuralSystem,
+      updateFacadeEnvelope: state.updateFacadeEnvelope,
+      updateFacadeZone: state.updateFacadeZone,
       setActiveLevel: state.setActiveLevel,
       setOutline: state.setOutline,
       setOutlineClosed: state.setOutlineClosed,
@@ -246,6 +257,9 @@ export function EvoLabWorkspace() {
           onRefineVersion={refineVersion}
           onHybridAccepted={handleHybridAccepted}
           onClose={() => setCompareModeOpen(false)}
+          copilotProposals={project.domain.copilotProposals}
+          selectedProposalId={selectedProposalId}
+          lockedElementIds={project.domain.lockedElementIds}
         />
       );
     }
@@ -262,6 +276,9 @@ export function EvoLabWorkspace() {
           onApproveChangeSet={approveChangeSet}
           onRejectChangeSet={rejectChangeSet}
           onToggleElementLock={toggleElementLock}
+          selectedProposalId={selectedProposalId}
+          onSelectProposal={selectCopilotProposal}
+          onOpenCompare={() => setCompareModeOpen(true)}
         />
       );
     }
@@ -328,6 +345,7 @@ export function EvoLabWorkspace() {
           verticalCirculation={project.domain.verticalCirculation}
           onLevelChange={setActiveLevel}
           onInpaintRevision={handleInpaintRevision}
+          onUpdateStructuralSystem={updateStructuralSystem}
         />
       );
     }
@@ -339,6 +357,19 @@ export function EvoLabWorkspace() {
           activeLevelId={activeLevelId}
           facadeEnvelope={project.domain.facadeEnvelope}
           orientationDeg={project.domain.site.orientationDeg}
+          onLevelChange={setActiveLevel}
+          onUpdateFacadeEnvelope={updateFacadeEnvelope}
+          onUpdateFacadeZone={updateFacadeZone}
+        />
+      );
+    }
+
+    if (activeTab === "Furniture") {
+      return (
+        <FurnitureWorkspace
+          version={activeVersion}
+          activeLevelId={activeLevelId}
+          furnitureLayout={project.domain.furnitureLayout}
           onLevelChange={setActiveLevel}
         />
       );

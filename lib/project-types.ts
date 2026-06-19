@@ -15,6 +15,7 @@ export const workspaceTabs = [
   "Model",
   "Structure",
   "Facade",
+  "Furniture",
   "Analysis",
   "Systems",
   "Quantity",

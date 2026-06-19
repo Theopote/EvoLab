@@ -7,6 +7,9 @@ import {
   type CodeContext,
   type ElementChange,
   type FacadeEnvelope,
+  type FurnitureCategory,
+  type FurnitureItem,
+  type FurnitureLayout,
   type ProgramModel,
   type ProgramSpaceRequirement,
   type ProjectDomain,
@@ -24,7 +27,7 @@ import { calculateQuantities } from "@/lib/quantity-engine";
 import { createDefaultScoringConfig, normalizeScoringConfig, resolveProgramGoalsFromDomain, resolveRulePackFromDomain } from "@/lib/rules/scoring-config";
 import { resolveTypologyPack } from "@/lib/typology/resolve";
 import { computeTotalScore } from "@/lib/rules/version-total-score";
-import type { DesignBrief, PlanVersion, Point, ProjectData, Room, TopologyGraph } from "@/lib/project-types";
+import type { DesignBrief, PlanVersion, Point, ProjectData, Room, RoomType, TopologyGraph } from "@/lib/project-types";
 import type { SiteContext, ZoningConstraints } from "@/lib/site-types";
 import { defaultZoningConstraints } from "@/lib/site-types";
 
@@ -200,6 +203,102 @@ export function buildFacadeEnvelope(version: PlanVersion): FacadeEnvelope {
       targetWindowRatio: level.floorProgram === "ground" ? 0.45 : 0.3
     }))
   };
+}
+
+export function mergeStructuralSystem(derived: StructuralSystem, existing?: StructuralSystem): StructuralSystem {
+  if (!existing) {
+    return derived;
+  }
+
+  return {
+    ...derived,
+    gridSpacingMeters: existing.gridSpacingMeters,
+    maxSpanMeters: existing.maxSpanMeters,
+    beams: existing.beams.length ? existing.beams : derived.beams,
+    shearWalls: existing.shearWalls.length ? existing.shearWalls : derived.shearWalls
+  };
+}
+
+export function mergeFacadeEnvelope(derived: FacadeEnvelope, existing?: FacadeEnvelope): FacadeEnvelope {
+  if (!existing) {
+    return derived;
+  }
+
+  const zones = derived.zones.map((zone) => {
+    const override = existing.zones.find((item) => item.id === zone.id);
+    return override ? { ...zone, ...override, id: zone.id } : zone;
+  });
+
+  return {
+    ...derived,
+    defaultWindowRatio: existing.defaultWindowRatio,
+    orientationStrategy: existing.orientationStrategy ?? derived.orientationStrategy,
+    zones
+  };
+}
+
+const furnitureTemplates: Partial<
+  Record<RoomType, Array<{ name: string; category: FurnitureCategory; width: number; depth: number; offset: Point }>>
+> = {
+  office: [
+    { name: "Desk", category: "desk", width: 1.4, depth: 0.7, offset: [0, 0] },
+    { name: "Chair", category: "chair", width: 0.5, depth: 0.5, offset: [0.8, 0.6] }
+  ],
+  bedroom: [{ name: "Bed", category: "bed", width: 2.0, depth: 1.5, offset: [0, 0] }],
+  living_room: [{ name: "Sofa", category: "sofa", width: 2.2, depth: 0.9, offset: [0, 0] }],
+  consultation: [{ name: "Exam desk", category: "desk", width: 1.2, depth: 0.6, offset: [0, 0] }],
+  ward: [{ name: "Patient bed", category: "bed", width: 2.1, depth: 1.0, offset: [0, 0] }],
+  kitchen: [{ name: "Counter", category: "table", width: 1.8, depth: 0.6, offset: [0, 0] }]
+};
+
+function roomCentroid(room: Room): Point {
+  const total = room.polygon.reduce((acc, [x, y]) => [acc[0] + x, acc[1] + y] as Point, [0, 0]);
+  return [total[0] / room.polygon.length, total[1] / room.polygon.length];
+}
+
+export function buildFurnitureLayout(version: PlanVersion): FurnitureLayout {
+  const items: FurnitureItem[] = [];
+
+  version.rooms.forEach((room) => {
+    const templates = furnitureTemplates[room.type];
+    if (!templates?.length || ["corridor", "stair", "elevator", "shaft", "bathroom"].includes(room.type)) {
+      return;
+    }
+
+    const center = roomCentroid(room);
+    templates.forEach((template, index) => {
+      items.push({
+        id: `furn-${room.id}-${index}`,
+        roomId: room.id,
+        levelId: room.levelId ?? version.levels[0]?.id ?? "level-01",
+        name: template.name,
+        category: template.category,
+        position: [center[0] + template.offset[0], center[1] + template.offset[1]],
+        rotationDeg: 0,
+        width: template.width,
+        depth: template.depth
+      });
+    });
+  });
+
+  return {
+    id: `furniture-${version.id}`,
+    versionId: version.id,
+    items,
+    generatedAt: new Date().toISOString()
+  };
+}
+
+export function mergeFurnitureLayout(derived: FurnitureLayout, existing?: FurnitureLayout): FurnitureLayout {
+  if (!existing || existing.versionId !== derived.versionId) {
+    return derived;
+  }
+
+  if (!existing.items.length) {
+    return derived;
+  }
+
+  return existing;
 }
 
 export function buildVerticalCirculation(version: PlanVersion): VerticalCirculationSystem {
@@ -440,9 +539,16 @@ export function syncProjectDomain(domain: ProjectDomain | undefined, input: Proj
     },
     program: programFromBrief(input.brief, activeVersion?.metadata?.topologyGraph ?? undefined),
     storeyStack: activeVersion ? buildStoreyStack(activeVersion) : base.storeyStack,
-    structuralSystem: activeVersion ? buildStructuralSystem(activeVersion) : base.structuralSystem,
-    facadeEnvelope: activeVersion ? buildFacadeEnvelope(activeVersion) : base.facadeEnvelope,
+    structuralSystem: activeVersion
+      ? mergeStructuralSystem(buildStructuralSystem(activeVersion), base.structuralSystem)
+      : base.structuralSystem,
+    facadeEnvelope: activeVersion
+      ? mergeFacadeEnvelope(buildFacadeEnvelope(activeVersion), base.facadeEnvelope)
+      : base.facadeEnvelope,
     verticalCirculation: activeVersion ? buildVerticalCirculation(activeVersion) : base.verticalCirculation,
+    furnitureLayout: activeVersion
+      ? mergeFurnitureLayout(buildFurnitureLayout(activeVersion), base.furnitureLayout)
+      : base.furnitureLayout,
     schedules: activeVersion
       ? [buildScheduleBundle(activeVersion), ...base.schedules.filter((item) => item.versionId !== activeVersion.id)]
       : base.schedules

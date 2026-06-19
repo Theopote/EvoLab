@@ -37,7 +37,8 @@ const schemeItems: { id: SchemeSubview; label: string }[] = [
   { id: "massing", label: "Massing" },
   { id: "model", label: "3D Model" },
   { id: "structure", label: "Structure" },
-  { id: "facade", label: "Facade" }
+  { id: "facade", label: "Facade" },
+  { id: "furniture", label: "Furniture" }
 ];
 
 const analyzeItems: { id: AnalyzeSubview; label: string }[] = [

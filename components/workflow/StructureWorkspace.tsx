@@ -19,6 +19,7 @@ interface StructureWorkspaceProps {
   verticalCirculation?: VerticalCirculationSystem;
   onLevelChange: (levelId: string) => void;
   onInpaintRevision?: (version: PlanVersion, prompt: string) => void;
+  onUpdateStructuralSystem?: (patch: Pick<StructuralSystem, "gridSpacingMeters" | "maxSpanMeters">) => void;
 }
 
 export function StructureWorkspace({
@@ -28,7 +29,8 @@ export function StructureWorkspace({
   storeyStack,
   verticalCirculation,
   onLevelChange,
-  onInpaintRevision
+  onInpaintRevision,
+  onUpdateStructuralSystem
 }: StructureWorkspaceProps) {
   if (!version) {
     return (
@@ -73,8 +75,23 @@ export function StructureWorkspace({
 
       <div className="grid min-h-0 grid-cols-[minmax(280px,0.75fr)_minmax(0,1.25fr)] gap-4">
         <aside className="space-y-3 overflow-auto">
-          <MetricCard label="Grid spacing" value={`${structuralSystem?.gridSpacingMeters.toFixed(1) ?? "—"} m`} />
-          <MetricCard label="Max span" value={`${structuralSystem?.maxSpanMeters.toFixed(1) ?? "—"} m`} />
+          <EditableMetric
+            label="Grid spacing (m)"
+            value={structuralSystem?.gridSpacingMeters ?? 12}
+            step={0.5}
+            onChange={(value) => onUpdateStructuralSystem?.({ gridSpacingMeters: value, maxSpanMeters: structuralSystem?.maxSpanMeters ?? value * 2 })}
+          />
+          <EditableMetric
+            label="Max span (m)"
+            value={structuralSystem?.maxSpanMeters ?? 24}
+            step={0.5}
+            onChange={(value) =>
+              onUpdateStructuralSystem?.({
+                gridSpacingMeters: structuralSystem?.gridSpacingMeters ?? 12,
+                maxSpanMeters: value
+              })
+            }
+          />
           <MetricCard label="Columns (level)" value={String(levelColumns)} />
           <MetricCard label="Total columns" value={String(structuralSystem?.columns.length ?? 0)} />
           <MetricCard label="Storey groups" value={String(storeyStack?.groups.length ?? 0)} />
@@ -125,5 +142,30 @@ function MetricCard({ label, value }: { label: string; value: string }) {
       <div className="text-muted">{label}</div>
       <div className="mt-1 text-sm font-medium text-slate-100">{value}</div>
     </div>
+  );
+}
+
+function EditableMetric({
+  label,
+  value,
+  step,
+  onChange
+}: {
+  label: string;
+  value: number;
+  step: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <label className="block rounded border border-line bg-panel/90 px-3 py-2 text-xs">
+      <span className="text-muted">{label}</span>
+      <input
+        className="mt-1 h-8 w-full rounded border border-line bg-[#0b1118] px-2 text-sm text-slate-100"
+        step={step}
+        type="number"
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value))}
+      />
+    </label>
   );
 }
