@@ -25,6 +25,12 @@ import {
   rejectChangeSetInDomain,
   syncProjectDomain
 } from "@/lib/project-domain";
+import {
+  mergeGeometryChangeSet,
+  shouldMergeGeometryChange,
+  startGeometryChangeBurst,
+  type GeometryChangeBurst
+} from "@/lib/geometry-change-merge";
 import { calculateQuantities, checkCompliance, type ComplianceItem, type QuantityResult } from "@/lib/quantity-engine";
 import { rescoreVersions, scoringInputFromDomain } from "@/lib/rules/resolve-version-scoring";
 import { createDefaultScoringConfig, normalizeScoringConfig } from "@/lib/rules/scoring-config";
@@ -296,6 +302,39 @@ function refreshDomainDraft(state: EvoProjectStore) {
   }
 }
 
+let pendingGeometryChangeBurst: GeometryChangeBurst | null = null;
+
+export function resetGeometryChangeBurstForTests() {
+  pendingGeometryChangeBurst = null;
+}
+
+function recordGeometryVersionChangeSet(
+  state: EvoProjectStore,
+  previousVersion: PlanVersion,
+  targetVersion: PlanVersion
+) {
+  const now = Date.now();
+
+  if (shouldMergeGeometryChange(pendingGeometryChangeBurst, targetVersion.id, now) && pendingGeometryChangeBurst) {
+    const merged = mergeGeometryChangeSet(
+      state.project.domain.changeSets,
+      pendingGeometryChangeBurst,
+      targetVersion,
+      now
+    );
+    state.project.domain = {
+      ...state.project.domain,
+      changeSets: merged.changeSets
+    };
+    pendingGeometryChangeBurst = merged.burst;
+    return;
+  }
+
+  const started = startGeometryChangeBurst(previousVersion, targetVersion, now);
+  state.project.domain = appendChangeSet(state.project.domain, started.changeSet);
+  pendingGeometryChangeBurst = started.burst;
+}
+
 function recordVersionChangeSet(
   state: EvoProjectStore,
   source: "ai" | "user" | "import" | "system",
@@ -303,6 +342,7 @@ function recordVersionChangeSet(
   baseVersion: PlanVersion,
   targetVersion: PlanVersion
 ) {
+  pendingGeometryChangeBurst = null;
   state.project.domain = appendChangeSet(
     state.project.domain,
     createChangeSet({
@@ -1048,14 +1088,20 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
           return;
         }
 
-        commitNormalizedVersionDraft(
-          state,
-          normalizePlanVersion(nextVersion),
-          false,
-          true,
-          "Updated shared room geometry",
-          "user"
+        const previousVersion = normalized;
+        const committedVersion = normalizePlanVersion(nextVersion);
+
+        state.project.versions = state.project.versions.map((item) =>
+          item.id === committedVersion.id ? committedVersion : item
         );
+        state.project.activeVersionId = committedVersion.id;
+
+        if (previousVersion) {
+          recordGeometryVersionChangeSet(state, previousVersion, committedVersion);
+        }
+
+        bumpGeometryRevision(state);
+        refreshDerivedDraft(state);
       })
     ),
   addParametricOpening: (input) =>

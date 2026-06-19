@@ -54,6 +54,7 @@ export function FloorPlanCanvas({
   const activeTool = useInteractionStore((state) => state.activeTool);
   const previewRooms = useEditPreviewStore((state) => state.previewRooms);
   const complianceRoomIds = useEditPreviewStore((state) => state.complianceRoomIds);
+  const dragHint = useEditPreviewStore((state) => state.dragHint);
   const setPreviewRooms = useEditPreviewStore((state) => state.setPreviewRooms);
   const clearPreview = useEditPreviewStore((state) => state.clearPreview);
   const {
@@ -112,12 +113,12 @@ export function FloorPlanCanvas({
   }, []);
 
   const handleRoomsGeometryPreview = useCallback(
-    (rooms: Room[]) => {
+    (rooms: Room[], hint?: string | null) => {
       if (!dragBaseSignatureRef.current) {
         dragBaseSignatureRef.current = roomsGeometrySignature(rooms);
       }
 
-      setPreviewRooms(rooms, corridorComplianceRoomIds(rooms));
+      setPreviewRooms(rooms, corridorComplianceRoomIds(rooms), hint ?? null);
     },
     [setPreviewRooms]
   );
@@ -197,6 +198,8 @@ export function FloorPlanCanvas({
     : undefined;
   const traceEnabled = interactive && activeTool === "trace";
   const inpaintEnabled = interactive && activeTool === "inpaint";
+  const directWallDragEnabled =
+    interactive && !inpaintEnabled && (activeTool === "select" || activeTool === "trace");
   const geometryEditEnabled =
     interactive &&
     !inpaintEnabled &&
@@ -204,9 +207,14 @@ export function FloorPlanCanvas({
     Boolean(selectedRoom && !lockedElementIds.includes(selectedRoom.id));
   const wallDragEnabled =
     interactive &&
-    (activeTool === "select" || activeTool === "trace") &&
+    directWallDragEnabled &&
     Boolean(selectedWallId) &&
     Boolean(selectedWall && !selectedWall.roomIds.some((roomId) => lockedElementIds.includes(roomId)));
+  const hoveredWall = hoveredWallId ? previewWalls.find((wall) => wall.id === hoveredWallId) : undefined;
+  const hoveredWallDraggable =
+    directWallDragEnabled &&
+    Boolean(hoveredWall && !hoveredWall.roomIds.some((roomId) => lockedElementIds.includes(roomId)));
+  const canvasCursor = previewRooms ? "grabbing" : hoveredWallDraggable ? "grab" : undefined;
   const parametricOpeningEnabled =
     interactive && activeTool === "select" && Boolean(selectedWall) && wallDragEnabled;
   const openingEditEnabled =
@@ -257,6 +265,7 @@ export function FloorPlanCanvas({
         <svg
           ref={svgRef}
           className="relative h-full min-h-[420px] w-full"
+          style={canvasCursor ? { cursor: canvasCursor } : undefined}
           viewBox={getViewBox(version)}
           role="img"
           onPointerLeave={interactive ? handleCanvasPointerLeave : undefined}
@@ -277,9 +286,18 @@ export function FloorPlanCanvas({
           />
           <WallLayer
             walls={previewWalls}
+            rooms={sourceRooms}
             hoveredWallId={hoveredWallId}
             selectedWallId={selectedWallId}
+            wallDragEnabled={directWallDragEnabled}
+            lockedElementIds={lockedElementIds}
+            gridSnapEnabled={gridSnapEnabled}
+            gridStep={gridStep}
+            svgRef={svgRef}
             onSelectWall={interactive && !inpaintEnabled ? selectWall : undefined}
+            onRoomsGeometryCancel={handleRoomsGeometryCancel}
+            onRoomsGeometryCommit={handleRoomsGeometryCommit}
+            onRoomsGeometryPreview={handleRoomsGeometryPreview}
           />
           <OpeningLayer
             openings={level?.openings ?? []}
@@ -312,11 +330,12 @@ export function FloorPlanCanvas({
         <div className="absolute bottom-3 left-3 rounded border border-line bg-[#081018]/90 px-2 py-1 text-xs text-muted">
           1 grid = 1 m / {version.label}
           {geometryEditEnabled ? " / Drag vertices or edge handles" : ""}
+          {hoveredWallDraggable && !previewRooms ? " / Drag wall line" : ""}
           {traceEnabled ? " / Trace mode" : ""}
           {inpaintEnabled ? " / Inpaint mask" : ""}
           {wallDragEnabled ? " / Drag shared wall" : ""}
           {openingEditEnabled ? " / Drag opening along wall" : ""}
-          {previewRooms ? " / Preview only — release to commit" : ""}
+          {dragHint ? ` / ${dragHint}` : previewRooms ? " / Preview only — release to commit" : ""}
         </div>
         <div className="absolute left-3 top-3 flex items-center gap-2">
           <button

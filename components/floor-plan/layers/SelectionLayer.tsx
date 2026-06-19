@@ -5,19 +5,21 @@ import type { OpeningElement, Point, Room, Wall } from "@/lib/project-types";
 import { clientToSvgPoint, openingSegment, polygonPoints } from "@/components/floor-plan/floor-plan-utils";
 import { openingCenterFromDragPoint } from "@/lib/opening-wall-utils";
 import {
+  createWallDragSession,
+  previewWallDrag,
+  wallDragOffsetFromPointer,
+  type WallDragSession
+} from "@/components/floor-plan/wall-drag-utils";
+import {
   applyNodeDrag,
-  applyWallDragByOffset,
   deriveWallGraph,
-  edgeUnitNormal,
   findRoomEdge,
   quantizePoint,
   roomsAtNode
 } from "@/lib/wall-graph";
 import {
   constrainOrthoDelta,
-  projectDeltaOntoNormal,
   snapPoint,
-  wallUnitNormal,
   type GridSnapStep
 } from "@/lib/plan-snap";
 
@@ -57,7 +59,7 @@ function ControlPoints({
   svgRef?: React.RefObject<SVGSVGElement | null>;
   gridStep: GridSnapStep;
   gridEnabled: boolean;
-  onPreviewRooms?: (rooms: Room[]) => void;
+  onPreviewRooms?: (rooms: Room[], dragHint?: string | null) => void;
   onCommitRooms?: (rooms: Room[]) => void;
   onCancelPreview?: () => void;
 }) {
@@ -97,7 +99,12 @@ function ControlPoints({
       return;
     }
 
-    onPreviewRooms?.(applyNodeDrag(session.originalRooms, graph, session.nodeId, next));
+    onPreviewRooms?.(
+      applyNodeDrag(session.originalRooms, graph, session.nodeId, next),
+      roomsAtNode(graph, session.nodeId).length > 1
+        ? `Shared corner · affects ${roomsAtNode(graph, session.nodeId).length} rooms`
+        : "Drag corner · release to commit"
+    );
   }
 
   const midpoints: Point[] = polygon.map((point, index) => midpoint(point, polygon[(index + 1) % polygon.length]));
@@ -215,14 +222,23 @@ function EdgeMidpointHandle({
   enabled: boolean;
   gridStep: GridSnapStep;
   gridEnabled: boolean;
-  onPreviewRooms?: (rooms: Room[]) => void;
+  onPreviewRooms?: (rooms: Room[], dragHint?: string | null) => void;
   onCommitRooms?: (rooms: Room[]) => void;
   onCancelPreview?: () => void;
 }) {
-  const sessionRef = useRef<GeometryDragSession | null>(null);
-  const normal = edgeUnitNormal(edge.nodeA, edge.nodeB);
+  const sessionRef = useRef<WallDragSession | null>(null);
+  const wall = {
+    id: edge.id,
+    start: edge.nodeA,
+    end: edge.nodeB,
+    roomIds: edge.roomIds,
+    type: "internal" as const,
+    thickness: 0.18,
+    height: 3,
+    levelId: "level-01"
+  };
 
-  function currentOffset(event: React.PointerEvent<SVGCircleElement>) {
+  function readOffset(event: React.PointerEvent<SVGCircleElement>) {
     const session = sessionRef.current;
     const svgElement = svgRef?.current;
 
@@ -230,16 +246,7 @@ function EdgeMidpointHandle({
       return null;
     }
 
-    const [x, y] = clientToSvgPoint(svgElement, event.clientX, event.clientY);
-    const rawDelta: Point = [x - session.dragStart[0], y - session.dragStart[1]];
-    const projected = projectDeltaOntoNormal(rawDelta, session.wallNormal ?? normal);
-    const nextPoint = snapPoint([session.dragStart[0] + projected[0], session.dragStart[1] + projected[1]], {
-      gridEnabled,
-      gridStep
-    });
-    const snappedDelta: Point = [nextPoint[0] - session.dragStart[0], nextPoint[1] - session.dragStart[1]];
-
-    return snappedDelta[0] * normal[0] + snappedDelta[1] * normal[1];
+    return wallDragOffsetFromPointer(event, session, svgElement, gridEnabled, gridStep);
   }
 
   return (
@@ -256,55 +263,43 @@ function EdgeMidpointHandle({
           return;
         }
 
-        const svgElement = svgRef?.current;
+        const session = createWallDragSession(event, wall, allRooms);
 
-        if (!svgElement) {
+        if (!session) {
           return;
         }
 
-        const [x, y] = clientToSvgPoint(svgElement, event.clientX, event.clientY);
-
-        sessionRef.current = {
-          pointerId: event.pointerId,
-          dragStart: [x, y],
-          originalRooms: allRooms,
-          wallId: edge.id,
-          wallNormal: normal
-        };
-        onPreviewRooms(allRooms);
+        sessionRef.current = session;
+        onPreviewRooms(allRooms, "Drag wall edge · release to commit");
         event.currentTarget.setPointerCapture(event.pointerId);
         event.stopPropagation();
       }}
       onPointerMove={(event) => {
         const session = sessionRef.current;
 
-        if (!session || session.pointerId !== event.pointerId || !session.wallId) {
+        if (!session || session.pointerId !== event.pointerId) {
           return;
         }
 
-        const offset = currentOffset(event);
+        const offset = readOffset(event);
 
         if (offset === null) {
           return;
         }
 
-        onPreviewRooms?.(
-          applyWallDragByOffset(session.originalRooms, session.wallId, offset, session.wallNormal ?? normal)
-        );
+        onPreviewRooms?.(previewWallDrag(session, offset), "Drag wall edge · release to commit");
       }}
       onPointerUp={(event) => {
         const session = sessionRef.current;
 
-        if (!session || session.pointerId !== event.pointerId || !session.wallId) {
+        if (!session || session.pointerId !== event.pointerId) {
           return;
         }
 
-        const offset = currentOffset(event);
+        const offset = readOffset(event);
 
         if (offset !== null) {
-          onCommitRooms?.(
-            applyWallDragByOffset(session.originalRooms, session.wallId, offset, session.wallNormal ?? normal)
-          );
+          onCommitRooms?.(previewWallDrag(session, offset));
         } else {
           onCancelPreview?.();
         }
@@ -337,15 +332,14 @@ function WallDragHandle({
   enabled: boolean;
   gridStep: GridSnapStep;
   gridEnabled: boolean;
-  onPreviewRooms?: (rooms: Room[]) => void;
+  onPreviewRooms?: (rooms: Room[], dragHint?: string | null) => void;
   onCommitRooms?: (rooms: Room[]) => void;
   onCancelPreview?: () => void;
 }) {
-  const sessionRef = useRef<GeometryDragSession | null>(null);
+  const sessionRef = useRef<WallDragSession | null>(null);
   const center = midpoint(wall.start, wall.end);
-  const normal = wallUnitNormal(wall);
 
-  function currentOffset(event: React.PointerEvent<SVGCircleElement>) {
+  function readOffset(event: React.PointerEvent<SVGCircleElement>) {
     const session = sessionRef.current;
     const svgElement = svgRef?.current;
 
@@ -353,16 +347,7 @@ function WallDragHandle({
       return null;
     }
 
-    const [x, y] = clientToSvgPoint(svgElement, event.clientX, event.clientY);
-    const rawDelta: Point = [x - session.dragStart[0], y - session.dragStart[1]];
-    const projected = projectDeltaOntoNormal(rawDelta, session.wallNormal ?? normal);
-    const nextPoint = snapPoint([session.dragStart[0] + projected[0], session.dragStart[1] + projected[1]], {
-      gridEnabled,
-      gridStep
-    });
-    const snappedDelta: Point = [nextPoint[0] - session.dragStart[0], nextPoint[1] - session.dragStart[1]];
-
-    return snappedDelta[0] * normal[0] + snappedDelta[1] * normal[1];
+    return wallDragOffsetFromPointer(event, session, svgElement, gridEnabled, gridStep);
   }
 
   return (
@@ -379,55 +364,43 @@ function WallDragHandle({
           return;
         }
 
-        const svgElement = svgRef?.current;
+        const session = createWallDragSession(event, wall, allRooms);
 
-        if (!svgElement) {
+        if (!session) {
           return;
         }
 
-        const [x, y] = clientToSvgPoint(svgElement, event.clientX, event.clientY);
-
-        sessionRef.current = {
-          pointerId: event.pointerId,
-          dragStart: [x, y],
-          originalRooms: allRooms,
-          wallId: wall.id,
-          wallNormal: normal
-        };
-        onPreviewRooms(allRooms);
+        sessionRef.current = session;
+        onPreviewRooms(allRooms, "Drag wall · release to commit");
         event.currentTarget.setPointerCapture(event.pointerId);
         event.stopPropagation();
       }}
       onPointerMove={(event) => {
         const session = sessionRef.current;
 
-        if (!session || session.pointerId !== event.pointerId || !session.wallId) {
+        if (!session || session.pointerId !== event.pointerId) {
           return;
         }
 
-        const offset = currentOffset(event);
+        const offset = readOffset(event);
 
         if (offset === null) {
           return;
         }
 
-        onPreviewRooms?.(
-          applyWallDragByOffset(session.originalRooms, session.wallId, offset, session.wallNormal ?? normal)
-        );
+        onPreviewRooms?.(previewWallDrag(session, offset), "Drag wall · release to commit");
       }}
       onPointerUp={(event) => {
         const session = sessionRef.current;
 
-        if (!session || session.pointerId !== event.pointerId || !session.wallId) {
+        if (!session || session.pointerId !== event.pointerId) {
           return;
         }
 
-        const offset = currentOffset(event);
+        const offset = readOffset(event);
 
         if (offset !== null) {
-          onCommitRooms?.(
-            applyWallDragByOffset(session.originalRooms, session.wallId, offset, session.wallNormal ?? normal)
-          );
+          onCommitRooms?.(previewWallDrag(session, offset));
         } else {
           onCancelPreview?.();
         }
@@ -524,7 +497,7 @@ interface SelectionLayerProps {
   gridStep?: GridSnapStep;
   gridSnapEnabled?: boolean;
   svgRef?: React.RefObject<SVGSVGElement | null>;
-  onRoomsGeometryPreview?: (rooms: Room[]) => void;
+  onRoomsGeometryPreview?: (rooms: Room[], dragHint?: string | null) => void;
   onRoomsGeometryCommit?: (rooms: Room[]) => void;
   onRoomsGeometryCancel?: () => void;
   onOpeningCenterChange?: (openingId: string, center: Point) => void;
