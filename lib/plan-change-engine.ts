@@ -1,3 +1,5 @@
+import { addProtrusion } from "@/lib/add-protrusion";
+import { resolveBayWindowGfaThresholds } from "@/lib/gfa-exemption";
 import { getOperationTargetIds } from "@/lib/plan-change-diff";
 import { postProcessPlanVersion } from "@/lib/plan-postprocess";
 import { polygonArea } from "@/lib/plan-validation";
@@ -365,6 +367,45 @@ function applyUpdateRoomPolygon(
   }));
 }
 
+function applyAddRoom(version: PlanVersion, operation: Extract<PlanOperation, { type: "add_room" }>): PlanVersion {
+  const room: Room = {
+    id: operation.room.id,
+    name: operation.room.name,
+    type: operation.room.type as Room["type"],
+    zone: operation.room.zone as Room["zone"],
+    polygon: operation.room.polygon,
+    areaSqm: operation.room.areaSqm,
+    doors: operation.room.doors,
+    windows: operation.room.windows
+  };
+
+  return replaceRoomsInVersion(version, [...version.rooms, room]);
+}
+
+function applyAddProtrusion(
+  version: PlanVersion,
+  operation: Extract<PlanOperation, { type: "add_protrusion" }>
+): PlanVersion {
+  const room = version.rooms.find((item) => item.id === operation.roomId);
+
+  if (!room) {
+    return version;
+  }
+
+  const nextRoom = addProtrusion(
+    room,
+    operation.protrusion,
+    version.outline,
+    resolveBayWindowGfaThresholds()
+  );
+
+  if (!nextRoom) {
+    return version;
+  }
+
+  return updateRoomInVersion(version, operation.roomId, () => nextRoom);
+}
+
 function applyOperation(version: PlanVersion, operation: PlanOperation): PlanVersion {
   switch (operation.type) {
     case "move_core":
@@ -389,6 +430,10 @@ function applyOperation(version: PlanVersion, operation: PlanOperation): PlanVer
       return applyResizeOpening(version, operation);
     case "update_room_polygon":
       return applyUpdateRoomPolygon(version, operation);
+    case "add_room":
+      return applyAddRoom(version, operation);
+    case "add_protrusion":
+      return applyAddProtrusion(version, operation);
     default:
       return version;
   }
@@ -591,5 +636,9 @@ export function operationSummary(operation: PlanOperation): string {
       return `Resize ${operation.openingKind} #${operation.openingIndex} to ${operation.width}m`;
     case "update_room_polygon":
       return `Reshape room ${operation.roomId} (${operation.polygon.length} vertices)`;
+    case "add_room":
+      return `Add room ${operation.room.name}`;
+    case "add_protrusion":
+      return `Add ${operation.protrusion.type} to ${operation.roomId}`;
   }
 }
