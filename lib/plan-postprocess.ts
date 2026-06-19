@@ -1,6 +1,7 @@
 import { normalizePlanVersion, type PlanVersionDraft } from "@/lib/architecture-model";
 import type { CodeContext, ProgramModel } from "@/lib/building-domain";
 import { enforceOpeningConstraintsOnVersion } from "@/lib/opening-constraints";
+import { applyLevelRoomsToVersion, resolveLevelRooms } from "@/lib/level-rooms";
 import type { PlanVersion, Point, Room } from "@/lib/project-types";
 import { calculateScores } from "@/lib/plan-scoring";
 import { polygonArea, validatePlanVersion } from "@/lib/plan-validation";
@@ -37,20 +38,18 @@ function repairRoom(room: Room, width: number, height: number) {
   };
 }
 
-function repairMissingCore(version: PlanVersion) {
-  if (version.rooms.some((room) => room.type === "stair" || room.type === "elevator")) {
-    return { version, repairs: [] as string[] };
-  }
-
+function createAutoCore(version: PlanVersion, levelId: string, levelName: string, rooms: Room[]): Room {
   const width = Math.max(4, Math.min(8, version.overallBounds.width * 0.12));
   const height = Math.max(5, Math.min(9, version.overallBounds.height * 0.18));
   const x = Math.max(0, version.overallBounds.width - width - 2);
   const y = Math.max(0, version.overallBounds.height - height - 2);
-  const core: Room = {
-    id: "auto-core-01",
+
+  return {
+    id: `auto-core-${levelId}`,
     name: "Auto Core",
     type: "elevator",
     zone: "circulation",
+    levelId,
     polygon: [
       [x, y],
       [x + width, y],
@@ -61,30 +60,57 @@ function repairMissingCore(version: PlanVersion) {
     ceilingHeight: 3.3,
     doors: [{ wall: "west", position: 0.5, width: 1.2 }],
     windows: [],
-    adjacents: version.rooms.filter((room) => room.type === "corridor").map((room) => room.id)
+    adjacents: rooms.filter((room) => room.type === "corridor").map((room) => room.id)
   };
+}
 
-  return {
-    version: {
-      ...version,
-      rooms: [...version.rooms, core]
-    },
-    repairs: ["Inserted a fallback stair/elevator core because the AI output had no vertical core."]
-  };
+function repairMissingCore(version: PlanVersion) {
+  const repairs: string[] = [];
+  let next = version;
+
+  next.levels.forEach((level) => {
+    const rooms = resolveLevelRooms(level, next.standardFloorGroups);
+    const hasCore = rooms.some((room) => room.type === "stair" || room.type === "elevator");
+
+    if (hasCore) {
+      return;
+    }
+
+    const core = createAutoCore(next, level.id, level.name, rooms);
+    const updated = applyLevelRoomsToVersion(next, level.id, [...rooms, core]);
+
+    if (updated) {
+      next = updated;
+      repairs.push(
+        next.levels.length > 1
+          ? `Inserted a fallback stair/elevator core on ${level.name}.`
+          : "Inserted a fallback stair/elevator core because the AI output had no vertical core."
+      );
+    }
+  });
+
+  return { version: next, repairs };
 }
 
 export function repairPlanVersion(version: PlanVersion) {
   const repairs: string[] = [];
-  const repairedRooms = version.rooms.map((room) => {
-    const result = repairRoom(room, version.overallBounds.width, version.overallBounds.height);
-    repairs.push(...result.repairs);
-    return result.room;
+  let next = version;
+
+  next.levels.forEach((level) => {
+    const rooms = resolveLevelRooms(level, next.standardFloorGroups);
+    const repairedRooms = rooms.map((room) => {
+      const result = repairRoom(room, next.overallBounds.width, next.overallBounds.height);
+      repairs.push(...result.repairs);
+      return result.room;
+    });
+    const updated = applyLevelRoomsToVersion(next, level.id, repairedRooms);
+
+    if (updated) {
+      next = updated;
+    }
   });
-  const withRooms = {
-    ...version,
-    rooms: repairedRooms
-  };
-  const coreRepair = repairMissingCore(withRooms);
+
+  const coreRepair = repairMissingCore(next);
 
   return {
     version: coreRepair.version,
