@@ -11,11 +11,13 @@ interface LocalFormEditStore {
     positionOnEdge: number;
     widthM: number;
   };
+  protrusionWidthM: number;
   protrusionPrompt: string;
   setPendingStartVertex: (index?: number) => void;
   setBoundarySpan: (span?: BoundarySpanSelection) => void;
   setReshapePrompt: (prompt: string) => void;
   setProtrusionPlacement: (placement?: LocalFormEditStore["protrusionPlacement"]) => void;
+  setProtrusionWidthM: (widthM: number) => void;
   setProtrusionPrompt: (prompt: string) => void;
   clearBoundarySpan: () => void;
   clearProtrusionPlacement: () => void;
@@ -27,11 +29,13 @@ export const useLocalFormEditStore = create<LocalFormEditStore>((set) => ({
   pendingStartVertex: undefined,
   reshapePrompt: "",
   protrusionPlacement: undefined,
+  protrusionWidthM: 1.5,
   protrusionPrompt: "",
   setPendingStartVertex: (index) => set({ pendingStartVertex: index }),
   setBoundarySpan: (span) => set({ boundarySpan: span, pendingStartVertex: undefined }),
   setReshapePrompt: (prompt) => set({ reshapePrompt: prompt }),
   setProtrusionPlacement: (placement) => set({ protrusionPlacement: placement }),
+  setProtrusionWidthM: (widthM) => set({ protrusionWidthM: widthM }),
   setProtrusionPrompt: (prompt) => set({ protrusionPrompt: prompt }),
   clearBoundarySpan: () => set({ boundarySpan: undefined, pendingStartVertex: undefined }),
   clearProtrusionPlacement: () => set({ protrusionPlacement: undefined }),
@@ -41,6 +45,7 @@ export const useLocalFormEditStore = create<LocalFormEditStore>((set) => ({
       pendingStartVertex: undefined,
       reshapePrompt: "",
       protrusionPlacement: undefined,
+      protrusionWidthM: 1.5,
       protrusionPrompt: ""
     })
 }));

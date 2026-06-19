@@ -8,7 +8,7 @@ import {
   BoundarySpanSelectionSchema,
   ReshapeBoundaryToolInputSchema
 } from "@/lib/schemas/local-form-edit-schema";
-import type { PlanVersion } from "@/lib/project-types";
+import type { CopilotFinding, PlanVersion } from "@/lib/project-types";
 
 interface ReshapeBoundaryRequest {
   currentVersion?: PlanVersion;
@@ -38,7 +38,7 @@ export async function POST(request: Request) {
   const span = spanResult.data;
   let points = mockReshapePoints(span, body.userRequest);
   let warning: string | undefined;
-  let findings: Array<{ title: string; detail: string; severity: string }> = [];
+  let findings: CopilotFinding[] = [];
 
   if (hasAnthropicKey()) {
     try {

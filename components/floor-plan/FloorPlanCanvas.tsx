@@ -56,7 +56,8 @@ export function FloorPlanCanvas({
   const dragBaseSignatureRef = useRef<string>("");
   const [gridStep, setGridStep] = useState<GridSnapStep>(0.1);
   const [gridSnapEnabled, setGridSnapEnabled] = useState(true);
-  const [protrusionWidthM, setProtrusionWidthM] = useState(1.5);
+  const [hoveredWallId, setHoveredWallId] = useState<string | undefined>();
+  const protrusionWidthM = useLocalFormEditStore((state) => state.protrusionWidthM);
   const resetLocalFormEdit = useLocalFormEditStore((state) => state.reset);
   const activeTool = useInteractionStore((state) => state.activeTool);
   const previewRooms = useEditPreviewStore((state) => state.previewRooms);
@@ -219,16 +220,21 @@ export function FloorPlanCanvas({
     : undefined;
   const traceEnabled = interactive && activeTool === "trace";
   const inpaintEnabled = interactive && activeTool === "inpaint";
+  const reshapeBoundaryEnabled = interactive && activeTool === "reshape_boundary";
+  const addProtrusionEnabled = interactive && activeTool === "add_protrusion";
+  const localFormEditEnabled = reshapeBoundaryEnabled || addProtrusionEnabled;
   const directWallDragEnabled =
-    interactive && !inpaintEnabled && (activeTool === "select" || activeTool === "trace");
+    interactive && !inpaintEnabled && !localFormEditEnabled && (activeTool === "select" || activeTool === "trace");
   const roomTopologyEnabled =
     interactive &&
     activeTool === "select" &&
     !inpaintEnabled &&
+    !localFormEditEnabled &&
     Boolean(selectedRoom && !lockedElementIds.includes(selectedRoom.id));
   const geometryEditEnabled =
     interactive &&
     !inpaintEnabled &&
+    !localFormEditEnabled &&
     (activeTool === "select" || activeTool === "trace") &&
     Boolean(selectedRoom && !lockedElementIds.includes(selectedRoom.id));
   const wallDragEnabled =
@@ -247,6 +253,7 @@ export function FloorPlanCanvas({
     interactive &&
     activeTool === "select" &&
     !inpaintEnabled &&
+    !localFormEditEnabled &&
     Boolean(selectedOpeningId) &&
     Boolean(
       selectedOpening &&
@@ -278,6 +285,17 @@ export function FloorPlanCanvas({
       {inpaintEnabled && onInpaintRevision ? (
         <InpaintToolbar version={version} onInpaintRevision={onInpaintRevision} />
       ) : null}
+      {reshapeBoundaryEnabled && onInpaintRevision ? (
+        <ReshapeBoundaryToolbar
+          levelId={levelId}
+          roomId={selectedRoomId}
+          version={version}
+          onApplyRevision={onInpaintRevision}
+        />
+      ) : null}
+      {addProtrusionEnabled && onInpaintRevision ? (
+        <AddProtrusionToolbar levelId={levelId} version={version} onApplyRevision={onInpaintRevision} />
+      ) : null}
       {roomTopologyEnabled && selectedRoom ? (
         <RoomTopologyToolbar
           disabled={Boolean(previewRooms)}
@@ -306,7 +324,7 @@ export function FloorPlanCanvas({
           onPointerLeave={interactive ? handleCanvasPointerLeave : undefined}
           onPointerMove={interactive ? handleCanvasPointerMove : undefined}
           onClick={() => {
-            if (interactive && !traceEnabled && !inpaintEnabled) {
+            if (interactive && !traceEnabled && !inpaintEnabled && !localFormEditEnabled) {
               clearSelection();
             }
           }}
@@ -317,7 +335,7 @@ export function FloorPlanCanvas({
             rooms={rooms}
             selectedRoomId={selectedRoomId}
             violationRoomIds={complianceRoomIds}
-            onSelectRoom={interactive && !inpaintEnabled ? selectRoom : undefined}
+            onSelectRoom={interactive && !inpaintEnabled && !addProtrusionEnabled ? selectRoom : interactive && reshapeBoundaryEnabled ? selectRoom : undefined}
           />
           <WallLayer
             walls={previewWalls}
@@ -329,7 +347,7 @@ export function FloorPlanCanvas({
             gridSnapEnabled={gridSnapEnabled}
             gridStep={gridStep}
             svgRef={svgRef}
-            onSelectWall={interactive && !inpaintEnabled ? selectWall : undefined}
+            onSelectWall={interactive && !inpaintEnabled && !localFormEditEnabled ? selectWall : undefined}
             onRoomsGeometryCancel={handleRoomsGeometryCancel}
             onRoomsGeometryCommit={handleRoomsGeometryCommit}
             onRoomsGeometryPreview={handleRoomsGeometryPreview}
@@ -338,7 +356,7 @@ export function FloorPlanCanvas({
             openings={level?.openings ?? []}
             walls={previewWalls}
             selectedOpeningId={selectedOpeningId}
-            onSelectOpening={interactive && !inpaintEnabled ? selectOpening : undefined}
+            onSelectOpening={interactive && !inpaintEnabled && !localFormEditEnabled ? selectOpening : undefined}
           />
           <CoreSymbolLayer rooms={rooms} />
           <LabelLayer version={visibleVersion} />
@@ -361,6 +379,18 @@ export function FloorPlanCanvas({
             onOpeningCenterChange={(openingId, center) => updateOpening(openingId, { center })}
           />
           <InpaintMaskLayer svgRef={svgRef} version={version} enabled={inpaintEnabled} />
+          <BoundarySpanLayer
+            enabled={reshapeBoundaryEnabled && Boolean(selectedRoom && !lockedElementIds.includes(selectedRoom.id))}
+            room={selectedRoom}
+          />
+          <ProtrusionPlacementLayer
+            enabled={addProtrusionEnabled}
+            rooms={rooms}
+            wallGraph={wallGraph}
+            walls={previewWalls}
+            widthM={protrusionWidthM}
+            svgRef={svgRef}
+          />
         </svg>
         <div className="absolute bottom-3 left-3 rounded border border-line bg-[#081018]/90 px-2 py-1 text-xs text-muted">
           1 grid = 1 m / {version.label}
@@ -368,6 +398,8 @@ export function FloorPlanCanvas({
           {hoveredWallDraggable && !previewRooms ? " / Drag wall line" : ""}
           {traceEnabled ? " / Trace mode" : ""}
           {inpaintEnabled ? " / Inpaint mask" : ""}
+          {reshapeBoundaryEnabled ? " / Boundary reshape span" : ""}
+          {addProtrusionEnabled ? " / Protrusion placement" : ""}
           {wallDragEnabled ? " / Drag shared wall" : ""}
           {openingEditEnabled ? " / Drag opening along wall" : ""}
           {dragHint ? ` / ${dragHint}` : previewRooms ? " / Preview only — release to commit" : ""}

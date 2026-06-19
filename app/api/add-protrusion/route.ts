@@ -4,7 +4,7 @@ import { hasAnthropicKey } from "@/lib/anthropic-json";
 import { buildProtrusionPreviewVersion, mockProtrusionFromWall } from "@/lib/local-form-edit";
 import { addProtrusionPrompt } from "@/lib/prompts/addProtrusionPrompt";
 import { AddProtrusionToolInputSchema } from "@/lib/schemas/local-form-edit-schema";
-import type { PlanVersion, RoomProtrusion, Wall } from "@/lib/project-types";
+import type { CopilotFinding, PlanVersion, RoomProtrusion, Wall } from "@/lib/project-types";
 import type { ScoringConfig } from "@/lib/building-domain";
 
 interface AddProtrusionRequest {
@@ -39,10 +39,11 @@ export async function POST(request: Request) {
     body.wall,
     positionOnEdge,
     widthM,
-    body.userRequest
+    body.userRequest,
+    body.currentVersion.rooms.find((room) => room.id === body.roomId)?.polygon
   );
   let warning: string | undefined;
-  let findings: Array<{ title: string; detail: string; severity: string }> = [];
+  let findings: CopilotFinding[] = [];
 
   if (!protrusion) {
     return NextResponse.json({ error: "Could not build a protrusion footprint on the selected wall." }, { status: 400 });
@@ -79,7 +80,13 @@ export async function POST(request: Request) {
       findings = data.findings ?? [];
     } catch (error) {
       warning = error instanceof Error ? error.message : "add-protrusion fell back to local footprint.";
-      protrusion = mockProtrusionFromWall(body.wall, positionOnEdge, widthM, body.userRequest);
+      protrusion = mockProtrusionFromWall(
+        body.wall,
+        positionOnEdge,
+        widthM,
+        body.userRequest,
+        body.currentVersion.rooms.find((room) => room.id === body.roomId)?.polygon
+      );
     }
   } else {
     warning = "ANTHROPIC_API_KEY is not configured. Using local bay-window footprint.";

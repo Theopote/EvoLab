@@ -143,9 +143,10 @@ export function mockProtrusionFromWall(
   wall: Wall,
   positionOnEdge: number,
   widthM: number,
-  instruction: string
+  instruction: string,
+  hostPolygon?: Point[]
 ) {
   const depthM = /深|deep/i.test(instruction) ? 0.6 : 0.45;
   const type = /阳台|balcony/i.test(instruction) ? "balcony" : /壁龛|niche/i.test(instruction) ? "niche" : "bay_window";
-  return createProtrusionPlacement(wall, positionOnEdge, widthM, depthM, type);
+  return createProtrusionPlacement(wall, positionOnEdge, widthM, depthM, type, hostPolygon);
 }

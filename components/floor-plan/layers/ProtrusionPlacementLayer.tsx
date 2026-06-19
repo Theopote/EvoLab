@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef } from "react";
-import type { PlanVersion, Room, Wall } from "@/lib/project-types";
+import type { Room, Wall } from "@/lib/project-types";
 import { clientToSvgPoint, polygonPoints } from "@/components/floor-plan/floor-plan-utils";
 import { buildBayWindowFootprint } from "@/lib/add-protrusion";
 import { openingEdgeParamFromCenter } from "@/lib/opening-edge-utils";
@@ -9,7 +9,6 @@ import { useLocalFormEditStore } from "@/lib/local-form-edit-store";
 import { hitTestWalls, type WallGraph } from "@/lib/wall-graph";
 
 interface ProtrusionPlacementLayerProps {
-  version: PlanVersion;
   rooms: Room[];
   walls: Wall[];
   wallGraph: WallGraph;
@@ -35,8 +34,14 @@ export function ProtrusionPlacementLayer({
     ? rooms.find((room) => previewWall.roomIds.includes(room.id) && room.type !== "corridor")
     : undefined;
   const previewFootprint =
-    previewWall && placement
-      ? buildBayWindowFootprint(previewWall, placement.positionOnEdge, placement.widthM, 0.45)
+    previewWall && placement && hostRoom
+      ? buildBayWindowFootprint(
+          previewWall,
+          placement.positionOnEdge,
+          placement.widthM,
+          0.45,
+          hostRoom.polygon
+        )
       : [];
 
   function pickWall(event: React.PointerEvent) {

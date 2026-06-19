@@ -18,10 +18,11 @@ export function AddProtrusionToolbar({ version, levelId, onApplyRevision }: AddP
   const scoringConfig = useEvoProject((state) => state.project.domain.scoringConfig);
   const protrusionPlacement = useLocalFormEditStore((state) => state.protrusionPlacement);
   const protrusionPrompt = useLocalFormEditStore((state) => state.protrusionPrompt);
+  const protrusionWidthM = useLocalFormEditStore((state) => state.protrusionWidthM);
   const setProtrusionPrompt = useLocalFormEditStore((state) => state.setProtrusionPrompt);
   const setProtrusionPlacement = useLocalFormEditStore((state) => state.setProtrusionPlacement);
+  const setProtrusionWidthM = useLocalFormEditStore((state) => state.setProtrusionWidthM);
   const clearProtrusionPlacement = useLocalFormEditStore((state) => state.clearProtrusionPlacement);
-  const [widthM, setWidthM] = useState(1.5);
   const [isSending, setIsSending] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [pendingPreview, setPendingPreview] = useState<{
@@ -57,7 +58,7 @@ export function AddProtrusionToolbar({ version, levelId, onApplyRevision }: AddP
           roomId: hostRoomId,
           wall: selectedWall,
           positionOnEdge: protrusionPlacement?.positionOnEdge ?? 0.5,
-          widthM,
+          widthM: protrusionWidthM,
           userRequest: protrusionPrompt.trim(),
           levelId,
           scoringConfig
@@ -81,7 +82,7 @@ export function AddProtrusionToolbar({ version, levelId, onApplyRevision }: AddP
         type: "bay_window",
         footprint: [],
         depthM: data.protrusion.depthM,
-        widthM: data.protrusion.widthM ?? widthM
+        widthM: data.protrusion.widthM ?? protrusionWidthM
       });
 
       setPendingPreview({
@@ -160,10 +161,10 @@ export function AddProtrusionToolbar({ version, levelId, onApplyRevision }: AddP
             min={0.6}
             step={0.1}
             type="number"
-            value={widthM}
+            value={protrusionWidthM}
             onChange={(event) => {
               const nextWidth = Number(event.target.value);
-              setWidthM(nextWidth);
+              setProtrusionWidthM(nextWidth);
               if (protrusionPlacement) {
                 setProtrusionPlacement({ ...protrusionPlacement, widthM: nextWidth });
               }
