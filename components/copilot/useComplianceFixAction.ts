@@ -8,14 +8,23 @@ import {
   requestComplianceFixPreview,
   type ComplianceFixPreview
 } from "@/lib/compliance-fix";
-import type { CopilotAction, PlanVersion } from "@/lib/project-types";
+import type { CopilotAction, CopilotFinding, PlanVersion } from "@/lib/project-types";
+import type { PlanChangeProposal } from "@/lib/schemas/plan-change-proposal-schema";
+
+export interface ComplianceFixProposalReadyInput {
+  prompt: string;
+  proposal: PlanChangeProposal;
+  findings: CopilotFinding[];
+  warning?: string;
+  highlightRoomIds: string[];
+}
 
 interface UseComplianceFixActionOptions {
   activeVersion?: PlanVersion;
   projectType: string;
   scoringConfig?: ScoringConfig;
   onBeforeFix?: () => void;
-  onApplyPreview: (preview: ComplianceFixPreview) => void;
+  onProposalReady: (input: ComplianceFixProposalReadyInput) => void;
   onNotice?: (message: string) => void;
 }
 
@@ -24,10 +33,9 @@ export function useComplianceFixAction({
   projectType,
   scoringConfig,
   onBeforeFix,
-  onApplyPreview,
+  onProposalReady,
   onNotice
 }: UseComplianceFixActionOptions) {
-  const [pendingComplianceFix, setPendingComplianceFix] = useState<ComplianceFixPreview | null>(null);
   const [isComplianceFixing, setIsComplianceFixing] = useState(false);
 
   const runComplianceFixAction = useCallback(
@@ -50,16 +58,23 @@ export function useComplianceFixAction({
       onBeforeFix?.();
 
       try {
-        const preview = await requestComplianceFixPreview(activeVersion, fixPackage);
-        setPendingComplianceFix(preview);
-        onNotice?.(`Prepared a localized fix preview for ${fixPackage.floorName}. Review before accepting.`);
+        const preview = await requestComplianceFixPreview(activeVersion, fixPackage, {
+          buildingType: projectType,
+          scoringConfig
+        });
+        publishCompliancePreview(preview, onProposalReady);
+        onNotice?.(
+          preview.fallback
+            ? `Prepared a compliance fix proposal for ${fixPackage.floorName} (fallback). Review each operation before applying.`
+            : `Prepared a compliance fix proposal for ${fixPackage.floorName}. Review each operation before applying.`
+        );
       } catch (error) {
         onNotice?.(error instanceof Error ? error.message : "Compliance fix request failed.");
       } finally {
         setIsComplianceFixing(false);
       }
     },
-    [activeVersion, isComplianceFixing, onBeforeFix, onNotice, projectType, scoringConfig]
+    [activeVersion, isComplianceFixing, onBeforeFix, onNotice, onProposalReady, projectType, scoringConfig]
   );
 
   const handleComplianceAction = useCallback(
@@ -74,27 +89,33 @@ export function useComplianceFixAction({
     [runComplianceFixAction]
   );
 
-  const acceptComplianceFixPreview = useCallback(() => {
-    if (!pendingComplianceFix) {
-      return;
-    }
-
-    const preview = pendingComplianceFix;
-    setPendingComplianceFix(null);
-    onApplyPreview(preview);
-  }, [onApplyPreview, pendingComplianceFix]);
-
-  const rejectComplianceFixPreview = useCallback(() => {
-    setPendingComplianceFix(null);
-    onNotice?.("Compliance fix preview rejected.");
-  }, [onNotice]);
-
   return {
-    pendingComplianceFix,
     isComplianceFixing,
     runComplianceFixAction,
-    handleComplianceAction,
-    acceptComplianceFixPreview,
-    rejectComplianceFixPreview
+    handleComplianceAction
   };
+}
+
+function publishCompliancePreview(
+  preview: ComplianceFixPreview,
+  onProposalReady: (input: ComplianceFixProposalReadyInput) => void
+) {
+  const findings: CopilotFinding[] = [
+    {
+      id: `finding-compliance-${preview.fixPackage.ruleId}`,
+      tone: preview.fallback ? "warning" : "success",
+      text: preview.fallback
+        ? "Compliance fix used an inpaint fallback proposal."
+        : "Compliance fix mapped to deterministic geometry operations.",
+      sub: preview.warning
+    }
+  ];
+
+  onProposalReady({
+    prompt: preview.prompt,
+    proposal: preview.proposal,
+    findings,
+    warning: preview.warning,
+    highlightRoomIds: preview.highlightRoomIds
+  });
 }

@@ -6,6 +6,10 @@ import {
   type ComplianceResult
 } from "@/lib/compliance-rules";
 import { captureInpaintImagesFromBBox } from "@/lib/inpaint-capture";
+import { buildComplianceFixProposal } from "@/lib/compliance-fix-proposal";
+import { buildPreviewVersion } from "@/lib/plan-change-engine";
+import type { PlanChangeProposal } from "@/lib/schemas/plan-change-proposal-schema";
+import type { ModifyPlanResponse } from "@/lib/copilot-modify-types";
 import { getResolvedLevel, resolveLevelRooms } from "@/lib/level-rooms";
 import type { SelectionBBox } from "@/lib/region-lock";
 import { bboxFromPoints } from "@/lib/region-lock";
@@ -33,11 +37,13 @@ export interface ComplianceFixPackage {
 }
 
 export interface ComplianceFixPreview {
+  proposal: PlanChangeProposal;
   version: PlanVersion;
   prompt: string;
   warning?: string;
   highlightRoomIds: string[];
   fixPackage: ComplianceFixPackage;
+  fallback?: boolean;
 }
 
 export interface ComplianceFixOptions {
@@ -576,8 +582,26 @@ export function buildComplianceFixPackageById(
 
 export async function requestComplianceFixPreview(
   version: PlanVersion,
-  fixPackage: ComplianceFixPackage
+  fixPackage: ComplianceFixPackage,
+  options: ComplianceFixOptions = {}
 ): Promise<ComplianceFixPreview> {
+  const deterministicProposal = buildComplianceFixProposal(version, fixPackage, options);
+
+  if (deterministicProposal?.operations.length) {
+    const previewVersion = buildPreviewVersion(version, deterministicProposal, {
+      allowedRoomIds: fixPackage.allowedRoomIds,
+      versionLabel: `${version.label} / Compliance fix`
+    });
+
+    return {
+      proposal: deterministicProposal,
+      version: previewVersion,
+      prompt: fixPackage.userRequest,
+      highlightRoomIds: fixPackage.highlightRoomIds,
+      fixPackage
+    };
+  }
+
   const { baseImage, maskImage } = await captureInpaintImagesFromBBox(
     version,
     fixPackage.maskBBox,
@@ -598,25 +622,25 @@ export async function requestComplianceFixPreview(
     })
   });
 
-  const data = (await response.json()) as {
-    version?: PlanVersion;
-    warning?: string;
+  const data = (await response.json()) as ModifyPlanResponse & {
     structuralViolations?: string[];
     error?: string;
   };
 
-  if (!response.ok || !data.version?.rooms) {
+  if (!response.ok || !data.version?.rooms || !data.proposal?.operations?.length) {
     throw new Error(data.error ?? `inpaint-plan failed with ${response.status}`);
   }
 
   const warning = [data.warning, ...(data.structuralViolations ?? [])].filter(Boolean).join(" ");
 
   return {
+    proposal: data.proposal,
     version: data.version,
     prompt: fixPackage.userRequest,
     warning: warning || undefined,
     highlightRoomIds: fixPackage.highlightRoomIds,
-    fixPackage
+    fixPackage,
+    fallback: data.fallback
   };
 }
 

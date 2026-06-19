@@ -4,7 +4,6 @@ import { AlertTriangle, Bot, CheckCircle2, Info, Loader2, Send, Sparkles } from 
 import { useMemo, useState } from "react";
 import { PlanChangeProposalPanel } from "@/components/copilot/PlanChangeProposalPanel";
 import { useComplianceFixAction } from "@/components/copilot/useComplianceFixAction";
-import { DiffPreviewOverlay } from "@/components/floor-plan/DiffPreviewOverlay";
 import type { ModifyPlanResponse } from "@/lib/copilot-modify-types";
 import { useEvoProject } from "@/lib/project-store";
 import { useShallow } from "zustand/react/shallow";
@@ -70,16 +69,48 @@ export function CopilotPanel({
     }))
   );
   const {
-    pendingComplianceFix,
     handleComplianceAction,
-    acceptComplianceFixPreview,
-    rejectComplianceFixPreview
+    isComplianceFixing
   } = useComplianceFixAction({
     activeVersion,
     projectType,
     scoringConfig,
     onBeforeFix: () => onTabChange("Plan"),
-    onApplyPreview: (preview) => onVersionUpdated(preview.version),
+    onProposalReady: (input) => {
+      if (!activeVersion) {
+        return;
+      }
+
+      const stored = registerCopilotProposal({
+        prompt: input.prompt,
+        baseVersion: activeVersion,
+        proposal: input.proposal,
+        findings: input.findings,
+        warning: input.warning
+      });
+
+      setPendingProposalId(stored.id);
+      setMessages((current) => [
+        ...current,
+        {
+          id: `assistant-compliance-${Date.now()}`,
+          role: "assistant",
+          content: input.warning
+            ? `Compliance fix prepared as a change proposal. ${input.warning}`
+            : "Compliance fix prepared as a change proposal. Review each operation before applying."
+        },
+        ...(input.findings.length
+          ? [
+              {
+                id: `findings-compliance-${Date.now()}`,
+                role: "findings" as const,
+                title: "Compliance fix",
+                items: input.findings
+              }
+            ]
+          : [])
+      ]);
+    },
     onNotice: (content) => {
       setMessages((current) => [
         ...current,
@@ -290,19 +321,6 @@ export function CopilotPanel({
 
   return (
     <section className="rounded border border-line bg-panel/90 p-3">
-      {pendingComplianceFix && activeVersion ? (
-        <div className="mb-3">
-          <DiffPreviewOverlay
-            baseVersion={activeVersion}
-            highlightRoomIds={pendingComplianceFix.highlightRoomIds}
-            notice={pendingComplianceFix.warning}
-            previewVersion={pendingComplianceFix.version}
-            title="Compliance fix preview"
-            onAccept={acceptComplianceFixPreview}
-            onReject={rejectComplianceFixPreview}
-          />
-        </div>
-      ) : null}
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="grid h-7 w-7 place-items-center rounded border border-accent/40 bg-accent/10">

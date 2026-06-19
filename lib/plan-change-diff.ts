@@ -22,6 +22,8 @@ export function getOperationTargetIds(operation: PlanOperation): string[] {
       return [operation.roomId];
     case "merge_room":
       return [operation.primaryRoomId, operation.secondaryRoomId];
+    case "update_room_polygon":
+      return [operation.roomId];
     case "widen_corridor":
       return operation.corridorIds ?? [];
     case "align_wet_rooms":

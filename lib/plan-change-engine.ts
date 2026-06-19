@@ -29,6 +29,7 @@ export interface PlanOperationsReport {
 export interface ApplyPlanOperationsOptions {
   acceptedOperationIds?: string[];
   lockedElementIds?: string[];
+  allowedRoomIds?: string[];
   skipPostProcess?: boolean;
 }
 
@@ -347,6 +348,23 @@ function applyResizeOpening(
   });
 }
 
+function applyUpdateRoomPolygon(
+  version: PlanVersion,
+  operation: Extract<PlanOperation, { type: "update_room_polygon" }>
+): PlanVersion {
+  const room = version.rooms.find((item) => item.id === operation.roomId);
+
+  if (!room) {
+    return version;
+  }
+
+  return updateRoomInVersion(version, operation.roomId, (current) => ({
+    ...current,
+    polygon: operation.polygon,
+    areaSqm: Number(polygonArea(operation.polygon).toFixed(1))
+  }));
+}
+
 function applyOperation(version: PlanVersion, operation: PlanOperation): PlanVersion {
   switch (operation.type) {
     case "move_core":
@@ -369,6 +387,8 @@ function applyOperation(version: PlanVersion, operation: PlanOperation): PlanVer
       return applyAddOpening(version, operation);
     case "resize_opening":
       return applyResizeOpening(version, operation);
+    case "update_room_polygon":
+      return applyUpdateRoomPolygon(version, operation);
     default:
       return version;
   }
@@ -428,6 +448,7 @@ export function applyPlanOperationsWithReport(
   options: ApplyPlanOperationsOptions = {}
 ): PlanOperationsReport {
   const lockedElementIds = options.lockedElementIds ?? [];
+  const allowedRoomIds = options.allowedRoomIds ? new Set(options.allowedRoomIds) : undefined;
   const candidate = options.acceptedOperationIds
     ? operations.filter((operation) => options.acceptedOperationIds!.includes(operation.id))
     : operations;
@@ -445,6 +466,20 @@ export function applyPlanOperationsWithReport(
         lockedElementIds: blockedLocks
       });
       return version;
+    }
+
+    if (allowedRoomIds && operation.type !== "optimize_egress") {
+      const targets = resolveOperationTargets(version, operation);
+
+      if (targets.length > 0 && targets.some((roomId) => !allowedRoomIds.has(roomId))) {
+        skippedOperations.push({
+          operationId: operation.id,
+          label: operation.label,
+          lockedElementIds: [],
+          reason: "Operation targets rooms outside the allowed edit region."
+        });
+        return version;
+      }
     }
 
     const versionBefore = version;
@@ -508,12 +543,14 @@ export function buildPreviewVersion(
   options?: {
     acceptedOperationIds?: string[];
     lockedElementIds?: string[];
+    allowedRoomIds?: string[];
     versionLabel?: string;
   }
 ): PlanVersion {
   const report = applyPlanOperationsWithReport(baseVersion, proposal.operations, {
     acceptedOperationIds: options?.acceptedOperationIds,
-    lockedElementIds: options?.lockedElementIds
+    lockedElementIds: options?.lockedElementIds,
+    allowedRoomIds: options?.allowedRoomIds
   });
 
   return {
@@ -552,5 +589,7 @@ export function operationSummary(operation: PlanOperation): string {
       return `Add ${operation.openingKind} on ${operation.wall} wall (${operation.width}m)`;
     case "resize_opening":
       return `Resize ${operation.openingKind} #${operation.openingIndex} to ${operation.width}m`;
+    case "update_room_polygon":
+      return `Reshape room ${operation.roomId} (${operation.polygon.length} vertices)`;
   }
 }

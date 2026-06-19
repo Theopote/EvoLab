@@ -5,7 +5,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AiTimelinePanel } from "@/components/copilot/AiTimelinePanel";
 import { CopilotProposalHistoryPanel } from "@/components/copilot/CopilotProposalHistoryPanel";
 import { PlanChangeProposalPanel } from "@/components/copilot/PlanChangeProposalPanel";
-import { DiffPreviewOverlay } from "@/components/floor-plan/DiffPreviewOverlay";
 import { useComplianceFixAction } from "@/components/copilot/useComplianceFixAction";
 import type { ModifyPlanResponse } from "@/lib/copilot-modify-types";
 import { useEvoProject } from "@/lib/project-store";
@@ -102,27 +101,47 @@ export function CopilotConsole({
     ]);
   };
   const {
-    pendingComplianceFix,
     handleComplianceAction,
-    acceptComplianceFixPreview,
-    rejectComplianceFixPreview
+    isComplianceFixing
   } = useComplianceFixAction({
     activeVersion,
     projectType,
     scoringConfig,
     onBeforeFix: () => onTabChange("Plan"),
-    onApplyPreview: (preview) => {
+    onProposalReady: (input) => {
       if (!activeVersion) {
         return;
       }
 
-      onCopilotRevision(preview.version, preview.prompt, activeVersion);
-      refreshCopilotInsights();
-      appendAssistantMessage(
-        preview.warning
-          ? `Applied compliance fix with note: ${preview.warning}`
-          : "Applied compliance fix as a new scheme version."
-      );
+      const stored = registerCopilotProposal({
+        prompt: input.prompt,
+        baseVersion: activeVersion,
+        proposal: input.proposal,
+        findings: input.findings,
+        warning: input.warning
+      });
+
+      setPendingProposalId(stored.id);
+      setMessages((current) => [
+        ...current,
+        {
+          id: `assistant-compliance-${Date.now()}`,
+          role: "assistant",
+          content: input.warning
+            ? `Compliance fix prepared as a change proposal. ${input.warning}`
+            : "Compliance fix prepared as a change proposal. Review each operation before applying."
+        },
+        ...(input.findings.length
+          ? [
+              {
+                id: `findings-compliance-${Date.now()}`,
+                role: "findings" as const,
+                title: "Compliance fix",
+                items: input.findings
+              }
+            ]
+          : [])
+      ]);
     },
     onNotice: appendAssistantMessage
   });
@@ -518,19 +537,6 @@ export function CopilotConsole({
 
   return (
     <section className="border-t border-line bg-[#0a0f15]">
-      {pendingComplianceFix && activeVersion ? (
-        <div className="border-b border-line px-4 py-3">
-          <DiffPreviewOverlay
-            baseVersion={activeVersion}
-            highlightRoomIds={pendingComplianceFix.highlightRoomIds}
-            notice={pendingComplianceFix.warning}
-            previewVersion={pendingComplianceFix.version}
-            title="Compliance fix preview"
-            onAccept={acceptComplianceFixPreview}
-            onReject={rejectComplianceFixPreview}
-          />
-        </div>
-      ) : null}
       <button
         className="flex w-full items-center justify-between px-4 py-2 text-left"
         type="button"

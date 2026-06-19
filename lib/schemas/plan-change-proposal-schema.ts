@@ -94,6 +94,14 @@ export const MergeRoomOperationSchema = BaseOperationSchema.extend({
   mergedRoomName: z.string().min(1).optional()
 });
 
+const PointTupleSchema = z.tuple([z.number(), z.number()]);
+
+export const UpdateRoomPolygonOperationSchema = BaseOperationSchema.extend({
+  type: z.literal("update_room_polygon"),
+  roomId: z.string().min(1),
+  polygon: z.array(PointTupleSchema).min(3).max(32)
+});
+
 export const PlanOperationSchema = z.discriminatedUnion("type", [
   MoveCoreOperationSchema,
   ShiftRoomsOperationSchema,
@@ -104,7 +112,8 @@ export const PlanOperationSchema = z.discriminatedUnion("type", [
   SplitRoomOperationSchema,
   MergeRoomOperationSchema,
   AddOpeningOperationSchema,
-  ResizeOpeningOperationSchema
+  ResizeOpeningOperationSchema,
+  UpdateRoomPolygonOperationSchema
 ]);
 
 export const PlanChangeProposalSchema = z.object({

@@ -1,4 +1,6 @@
 import { initialProjectData } from "@/lib/evolab-data";
+import { formatCopilotFallbackWarning } from "@/lib/copilot-supported-operations";
+import { getOperationTargetIds } from "@/lib/plan-change-diff";
 import { generateRuleBasedMep } from "@/lib/mep-router";
 import { buildPreviewVersion } from "@/lib/plan-change-engine";
 import { postProcessPlanVersion } from "@/lib/plan-postprocess";
@@ -173,6 +175,71 @@ export function createMockChangeProposal(currentVersion: PlanVersion, userReques
   return { proposal, version, findings };
 }
 
+export function createMockInpaintProposal(
+  currentVersion: PlanVersion,
+  userRequest: string,
+  allowedRoomIds: string[]
+) {
+  const base = createMockChangeProposal(currentVersion, userRequest);
+  const allowed = new Set(allowedRoomIds);
+  const operations = base.proposal.operations.filter((operation) => {
+    const targets = getOperationTargetIds(operation);
+
+    return targets.length === 0 || targets.every((roomId) => allowed.has(roomId));
+  });
+
+  if (!operations.length && allowedRoomIds.length > 0) {
+    const corridor = currentVersion.rooms.find(
+      (room) => allowed.has(room.id) && room.type === "corridor"
+    );
+    const fallbackRoom =
+      corridor ??
+      currentVersion.rooms.find((room) => allowed.has(room.id)) ??
+      currentVersion.rooms[0];
+
+    if (fallbackRoom && allowed.has(fallbackRoom.id)) {
+      if (fallbackRoom.type === "corridor") {
+        operations.push({
+          id: "op-inpaint-widen-corridor",
+          type: "widen_corridor",
+          label: `Widen ${fallbackRoom.name}`,
+          rationale: "Localized fallback edit inside the masked region.",
+          targetRoomIds: [fallbackRoom.id],
+          corridorIds: [fallbackRoom.id],
+          extraWidthMeters: 0.4,
+          side: "both"
+        });
+      } else {
+        operations.push({
+          id: "op-inpaint-shift-room",
+          type: "shift_rooms",
+          label: `Adjust ${fallbackRoom.name}`,
+          rationale: "Localized fallback edit inside the masked region.",
+          targetRoomIds: [fallbackRoom.id],
+          roomIds: [fallbackRoom.id],
+          dx: 0.5,
+          dy: 0
+        });
+      }
+    }
+  }
+
+  const proposal: PlanChangeProposal = {
+    ...base.proposal,
+    intent: userRequest.trim() || "Apply a localized inpaint adjustment",
+    targetElementIds: [...new Set(operations.flatMap((operation) => operation.targetRoomIds))],
+    operations
+  };
+  const version = buildPreviewVersion(currentVersion, proposal, { allowedRoomIds });
+
+  return {
+    proposal,
+    version,
+    findings: base.findings,
+    warning: formatCopilotFallbackWarning("Only rooms inside the painted mask were considered.")
+  };
+}
+
 export function createMockModifiedVersion(currentVersion: PlanVersion, userRequest: string) {
   const proposalResult = createMockChangeProposal(currentVersion, userRequest);
 
@@ -180,7 +247,8 @@ export function createMockModifiedVersion(currentVersion: PlanVersion, userReque
     proposal: proposalResult.proposal,
     version: proposalResult.version,
     findings: proposalResult.findings,
-    mode: "proposal" as const
+    mode: "proposal" as const,
+    warning: formatCopilotFallbackWarning()
   };
 }
 
