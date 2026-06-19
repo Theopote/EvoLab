@@ -127,6 +127,13 @@ export interface PlanVersionMetadata {
   programCompliant?: boolean;
   programValidationWarnings?: string[];
   hybridSourceVersionIds?: string[];
+  importSource?: {
+    fileName: string;
+    sourceType: "image" | "pdf" | "dxf";
+    importPath?: "vision" | "structured";
+    confidence?: number;
+    warnings?: string[];
+  };
 }
 
 export interface FloorValidationSummary {

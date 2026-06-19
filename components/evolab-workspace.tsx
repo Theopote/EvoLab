@@ -39,6 +39,9 @@ import { useCopilotTimelineStore } from "@/lib/copilot-timeline-store";
 import { Scene } from "@/components/viewer-3d/Scene";
 import { tabForDeliverSubview, tabForSchemeSubview } from "@/lib/workflow-phases";
 import { useEvoProject } from "@/lib/project-store";
+import { useInteractionStore } from "@/lib/interaction-store";
+import { useImportSessionStore } from "@/lib/import-session-store";
+import type { ImportWizardResult } from "@/components/workflow/import/ImportWizard";
 
 export function EvoLabWorkspace() {
   const {
@@ -307,9 +310,11 @@ export function EvoLabWorkspace() {
       if (briefSiteSubview === "intake") {
         return (
           <IntakeWorkspace
+            onImportComplete={handleImportComplete}
             onContinueToScheme={() => {
               setWorkflowPhase("scheme");
               setActiveTab(tabForSchemeSubview("plan"));
+              useInteractionStore.getState().setActiveTool("trace");
             }}
           />
         );
@@ -506,6 +511,49 @@ export function EvoLabWorkspace() {
         <Scene />
       </section>
     );
+  }
+
+  function handleImportComplete(result: ImportWizardResult) {
+    const parent = activeVersion;
+    const enrichedVersion = {
+      ...result.version,
+      metadata: {
+        ...result.version.metadata,
+        importSource: {
+          fileName: result.file.fileName,
+          sourceType: result.analysis.sourceType,
+          importPath: result.analysis.importPath,
+          confidence: result.analysis.confidence,
+          warnings: result.analysis.warnings
+        }
+      }
+    };
+
+    appendGeneratedVersions([enrichedVersion]);
+
+    useImportSessionStore.getState().setReference({
+      versionId: enrichedVersion.id,
+      fileName: result.file.fileName,
+      sourceType: result.analysis.sourceType,
+      previewUrl: result.file.previewUrl,
+      opacity: result.file.sourceType === "image" ? 0.45 : 0.35
+    });
+
+    if (parent) {
+      useCopilotTimelineStore.getState().addEntry({
+        prompt: `Import plan from ${result.file.fileName}`,
+        parentVersionId: parent.id,
+        parentVersionLabel: parent.label,
+        resultVersionId: enrichedVersion.id,
+        resultVersionLabel: enrichedVersion.label
+      });
+    }
+
+    if (result.openTrace) {
+      setWorkflowPhase("scheme");
+      setActiveTab(tabForSchemeSubview("plan"));
+      useInteractionStore.getState().setActiveTool("trace");
+    }
   }
 
   function handleAnalyzedVersion(
