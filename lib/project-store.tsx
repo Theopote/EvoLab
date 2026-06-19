@@ -135,6 +135,7 @@ interface EvoProjectStore {
   clearSelection: () => void;
   updateRoom: (roomId: string, patch: Partial<Room>) => void;
   updateRoomGeometry: (roomId: string, patch: Partial<Room>) => void;
+  applyLevelRoomsGeometry: (rooms: Room[]) => void;
   updateWall: (wallId: string, patch: Partial<Wall>) => void;
   updateOpening: (openingId: string, patch: Partial<OpeningElement>) => void;
   replaceVersions: (versions: PlanVersion[], projectType?: string) => void;
@@ -412,6 +413,30 @@ function applyRoomPatchToVersion(
   };
 }
 
+function applyLevelRoomsToVersion(
+  version: PlanVersion,
+  levelId: string | undefined,
+  rooms: Room[]
+): PlanVersion | undefined {
+  const level = getLevel(version, levelId);
+
+  if (!level) {
+    return undefined;
+  }
+
+  const nextLevels = version.levels.map((item) => (item.id === level.id ? { ...item, rooms } : item));
+
+  return {
+    ...version,
+    rooms: nextLevels.flatMap((item) => item.rooms),
+    levels: nextLevels,
+    building: {
+      ...version.building,
+      levels: nextLevels
+    }
+  };
+}
+
 function commitNormalizedVersionDraft(
   state: EvoProjectStore,
   normalizedVersion: PlanVersion,
@@ -478,6 +503,7 @@ function createInitialState(): Omit<
   | "clearSelection"
   | "updateRoom"
   | "updateRoomGeometry"
+  | "applyLevelRoomsGeometry"
   | "updateWall"
   | "updateOpening"
   | "replaceVersions"
@@ -990,6 +1016,34 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
           false,
           true,
           `Updated room geometry for ${roomId}`,
+          "user"
+        );
+      })
+    ),
+  applyLevelRoomsGeometry: (rooms) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        if (!state.activeVersion) {
+          return;
+        }
+
+        if (rooms.some((room) => isElementLocked(state, room.id))) {
+          return;
+        }
+
+        const normalized = normalizePlanVersion(state.activeVersion);
+        const nextVersion = applyLevelRoomsToVersion(normalized, state.activeLevelId, rooms);
+
+        if (!nextVersion) {
+          return;
+        }
+
+        commitNormalizedVersionDraft(
+          state,
+          normalizePlanVersion(nextVersion),
+          false,
+          true,
+          "Updated shared room geometry",
           "user"
         );
       })
