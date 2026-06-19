@@ -577,6 +577,11 @@ export function buildComplianceContext(
   };
 }
 
+export interface ComplianceCheckOptions {
+  /** When true, collapse per-floor rule results to one row per rule (worst case). */
+  rollupPerFloor?: boolean;
+}
+
 function rollupPerFloorResults(results: ComplianceResult[]): ComplianceResult[] {
   const rollup = new Map<string, ComplianceResult>();
 
@@ -600,7 +605,10 @@ function rollupPerFloorResults(results: ComplianceResult[]): ComplianceResult[] 
   return [...rollup.values()];
 }
 
-export function runComplianceCheck(ctx: ComplianceContext): ComplianceResult[] {
+export function runComplianceCheck(
+  ctx: ComplianceContext,
+  options: ComplianceCheckOptions = {}
+): ComplianceResult[] {
   const activeRules = complianceRules.filter((rule) => matchesBuildingType(rule, ctx.buildingType));
   const perFloorRules = activeRules.filter((rule) => rule.scope === "per_floor");
   const buildingWideRules = activeRules.filter((rule) => rule.scope === "building_wide");
@@ -614,7 +622,7 @@ export function runComplianceCheck(ctx: ComplianceContext): ComplianceResult[] {
     const allLevelResults = ctx.version.levels.flatMap((level) =>
       perFloorRules.flatMap((rule) => rule.check(ctx, level.id))
     );
-    perFloorResults = rollupPerFloorResults(allLevelResults);
+    perFloorResults = options.rollupPerFloor ? rollupPerFloorResults(allLevelResults) : allLevelResults;
   }
 
   const buildingWideResults = buildingWideRules.flatMap((rule) => rule.check(ctx));

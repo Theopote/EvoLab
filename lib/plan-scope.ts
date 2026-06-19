@@ -6,6 +6,7 @@ import {
   resolveLevelRooms
 } from "@/lib/level-rooms";
 import { findStandardFloorGroup } from "@/lib/standard-floor-group";
+import type { PlanValidationIssue } from "@/lib/plan-validation";
 import type { Level, OpeningElement, PlanVersion, Point, Room, StandardFloorGroup, Wall } from "@/lib/project-types";
 
 export type PlanScopeKind = "level" | "floor_group" | "building";
@@ -140,6 +141,49 @@ export function scopeVersionForLevel(version: PlanVersion, levelId?: string): Pl
     outline: resolveLevelOutline(resolved, version.standardFloorGroups, version.outline),
     levels: [resolved]
   };
+}
+
+/** Version slice prepared for metric engines at a given scope. */
+export function versionForScoringScope(version: PlanVersion, options: PlanScopeOptions = {}): PlanVersion {
+  const resolved = resolvePlanScope(version, options);
+
+  if (resolved.scope === "building") {
+    return {
+      ...version,
+      rooms: resolved.rooms
+    };
+  }
+
+  return {
+    ...version,
+    rooms: resolved.rooms,
+    outline: resolved.outline,
+    levels: resolved.levels.length > 0 ? resolved.levels : version.levels
+  };
+}
+
+export function filterIssuesForScope(
+  issues: PlanValidationIssue[] | undefined,
+  version: PlanVersion,
+  options: PlanScopeOptions
+): PlanValidationIssue[] | undefined {
+  if (!issues?.length) {
+    return issues;
+  }
+
+  const resolved = resolvePlanScope(version, options);
+
+  if (resolved.scope === "building") {
+    return issues;
+  }
+
+  if (resolved.scope === "floor_group") {
+    const levelIds = new Set(resolved.levelIds);
+    return issues.filter((issue) => !issue.levelId || levelIds.has(issue.levelId));
+  }
+
+  const levelId = options.levelId ?? resolved.levelIds[0];
+  return issues.filter((issue) => !issue.levelId || issue.levelId === levelId);
 }
 
 /** One validation unit per physical level (rooms resolved, outline per level). */

@@ -5,6 +5,21 @@ import { hasExternalWall, hasWindow, roomFacadeOrientationScore } from "@/lib/ru
 
 export const scoreDaylight = (context: ScoringContext): MetricResult => {
   const daylightRooms = context.version.rooms.filter((room) => room.needsDaylight);
+  const scopedIssues = (context.issues ?? []).filter((issue) => {
+    if (issue.id !== "daylight-room-invalid") {
+      return false;
+    }
+
+    if (!issue.levelId || context.scope === "building") {
+      return true;
+    }
+
+    if (context.scope === "floor_group") {
+      return context.version.levels.some((level) => level.id === issue.levelId);
+    }
+
+    return issue.levelId === context.levelId;
+  });
   const maxDepth = context.rulePack.scoring.daylightMaxDepthM;
 
   if (daylightRooms.length === 0) {
@@ -52,7 +67,7 @@ export const scoreDaylight = (context: ScoringContext): MetricResult => {
     });
   });
 
-  const validationWarnings = (context.issues ?? []).filter((issue) => issue.id === "daylight-room-invalid").length;
+  const validationWarnings = scopedIssues.length;
   const baseScore = totalScore / daylightRooms.length;
   const penalty = (validationWarnings / daylightRooms.length) * 20;
   const score = clampScore(baseScore - penalty);

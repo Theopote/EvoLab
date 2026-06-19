@@ -379,6 +379,8 @@ export interface MepShaft {
   id: string;
   position: Point;
   systems: MepSystemType[];
+  /** Floors served by this vertical riser stack. */
+  levelIds?: string[];
 }
 
 export interface MepRoute {
@@ -386,6 +388,8 @@ export interface MepRoute {
   system: MepSystemType;
   path: Point[];
   connectsRoomIds: string[];
+  /** Floor this horizontal route belongs to. */
+  levelId?: string;
 }
 
 export type MepSystemType =

@@ -1,3 +1,4 @@
+import type { PlanScopeKind } from "@/lib/plan-scope";
 import type { CodeContext } from "@/lib/building-domain";
 import type { ProgramModel } from "@/lib/building-domain";
 import type { PlanVersion } from "@/lib/project-types";
@@ -73,6 +74,7 @@ export interface ScoringContext {
   programGoals: ProgramGoals;
   orientationDeg?: number;
   levelId?: string;
+  scope?: PlanScopeKind;
 }
 
 export interface MetricResult {

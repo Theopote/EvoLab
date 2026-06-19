@@ -18,6 +18,12 @@ import type { CodeContext, ProgramModel, ScoringConfig } from "@/lib/building-do
 import type { PlanVersion, VersionScores } from "@/lib/project-types";
 import type { PlanValidationIssue } from "@/lib/plan-validation";
 import { computeTotalScore } from "@/lib/rules/version-total-score";
+import {
+  filterIssuesForScope,
+  resolvePlanScope,
+  type PlanScopeKind,
+  versionForScoringScope
+} from "@/lib/plan-scope";
 
 export interface ScoreEngineOptions {
   issues?: PlanValidationIssue[];
@@ -27,6 +33,8 @@ export interface ScoreEngineOptions {
   scoringConfig?: ScoringConfig;
   orientationDeg?: number;
   levelId?: string;
+  standardFloorGroupId?: string;
+  scope?: PlanScopeKind;
   rulePack?: RulePack;
   programGoals?: ProgramGoals;
 }
@@ -46,24 +54,44 @@ const buildMetricContribution = (
   evidence: metric.evidence
 });
 
+function resolveScoreScope(version: PlanVersion, options: ScoreEngineOptions): PlanScopeKind {
+  return resolvePlanScope(version, {
+    levelId: options.levelId,
+    standardFloorGroupId: options.standardFloorGroupId,
+    scope: options.scope
+  }).scope;
+}
+
+function buildScoringContext(version: PlanVersion, options: ScoreEngineOptions): ScoringContext {
+  const scope = resolveScoreScope(version, options);
+  const scopeOptions = {
+    levelId: options.levelId,
+    standardFloorGroupId: options.standardFloorGroupId,
+    scope
+  };
+
+  return {
+    version: versionForScoringScope(version, scopeOptions),
+    issues: filterIssuesForScope(options.issues, version, scopeOptions),
+    rulePack: options.rulePack ?? resolveRulePack({ codeContext: options.codeContext, projectType: options.projectType ?? options.program?.projectType }),
+    programGoals:
+      options.programGoals ??
+      resolveProgramGoalsFromContext({
+        program: options.program,
+        projectType: options.projectType
+      }),
+    orientationDeg: options.orientationDeg,
+    levelId: options.levelId ?? (scope === "level" ? scopeOptions.levelId : undefined),
+    scope
+  };
+}
+
 export const calculateVersionScores = (
   version: PlanVersion,
   options: ScoreEngineOptions = {}
 ): { scores: VersionScores; breakdown: ScoreBreakdown } => {
-  const rulePack = options.rulePack ?? resolveRulePack({ codeContext: options.codeContext, projectType: options.projectType ?? options.program?.projectType });
-  const programGoals = options.programGoals ?? resolveProgramGoalsFromContext({
-    program: options.program,
-    projectType: options.projectType
-  });
-  const normalizedWeights = normalizeGoalWeights(programGoals.weights);
-  const context: ScoringContext = {
-    version,
-    issues: options.issues,
-    rulePack,
-    programGoals,
-    orientationDeg: options.orientationDeg,
-    levelId: options.levelId
-  };
+  const context = buildScoringContext(version, options);
+  const normalizedWeights = normalizeGoalWeights(context.programGoals.weights);
 
   const area = scoreAreaEfficiency(context);
   const circulation = scoreCirculation(context);
@@ -72,12 +100,12 @@ export const calculateVersionScores = (
   const egress = scoreEgress(context);
   const structureFit = scoreStructureFit(context);
 
-  const complianceContext = buildComplianceContext(version, rulePack, {
+  const complianceContext = buildComplianceContext(version, context.rulePack, {
     buildingType: options.projectType ?? options.program?.projectType ?? "healthcare",
     scoringConfig: options.scoringConfig
   });
   const complianceResults = runComplianceCheck(complianceContext);
-  const validationErrors = (options.issues ?? []).filter((issue) => issue.severity === "error").length;
+  const validationErrors = (context.issues ?? []).filter((issue) => issue.severity === "error").length;
   const riskCount = computeRiskCount(complianceResults, validationErrors);
 
   const scores: VersionScores = {
@@ -105,9 +133,9 @@ export const calculateVersionScores = (
   ].filter(Boolean);
 
   const breakdown: ScoreBreakdown = {
-    rulePackId: rulePack.id,
-    programGoalsId: programGoals.id,
-    totalScore: computeTotalScore(scores, programGoals),
+    rulePackId: context.rulePack.id,
+    programGoalsId: context.programGoals.id,
+    totalScore: computeTotalScore(scores, context.programGoals),
     metrics,
     comparisonHints
   };
@@ -120,3 +148,33 @@ export const calculateVersionScores = (
     breakdown
   };
 };
+
+export function calculateVersionScoresByLevel(
+  version: PlanVersion,
+  options: Omit<ScoreEngineOptions, "levelId" | "scope"> = {}
+): Record<string, { scores: VersionScores; breakdown: ScoreBreakdown }> {
+  return version.levels.reduce<Record<string, { scores: VersionScores; breakdown: ScoreBreakdown }>>((acc, level) => {
+    acc[level.id] = calculateVersionScores(version, {
+      ...options,
+      levelId: level.id,
+      scope: "level"
+    });
+    return acc;
+  }, {});
+}
+
+export function calculateVersionScoresByFloorGroup(
+  version: PlanVersion,
+  options: Omit<ScoreEngineOptions, "standardFloorGroupId" | "scope"> = {}
+): Record<string, { scores: VersionScores; breakdown: ScoreBreakdown }> {
+  const groups = version.standardFloorGroups ?? [];
+
+  return groups.reduce<Record<string, { scores: VersionScores; breakdown: ScoreBreakdown }>>((acc, group) => {
+    acc[group.id] = calculateVersionScores(version, {
+      ...options,
+      standardFloorGroupId: group.id,
+      scope: "floor_group"
+    });
+    return acc;
+  }, {});
+}
