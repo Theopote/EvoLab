@@ -1,10 +1,15 @@
 "use client";
 
+import { useState } from "react";
 import { FloorPlan } from "@/components/floor-plan";
 import { ExplodeSlider } from "@/components/viewer-3d/ExplodeSlider";
 import { Scene } from "@/components/viewer-3d/Scene";
+import { VerticalAlignmentPanel } from "@/components/workflow/VerticalAlignmentPanel";
+import { useEvoProject } from "@/lib/project-store";
 import { isLevelLinkedToStandardGroup, standardFloorGroupLabel } from "@/lib/standard-floor-group";
 import type { PlanVersion } from "@/lib/project-types";
+
+type ViewportMode = "split" | "alignment";
 
 interface SchemeSplitViewportProps {
   activeVersion?: PlanVersion;
@@ -19,6 +24,9 @@ export function SchemeSplitViewport({
   onLevelChange,
   onInpaintRevision
 }: SchemeSplitViewportProps) {
+  const [viewportMode, setViewportMode] = useState<ViewportMode>("split");
+  const setLevelTransferFloor = useEvoProject((state) => state.setLevelTransferFloor);
+
   if (!activeVersion) {
     return (
       <div className="grid min-h-[520px] place-items-center rounded border border-dashed border-line bg-panel/60 text-sm text-muted">
@@ -41,6 +49,26 @@ export function SchemeSplitViewport({
           <p className="mt-1 text-xs text-muted">2D plan edits sync live with the 3D massing preview.</p>
         </div>
         <div className="flex items-center gap-2">
+          <div className="flex rounded border border-line p-0.5">
+            <button
+              className={`rounded px-2 py-1 text-xs ${
+                viewportMode === "split" ? "bg-accent/20 text-accent" : "text-muted"
+              }`}
+              type="button"
+              onClick={() => setViewportMode("split")}
+            >
+              Plan / 3D
+            </button>
+            <button
+              className={`rounded px-2 py-1 text-xs ${
+                viewportMode === "alignment" ? "bg-accent/20 text-accent" : "text-muted"
+              }`}
+              type="button"
+              onClick={() => setViewportMode("alignment")}
+            >
+              Vertical alignment
+            </button>
+          </div>
           {activeVersion.levels.length ? (
             <select
               className="h-8 rounded border border-line bg-[#0b1118] px-2 text-xs text-slate-100"
@@ -64,25 +92,33 @@ export function SchemeSplitViewport({
         </p>
       ) : null}
 
-      <div className="grid min-h-0 gap-3 lg:grid-cols-2">
-        <article className="min-h-[420px] overflow-hidden rounded border border-line bg-[#0b1118] p-2">
-          <div className="mb-2 text-[11px] uppercase tracking-[0.12em] text-muted">2D Plan</div>
-          <FloorPlan
-            levelId={activeLevelId}
-            version={activeVersion}
-            onInpaintRevision={onInpaintRevision}
-          />
-        </article>
-        <article className="min-h-[420px] overflow-hidden rounded border border-line bg-[#081018]">
-          <div className="flex items-center justify-between gap-3 border-b border-line px-3 py-2">
-            <div className="text-[11px] uppercase tracking-[0.12em] text-muted">3D Model</div>
-            <ExplodeSlider className="max-w-xs flex-1" />
-          </div>
-          <div className="h-[calc(100%-2.75rem)] min-h-[380px]">
-            <Scene />
-          </div>
-        </article>
-      </div>
+      {viewportMode === "alignment" ? (
+        <VerticalAlignmentPanel
+          version={activeVersion}
+          activeLevelId={activeLevelId}
+          onMarkTransferFloor={(levelId) => setLevelTransferFloor(levelId, true)}
+        />
+      ) : (
+        <div className="grid min-h-0 gap-3 lg:grid-cols-2">
+          <article className="min-h-[420px] overflow-hidden rounded border border-line bg-[#0b1118] p-2">
+            <div className="mb-2 text-[11px] uppercase tracking-[0.12em] text-muted">2D Plan</div>
+            <FloorPlan
+              levelId={activeLevelId}
+              version={activeVersion}
+              onInpaintRevision={onInpaintRevision}
+            />
+          </article>
+          <article className="min-h-[420px] overflow-hidden rounded border border-line bg-[#081018]">
+            <div className="flex items-center justify-between gap-3 border-b border-line px-3 py-2">
+              <div className="text-[11px] uppercase tracking-[0.12em] text-muted">3D Model</div>
+              <ExplodeSlider className="max-w-xs flex-1" />
+            </div>
+            <div className="h-[calc(100%-2.75rem)] min-h-[380px]">
+              <Scene />
+            </div>
+          </article>
+        </div>
+      )}
     </section>
   );
 }

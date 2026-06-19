@@ -141,6 +141,7 @@ interface EvoProjectStore {
   setActiveAnalysisLayers: (layers: AnalysisLayerId[]) => void;
   setActiveMepLayers: (layers: MepLayerId[]) => void;
   setActiveLevel: (levelId: string) => void;
+  setLevelTransferFloor: (levelId: string, isTransferFloor: boolean) => void;
   selectRoom: (roomId: string) => void;
   selectWall: (wallId: string) => void;
   selectOpening: (openingId: string) => void;
@@ -517,6 +518,7 @@ function createInitialState(): Omit<
   | "setActiveAnalysisLayers"
   | "setActiveMepLayers"
   | "setActiveLevel"
+  | "setLevelTransferFloor"
   | "selectRoom"
   | "selectWall"
   | "selectOpening"
@@ -819,6 +821,30 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
         state.activeLevelId = levelId;
         state.compareLevelId = levelId;
         refreshDerivedDraft(state);
+      })
+    ),
+  setLevelTransferFloor: (levelId, isTransferFloor) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        if (!state.activeVersion) {
+          return;
+        }
+
+        const nextLevels = state.activeVersion.levels.map((level) =>
+          level.id === levelId ? { ...level, isTransferFloor } : level
+        );
+        const nextVersion = normalizePlanVersion({
+          ...state.activeVersion,
+          levels: nextLevels
+        });
+
+        commitNormalizedVersionDraft(
+          state,
+          nextVersion,
+          false,
+          true,
+          isTransferFloor ? `Marked ${levelId} as transfer floor` : `Cleared transfer floor on ${levelId}`
+        );
       })
     ),
   setCompareLevel: (levelId) =>
