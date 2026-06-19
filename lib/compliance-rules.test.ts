@@ -92,6 +92,28 @@ describe("compliance-rules", () => {
     expect(riskCount).toBe(results.filter((item) => item.status === "warning" && item.severity !== "low").length + 1);
   });
 
+  it("keeps per-floor compliance rows with level metadata on multi-floor versions", () => {
+    const expanded = expandPlanVersionToFloors(baseVersion, 4);
+    const ctx = buildComplianceContext(expanded, rulePack, { buildingType: "healthcare" });
+    const results = runComplianceCheck(ctx);
+    const egressRows = results.filter((item) => item.ruleId === "egress-distance");
+
+    expect(egressRows.length).toBeGreaterThan(1);
+    expect(egressRows.every((item) => item.levelId)).toBe(true);
+    expect(egressRows.map((item) => item.levelId)).toEqual(
+      expect.arrayContaining(["level-01", "level-02", "level-03", "level-04"])
+    );
+  });
+
+  it("can still rollup per-floor compliance rows when requested", () => {
+    const expanded = expandPlanVersionToFloors(baseVersion, 4);
+    const ctx = buildComplianceContext(expanded, rulePack, { buildingType: "healthcare" });
+    const rolled = runComplianceCheck(ctx, { rollupPerFloor: true });
+
+    expect(rolled.filter((item) => item.ruleId === "egress-distance")).toHaveLength(1);
+    expect(rolled.find((item) => item.ruleId === "egress-distance")?.levelId).toBeUndefined();
+  });
+
   it("keeps quantity-engine checkCompliance as a thin adapter", () => {
     const items = checkCompliance(baseVersion, defaultHealthcareCodeContext, rulePack, {
       buildingType: "healthcare"

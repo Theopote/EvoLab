@@ -412,7 +412,7 @@ export function EvoLabWorkspace() {
               </div>
             ) : null}
           </div>
-          <MepCanvas activeLayers={activeMepLayers} version={activeVersion} />
+          <MepCanvas activeLayers={activeMepLayers} version={activeVersion} activeLevelId={activeLevelId} />
         </section>
       );
     }

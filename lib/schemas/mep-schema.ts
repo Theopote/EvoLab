@@ -16,7 +16,8 @@ export const MepLayoutSchema = z.object({
     z.object({
       id: z.string().min(1),
       position: PointSchema,
-      systems: z.array(MepSystemTypeSchema).min(1)
+      systems: z.array(MepSystemTypeSchema).min(1),
+      levelIds: z.array(z.string()).optional()
     })
   ),
   routes: z.array(
@@ -24,7 +25,8 @@ export const MepLayoutSchema = z.object({
       id: z.string().min(1),
       system: MepSystemTypeSchema,
       path: z.array(PointSchema).min(2),
-      connectsRoomIds: z.array(z.string())
+      connectsRoomIds: z.array(z.string()),
+      levelId: z.string().optional()
     })
   ),
   strategy: z

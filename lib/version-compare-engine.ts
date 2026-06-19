@@ -1,5 +1,7 @@
 import { getLevelById, getLevelByIndex, listComparableLevelGroups } from "@/lib/multi-floor";
+import { getResolvedLevel } from "@/lib/level-rooms";
 import { calculateQuantities } from "@/lib/quantity-engine";
+import { calculateVersionScores } from "@/lib/rules/score-engine";
 import { resolveProgramGoals } from "@/lib/rules/program-goals";
 import { computeTotalScore } from "@/lib/rules/version-total-score";
 import type { PlanVersion, Point } from "@/lib/project-types";
@@ -52,44 +54,17 @@ function scoreVersion(version: PlanVersion, program?: ProgramModel) {
 }
 
 function scoreLevel(version: PlanVersion, levelId: string, program?: ProgramModel) {
-  const quantities = calculateQuantities(version, { levelId, scope: "level" });
-  const level = getLevelById(version, levelId);
-  const rooms = level?.rooms ?? [];
-  const circulationArea = rooms
-    .filter((room) => room.type === "corridor" || room.zone === "circulation")
-    .reduce((total, room) => total + room.areaSqm, 0);
-  const circulationRatio = quantities.summary.grossArea > 0 ? circulationArea / quantities.summary.grossArea : 0;
-  const areaEfficiency =
-    quantities.summary.grossArea > 0
-      ? (quantities.summary.netUsableArea / quantities.summary.grossArea) * 100
-      : version.scores?.areaEfficiency ?? 0;
-  const daylightRooms = rooms.filter((room) => room.needsDaylight);
-  const daylightScore =
-    daylightRooms.length === 0
-      ? version.scores?.daylightScore ?? 70
-      : (daylightRooms.filter((room) => room.windows.length > 0).length / daylightRooms.length) * 100;
-  const goals = resolveProgramGoals(program);
-  const weights = goals.weights;
-  const weightTotal =
-    weights.areaEfficiency + weights.circulation + weights.daylight + weights.wetCore + weights.egress + weights.structureFit;
+  const { breakdown } = calculateVersionScores(version, {
+    levelId,
+    scope: "level",
+    projectType: program?.projectType
+  });
 
-  return Math.round(
-    Math.max(
-      0,
-      areaEfficiency * (weights.areaEfficiency / weightTotal) +
-        (1 - circulationRatio) * 100 * (weights.circulation / weightTotal) +
-        daylightScore * (weights.daylight / weightTotal) +
-        (version.scores?.mepAlignmentScore ?? 70) * (weights.wetCore / weightTotal) +
-        (version.scores?.egressScore ?? 70) * (weights.egress / weightTotal) +
-        (version.scores?.structureFitScore ?? 70) * (weights.structureFit / weightTotal) -
-        (version.scores?.riskCount ?? 0) * goals.weights.riskPenalty
-    )
-  );
+  return breakdown.totalScore;
 }
 
 function corePositionForLevel(version: PlanVersion, levelId: string): Point {
-  const level = getLevelById(version, levelId);
-  const rooms = level?.rooms ?? [];
+  const rooms = getResolvedLevel(version, levelId)?.rooms ?? [];
   const coreRoom = rooms.find((room) => ["stair", "elevator", "shaft"].includes(room.type));
 
   if (!coreRoom) {
@@ -122,8 +97,9 @@ export function compareVersionsAtLevelIndex(
   const rows = versions.map((version) => {
     const level = getLevelByIndex(version, levelIndex);
     const levelId = level?.id ?? displayLevelId ?? `level-${String(levelIndex).padStart(2, "0")}`;
+    const resolved = getResolvedLevel(version, levelId);
     const quantities = calculateQuantities(version, { levelId, scope: "level" });
-    const rooms = level?.rooms ?? [];
+    const rooms = resolved?.rooms ?? level?.rooms ?? [];
     const circulationArea = rooms
       .filter((room) => room.type === "corridor" || room.zone === "circulation")
       .reduce((total, room) => total + room.areaSqm, 0);

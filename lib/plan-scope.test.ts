@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { initialProjectData } from "@/lib/evolab-data";
 import { createIfcExportPayload } from "@/lib/ifc-export-contract";
+import { routeMepLayout } from "@/lib/mep-router";
 import { expandPlanVersionToFloors } from "@/lib/multi-floor";
 import { calculateQuantities, calculateQuantitiesByFloorGroup } from "@/lib/quantity-engine";
 import { collectLevelValidationUnits, resolvePlanScope } from "@/lib/plan-scope";
+import { calculateVersionScores, calculateVersionScoresByLevel } from "@/lib/rules/score-engine";
 import { validatePlanVersion } from "@/lib/plan-validation";
 
 const baseVersion = initialProjectData.versions[0]!;
@@ -75,5 +77,33 @@ describe("ifc export scope", () => {
     const typicalStorey = payload.storeys.find((storey) => storey.id === "level-02");
 
     expect(typicalStorey?.spaces.length).toBeGreaterThan(0);
+  });
+});
+
+describe("scoped scoring and mep routing", () => {
+  it("scores each level independently", () => {
+    const expanded = expandPlanVersionToFloors(baseVersion, 4);
+    const byLevel = calculateVersionScoresByLevel(expanded, { projectType: "healthcare" });
+
+    expect(Object.keys(byLevel)).toEqual(["level-01", "level-02", "level-03", "level-04"]);
+    expect(byLevel["level-01"]?.breakdown.totalScore).toBeGreaterThan(0);
+  });
+
+  it("building score uses summed gross area across physical floors", () => {
+    const expanded = expandPlanVersionToFloors(baseVersion, 4);
+    const building = calculateVersionScores(expanded, { scope: "building", projectType: "healthcare" });
+    const level1 = calculateVersionScores(expanded, { levelId: "level-01", scope: "level", projectType: "healthcare" });
+
+    expect(building.scores.areaEfficiency).toBeDefined();
+    expect(building.scores.areaEfficiency).not.toBe(level1.scores.areaEfficiency);
+  });
+
+  it("routes MEP per floor with a shared riser stack", () => {
+    const expanded = expandPlanVersionToFloors(baseVersion, 4);
+    const mep = routeMepLayout(expanded);
+
+    expect(mep.shafts[0]?.levelIds).toEqual(["level-01", "level-02", "level-03", "level-04"]);
+    expect(mep.routes.filter((route) => route.levelId === "level-02").length).toBeGreaterThan(0);
+    expect(mep.routes.length).toBe(6 * expanded.levels.length);
   });
 });
