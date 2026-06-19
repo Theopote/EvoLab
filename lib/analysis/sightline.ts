@@ -1,3 +1,4 @@
+import { levelGeometryForRoom } from "@/lib/level-rooms";
 import { castRayFan, wallSegments } from "@/lib/analysis/raycasting";
 import type { PlanVersion, Point, Room } from "@/lib/project-types";
 
@@ -9,7 +10,7 @@ function centroid(room: Room): Point {
 export function computeSightlineCone(version: PlanVersion, originRoom: Room, targetRoom?: Room): Point[] | undefined {
   const origin = centroid(originRoom);
   const target = targetRoom ? centroid(targetRoom) : undefined;
-  const walls = version.levels[0]?.walls ?? [];
+  const walls = levelGeometryForRoom(version, originRoom).walls;
   const obstacles = wallSegments(walls, false);
   const maxDistance = Math.max(version.overallBounds.width, version.overallBounds.height);
 

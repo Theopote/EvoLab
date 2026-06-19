@@ -8,7 +8,8 @@ import {
   type ComplianceScope
 } from "@/lib/compliance-rules";
 import type { FunctionZone, OpeningElement, PlanVersion, Point, Room, RoomType, Wall, CopilotActionId } from "@/lib/project-types";
-import { resolveLevelRooms } from "@/lib/level-rooms";
+import { resolveLevelOutline, resolveLevelRooms } from "@/lib/level-rooms";
+import { resolvePlanScope, type PlanScopeKind } from "@/lib/plan-scope";
 import { resolveRulePack } from "@/lib/rules/rule-pack";
 import type { RulePack } from "@/lib/rules/types";
 
@@ -38,10 +39,11 @@ export interface QuantityResult {
   };
 }
 
-export type QuantityScope = "level" | "building";
+export type QuantityScope = PlanScopeKind;
 
 export interface QuantityOptions {
   levelId?: string;
+  standardFloorGroupId?: string;
   scope?: QuantityScope;
 }
 
@@ -105,49 +107,24 @@ function polygonArea(points: Point[]) {
   return Math.abs(area) / 2;
 }
 
-function activeLevel(version: PlanVersion, levelId?: string) {
-  if (!levelId) {
-    return version.levels[0];
-  }
-
-  return version.levels.find((level) => level.id === levelId) ?? version.levels[0];
+function resolveQuantityScope(version: PlanVersion, options: QuantityOptions): QuantityScope {
+  return resolvePlanScope(version, options).scope;
 }
 
-function resolveQuantityScope(version: PlanVersion, levelId?: string, scope?: QuantityScope): QuantityScope {
-  if (scope) {
-    return scope;
-  }
-
-  if (levelId) {
-    return "level";
-  }
-
-  return version.levels.length > 1 ? "building" : "level";
+function roomsForQuantities(version: PlanVersion, options: QuantityOptions, scope: QuantityScope) {
+  return resolvePlanScope(version, { ...options, scope }).rooms;
 }
 
-function roomsForQuantities(version: PlanVersion, levelId: string | undefined, scope: QuantityScope) {
-  if (scope === "building") {
-    return version.rooms;
-  }
-
-  const level = activeLevel(version, levelId);
-  return level ? resolveLevelRooms(level, version.standardFloorGroups) : version.rooms;
+function wallsForQuantities(version: PlanVersion, options: QuantityOptions, scope: QuantityScope) {
+  return resolvePlanScope(version, { ...options, scope }).walls;
 }
 
-function wallsForQuantities(version: PlanVersion, levelId: string | undefined, scope: QuantityScope) {
-  if (scope === "building") {
-    return version.levels.flatMap((level) => level.walls);
-  }
-
-  return activeLevel(version, levelId)?.walls ?? [];
+function openingsForQuantities(version: PlanVersion, options: QuantityOptions, scope: QuantityScope) {
+  return resolvePlanScope(version, { ...options, scope }).openings;
 }
 
-function openingsForQuantities(version: PlanVersion, levelId: string | undefined, scope: QuantityScope) {
-  if (scope === "building") {
-    return version.levels.flatMap((level) => level.openings);
-  }
-
-  return activeLevel(version, levelId)?.openings ?? [];
+function outlineForQuantities(version: PlanVersion, options: QuantityOptions, scope: QuantityScope) {
+  return resolvePlanScope(version, { ...options, scope }).outline;
 }
 
 function roomOpenings(room: Room, openings: OpeningElement[], type: OpeningElement["type"]) {
@@ -303,27 +280,31 @@ export function calculateQuantities(
 ): QuantityResult {
   const options: QuantityOptions =
     typeof levelIdOrOptions === "string" ? { levelId: levelIdOrOptions } : (levelIdOrOptions ?? {});
-  const scope = resolveQuantityScope(version, options.levelId, options.scope);
-  const rooms = roomsForQuantities(version, options.levelId, scope);
-  const walls = wallsForQuantities(version, options.levelId, scope);
-  const openings = openingsForQuantities(version, options.levelId, scope);
-  const outlineArea = polygonArea(version.outline);
+  const scope = resolveQuantityScope(version, options);
+  const rooms = roomsForQuantities(version, options, scope);
+  const walls = wallsForQuantities(version, options, scope);
+  const openings = openingsForQuantities(version, options, scope);
+  const outline = outlineForQuantities(version, options, scope);
+  const outlineArea = polygonArea(outline);
   const topLevel = version.levels[version.levels.length - 1];
+  const groups = version.standardFloorGroups;
 
   if (scope === "building") {
     const perLevelSlab = version.levels.reduce((total, level) => {
-      const levelOutline = level.floor?.outline ?? version.outline;
-      const levelGross = level.rooms.reduce((sum, room) => sum + room.areaSqm, 0);
+      const levelOutline = resolveLevelOutline(level, groups, version.outline);
+      const levelRooms = resolveLevelRooms(level, groups);
+      const levelGross = levelRooms.reduce((sum, room) => sum + room.areaSqm, 0);
       return total + (polygonArea(levelOutline) || levelGross);
     }, 0);
-    const roofOutline = topLevel?.floor?.outline ?? version.outline;
-    const roofGross = topLevel?.rooms.reduce((sum, room) => sum + room.areaSqm, 0) ?? 0;
+    const topResolved = topLevel ? resolveLevelRooms(topLevel, groups) : [];
+    const roofOutline = topLevel ? resolveLevelOutline(topLevel, groups, version.outline) : version.outline;
+    const roofGross = topResolved.reduce((sum, room) => sum + room.areaSqm, 0);
 
     return buildQuantityResult(
       rooms,
       walls,
       openings,
-      version.outline,
+      outline,
       "Sum of per-level slab areas",
       "Top level outline area",
       perLevelSlab || outlineArea * Math.max(1, version.levels.length),
@@ -335,10 +316,19 @@ export function calculateQuantities(
     rooms,
     walls,
     openings,
-    version.outline,
-    "Outline polygon area",
-    "Assume roof equals outline area"
+    outline,
+    "Level outline polygon area",
+    scope === "floor_group" ? "Assume roof equals standard-floor-group outline" : "Assume roof equals level outline area"
   );
+}
+
+export function calculateQuantitiesByFloorGroup(version: PlanVersion): Record<string, QuantityResult> {
+  const groups = version.standardFloorGroups ?? [];
+
+  return groups.reduce<Record<string, QuantityResult>>((acc, group) => {
+    acc[group.id] = calculateQuantities(version, { standardFloorGroupId: group.id, scope: "floor_group" });
+    return acc;
+  }, {});
 }
 
 export function calculateQuantitiesByLevel(version: PlanVersion): Record<string, QuantityResult> {

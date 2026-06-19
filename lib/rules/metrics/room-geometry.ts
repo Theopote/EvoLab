@@ -1,9 +1,10 @@
-import type { OpeningElement, PlanVersion, Point, Room } from "@/lib/project-types";
+import type { PlanVersion, Point, Room } from "@/lib/project-types";
 import { polygonSegments, type Segment } from "@/lib/analysis/raycasting";
+import { levelGeometryForRoom } from "@/lib/level-rooms";
 import { extractWallsFromRooms } from "@/lib/wall-extractor";
 
 const roomExternalSegments = (version: PlanVersion, room: Room): Segment[] => {
-  const walls = version.levels[0]?.walls ?? [];
+  const { walls, outline } = levelGeometryForRoom(version, room);
   const externalFromWalls = walls
     .filter((wall) => wall.type === "external" && wall.roomIds.includes(room.id))
     .map((wall) => ({ start: wall.start, end: wall.end }));
@@ -12,7 +13,7 @@ const roomExternalSegments = (version: PlanVersion, room: Room): Segment[] => {
     return externalFromWalls;
   }
 
-  const outlineSegments = polygonSegments(version.outline);
+  const outlineSegments = polygonSegments(outline);
   const roomSegments = polygonSegments(room.polygon);
 
   return roomSegments.filter((segment) =>
@@ -64,18 +65,18 @@ export const roomFacadeOrientationScore = (version: PlanVersion, room: Room, pre
 };
 
 export const hasWindow = (version: PlanVersion, room: Room) => {
-  const openings: OpeningElement[] = version.levels?.[0]?.openings ?? [];
+  const { openings } = levelGeometryForRoom(version, room);
+
   return openings.length
     ? openings.some((opening) => opening.type === "window" && opening.roomIds?.includes(room.id))
     : room.windows.length > 0;
 };
 
 export const hasExternalWall = (version: PlanVersion, room: Room) => {
-  const walls = version.levels?.[0]?.walls?.length
-    ? version.levels[0].walls
-    : extractWallsFromRooms(version.rooms, version.outline);
+  const { walls, outline } = levelGeometryForRoom(version, room);
+  const resolvedWalls = walls.length ? walls : extractWallsFromRooms([room], outline);
 
-  return walls.some((wall) => wall.type === "external" && wall.roomIds.includes(room.id));
+  return resolvedWalls.some((wall) => wall.type === "external" && wall.roomIds.includes(room.id));
 };
 
 export const roomDepthEstimate = (room: Room) => {

@@ -1,3 +1,4 @@
+import { findLevelForRoom, levelGeometryForRoom, resolveLevelRooms } from "@/lib/level-rooms";
 import { pointInPolygon } from "@/lib/geometry-kernel";
 import { castRay, polygonSegments, type Segment } from "@/lib/analysis/raycasting";
 import type { PlanVersion, Point, Room } from "@/lib/project-types";
@@ -8,7 +9,7 @@ function centroid(room: Room): Point {
 }
 
 function roomExternalSegments(version: PlanVersion, room: Room): Segment[] {
-  const walls = version.levels[0]?.walls ?? [];
+  const { walls, outline } = levelGeometryForRoom(version, room);
   const externalFromWalls = walls
     .filter((wall) => wall.type === "external" && wall.roomIds.includes(room.id))
     .map((wall) => ({ start: wall.start, end: wall.end }));
@@ -17,7 +18,7 @@ function roomExternalSegments(version: PlanVersion, room: Room): Segment[] {
     return externalFromWalls;
   }
 
-  const outlineSegments = polygonSegments(version.outline);
+  const outlineSegments = polygonSegments(outline);
   const roomSegments = polygonSegments(room.polygon);
 
   return roomSegments.filter((segment) =>
@@ -52,10 +53,13 @@ function inwardNormal(segment: Segment, roomPolygon: Point[]): Point {
   return [chosen[0] / length, chosen[1] / length];
 }
 
-function buildOccluders(version: PlanVersion, roomId: string): Segment[] {
-  return version.rooms
-    .filter((room) => room.id !== roomId)
-    .flatMap((room) => polygonSegments(room.polygon));
+function buildOccluders(version: PlanVersion, room: Room): Segment[] {
+  const level = findLevelForRoom(version, room);
+  const roomsOnLevel = level
+    ? resolveLevelRooms(level, version.standardFloorGroups).filter((item) => item.id !== room.id)
+    : version.rooms.filter((item) => item.id !== room.id);
+
+  return roomsOnLevel.flatMap((item) => polygonSegments(item.polygon));
 }
 
 export interface DaylightSample {
@@ -71,7 +75,7 @@ export function computeDaylightSamples(version: PlanVersion, rooms: Room[]): Day
   return rooms.map((room) => {
     const center = centroid(room);
     const externalSegments = roomExternalSegments(version, room);
-    const occluders = buildOccluders(version, room.id);
+    const occluders = buildOccluders(version, room);
     let penetration = Math.max(3, Math.sqrt(room.areaSqm) / 2.5);
 
     if (externalSegments.length > 0) {

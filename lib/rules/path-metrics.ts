@@ -6,6 +6,7 @@ import {
   type EgressPathMethod,
   type SemanticEgressRoute
 } from "@/lib/analysis/egress-semantics";
+import { scopeVersionForLevel } from "@/lib/plan-scope";
 import type { PlanVersion } from "@/lib/project-types";
 
 export type { EgressPathMethod, SemanticEgressRoute } from "@/lib/analysis/egress-semantics";
@@ -55,20 +56,7 @@ export interface WetCorePathResult {
 }
 
 function scopeVersion(version: PlanVersion, levelId?: string): PlanVersion {
-  if (!levelId) {
-    return version;
-  }
-
-  const level = version.levels.find((item) => item.id === levelId);
-  if (!level) {
-    return version;
-  }
-
-  return {
-    ...version,
-    rooms: level.rooms,
-    levels: [level]
-  };
+  return scopeVersionForLevel(version, levelId);
 }
 
 export function computeEgressPathMetrics(version: PlanVersion, levelId?: string): EgressPathResult {

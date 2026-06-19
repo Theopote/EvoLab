@@ -1,4 +1,5 @@
 import type { OpeningElement, PlanVersion, Point, Room, Wall } from "@/lib/project-types";
+import { resolveLevelOutline, resolveLevelRooms } from "@/lib/level-rooms";
 
 export interface IfcExportPayload {
   schema: "IFC4";
@@ -84,6 +85,8 @@ function wallPredefinedType(wall: Wall): IfcWallPayload["predefinedType"] {
 }
 
 export function createIfcExportPayload(version: PlanVersion): IfcExportPayload {
+  const groups = version.standardFloorGroups;
+
   return {
     schema: "IFC4",
     generator: "EvoLab",
