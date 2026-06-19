@@ -1,7 +1,16 @@
 import { produce } from "immer";
 import { create } from "zustand";
 
-export type ActiveTool = "select" | "outline" | "upload" | "flow" | "model" | "trace" | "inpaint";
+export type ActiveTool =
+  | "select"
+  | "outline"
+  | "upload"
+  | "flow"
+  | "model"
+  | "trace"
+  | "inpaint"
+  | "reshape_boundary"
+  | "add_protrusion";
 
 interface View3DState {
   frameloop: "always" | "demand";

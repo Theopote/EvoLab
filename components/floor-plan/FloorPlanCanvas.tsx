@@ -12,6 +12,10 @@ import { RoomFillLayer } from "@/components/floor-plan/layers/RoomFillLayer";
 import { SelectionLayer } from "@/components/floor-plan/layers/SelectionLayer";
 import { InpaintMaskLayer } from "@/components/floor-plan/layers/InpaintMaskLayer";
 import { InpaintToolbar } from "@/components/floor-plan/InpaintToolbar";
+import { ReshapeBoundaryToolbar } from "@/components/floor-plan/ReshapeBoundaryToolbar";
+import { AddProtrusionToolbar } from "@/components/floor-plan/AddProtrusionToolbar";
+import { BoundarySpanLayer } from "@/components/floor-plan/layers/BoundarySpanLayer";
+import { ProtrusionPlacementLayer } from "@/components/floor-plan/layers/ProtrusionPlacementLayer";
 import { ParametricOpeningToolbar } from "@/components/floor-plan/ParametricOpeningToolbar";
 import { RoomTopologyToolbar } from "@/components/floor-plan/RoomTopologyToolbar";
 import { WallLayer } from "@/components/floor-plan/layers/WallLayer";
@@ -24,6 +28,7 @@ import { corridorComplianceRoomIds } from "@/lib/drag-compliance";
 import { normalizePlanVersion } from "@/lib/architecture-model";
 import type { GridSnapStep } from "@/lib/plan-snap";
 import { clientToSvgPoint } from "@/components/floor-plan/floor-plan-utils";
+import { useLocalFormEditStore } from "@/lib/local-form-edit-store";
 import { deriveWallGraph, hitTestWalls } from "@/lib/wall-graph";
 
 export interface FloorPlanCanvasProps {
@@ -51,7 +56,8 @@ export function FloorPlanCanvas({
   const dragBaseSignatureRef = useRef<string>("");
   const [gridStep, setGridStep] = useState<GridSnapStep>(0.1);
   const [gridSnapEnabled, setGridSnapEnabled] = useState(true);
-  const [hoveredWallId, setHoveredWallId] = useState<string | undefined>();
+  const [protrusionWidthM, setProtrusionWidthM] = useState(1.5);
+  const resetLocalFormEdit = useLocalFormEditStore((state) => state.reset);
   const activeTool = useInteractionStore((state) => state.activeTool);
   const previewRooms = useEditPreviewStore((state) => state.previewRooms);
   const complianceRoomIds = useEditPreviewStore((state) => state.complianceRoomIds);
@@ -94,6 +100,16 @@ export function FloorPlanCanvas({
   const selectedRoomId = interactive ? selectedRoomIdProp ?? roomSelectionFromStore : selectedRoomIdProp;
   const selectedWallId = interactive ? wallSelectionFromStore : undefined;
   const selectedOpeningId = interactive ? openingSelectionFromStore : undefined;
+
+  useEffect(() => {
+    if (activeTool !== "reshape_boundary" && activeTool !== "add_protrusion") {
+      return;
+    }
+
+    return () => {
+      resetLocalFormEdit();
+    };
+  }, [activeTool, resetLocalFormEdit]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {

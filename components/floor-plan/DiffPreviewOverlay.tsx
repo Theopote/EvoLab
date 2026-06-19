@@ -9,6 +9,11 @@ interface DiffPreviewOverlayProps {
   previewVersion: PlanVersion;
   highlightRoomIds?: string[];
   notice?: string;
+  dimensionOverlay?: {
+    widthM: number;
+    depthM: number;
+    label: string;
+  };
   onAccept: () => void;
   onReject: () => void;
 }
@@ -19,6 +24,7 @@ export function DiffPreviewOverlay({
   previewVersion,
   highlightRoomIds = [],
   notice,
+  dimensionOverlay,
   onAccept,
   onReject
 }: DiffPreviewOverlayProps) {
@@ -44,6 +50,15 @@ export function DiffPreviewOverlay({
         </div>
       </div>
       {notice ? <p className="mb-2 text-xs text-muted">{notice}</p> : null}
+      {dimensionOverlay ? (
+        <div className="mb-2 inline-flex items-center gap-2 rounded border border-line px-2 py-1 text-[11px] text-slate-100">
+          <span className="text-muted">Size</span>
+          <span>{dimensionOverlay.label}</span>
+          <span className="text-muted">
+            W {dimensionOverlay.widthM.toFixed(2)}m · D {dimensionOverlay.depthM.toFixed(2)}m
+          </span>
+        </div>
+      ) : null}
       <PlanChangeProposalDiffPreview
         baseVersion={baseVersion}
         previewVersion={previewVersion}

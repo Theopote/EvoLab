@@ -42,7 +42,18 @@ export function buildReshapedPreviewVersion(
 
   const reshaped = applyBoundaryReshape(room, span, newPoints);
   const syncedRooms = syncSharedVerticesOnReshape(rooms, room.id, room.polygon, reshaped.polygon);
+  const draft: PlanVersion = {
+    ...baseVersion,
+    rooms: syncedRooms,
+    levels: baseVersion.levels.map((currentLevel) =>
+      currentLevel.id === level?.id ? { ...currentLevel, rooms: syncedRooms } : currentLevel
+    )
+  };
+
+  const normalized = normalizePlanVersion(draft);
+  const normalizedLevel = normalized.levels.find((item) => item.id === level?.id) ?? normalized.levels[0];
   const previousWalls = level?.walls ?? [];
+  const nextWalls = normalizedLevel?.walls ?? [];
   const affectedOpenings = openingsOnBoundarySpan(
     room.id,
     span,
@@ -56,25 +67,17 @@ export function buildReshapedPreviewVersion(
     affectedOpenings.map((opening) => opening.id),
     openingPolicy,
     previousWalls,
-    previousWalls
+    nextWalls
   );
 
-  const draft: PlanVersion = {
-    ...baseVersion,
-    rooms: syncedRooms,
-    levels: baseVersion.levels.map((currentLevel) =>
-      currentLevel.id === level?.id
-        ? {
-            ...currentLevel,
-            rooms: syncedRooms,
-            openings: openingResult.openings
-          }
-        : currentLevel
+  const withOpenings: PlanVersion = {
+    ...normalized,
+    levels: normalized.levels.map((currentLevel) =>
+      currentLevel.id === level?.id ? { ...currentLevel, openings: openingResult.openings } : currentLevel
     )
   };
 
-  const normalized = normalizePlanVersion(draft);
-  const openingEnforced = enforceOpeningConstraintsOnVersion(normalized);
+  const openingEnforced = enforceOpeningConstraintsOnVersion(withOpenings);
 
   return {
     version: postProcessPlanVersion(openingEnforced.version),
