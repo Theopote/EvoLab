@@ -31,7 +31,6 @@ import { normalizePlanVersion } from "@/lib/architecture-model";
 import type { GridSnapStep } from "@/lib/plan-snap";
 import { clientToSvgPoint } from "@/components/floor-plan/floor-plan-utils";
 import { useLocalFormEditStore } from "@/lib/local-form-edit-store";
-import { useSketchInputStore } from "@/lib/sketch-input-store";
 import { deriveWallGraph, hitTestWalls } from "@/lib/wall-graph";
 
 export interface FloorPlanCanvasProps {
@@ -114,18 +113,6 @@ export function FloorPlanCanvas({
       resetLocalFormEdit();
     };
   }, [activeTool, resetLocalFormEdit]);
-
-  useEffect(() => {
-    if (activeTool === "sketch_input") {
-      return;
-    }
-
-    return () => {
-      if (useSketchInputStore.getState().strokes.length > 0 || useSketchInputStore.getState().ghostLoops.length > 0) {
-        useSketchInputStore.getState().clearSketch();
-      }
-    };
-  }, [activeTool]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {

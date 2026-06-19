@@ -1,22 +1,34 @@
 import { z } from "zod";
-import { FiniteNumberSchema } from "@/lib/schemas/plan-version-schema";
 
+const FiniteNumberSchema = z.number().finite();
 const PointSchema = z.tuple([FiniteNumberSchema, FiniteNumberSchema]);
 
 const OpeningSchema = z.object({
-  id: z.string(),
-  type: z.enum(["door", "window"]),
   wall: z.enum(["north", "south", "east", "west"]),
-  width: FiniteNumberSchema,
-  height: FiniteNumberSchema.optional(),
-  offset: FiniteNumberSchema.optional()
+  position: FiniteNumberSchema.min(0).max(1),
+  width: FiniteNumberSchema.positive()
 });
 
 const SketchRoomSchema = z.object({
   id: z.string(),
   name: z.string(),
-  type: z.string(),
-  zone: z.string(),
+  type: z.enum([
+    "lobby",
+    "corridor",
+    "consultation",
+    "ward",
+    "office",
+    "living_room",
+    "bedroom",
+    "kitchen",
+    "bathroom",
+    "stair",
+    "elevator",
+    "shaft",
+    "equipment_room",
+    "other"
+  ]),
+  zone: z.enum(["public", "semi_public", "private", "service", "circulation"]),
   polygon: z.array(PointSchema).min(3),
   areaSqm: FiniteNumberSchema,
   ceilingHeight: FiniteNumberSchema.optional(),

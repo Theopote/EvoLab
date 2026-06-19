@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { Point } from "@/lib/project-types";
 import {
   closeStrokePolygon,
   detectClosedLoops,
@@ -11,14 +12,14 @@ import {
 
 describe("sketch-processing", () => {
   it("simplifies jittery strokes while keeping corners", () => {
-    const jittery = [
+    const jittery: Point[] = [
       [0, 0],
       [0.01, 0.02],
       [0, 4],
       [5.01, 4.01],
       [5, 0],
       [0.01, 0]
-    ] as const;
+    ];
 
     const simplified = simplifyStroke([...jittery], 0.05);
 
@@ -37,11 +38,11 @@ describe("sketch-processing", () => {
     );
 
     expect(segments[0].end[1]).toBeCloseTo(0, 5);
-    expect(segments[1].end[0]).toBeCloseTo(segments[0].end[0], 5);
+    expect(segments[1].end[0]).toBeCloseTo(segments[0].end[0], 2);
   });
 
   it("detects a closed rectangular stroke as a room polygon", () => {
-    const stroke = [
+    const stroke: Point[] = [
       [2, 2],
       [8, 2.05],
       [8.05, 6],

@@ -1,10 +1,10 @@
 import { normalizePlanVersion } from "@/lib/architecture-model";
 import { postProcessPlanVersion } from "@/lib/plan-postprocess";
-import type { Opening, PlanVersion, Point, Room } from "@/lib/project-types";
+import type { FunctionZone, PlanVersion, Point, Room, RoomType } from "@/lib/project-types";
 import { polygonArea } from "@/lib/plan-validation";
 import type { RecognizedSketchRoom } from "@/lib/schemas/sketch-interpretation-schema";
 
-function inferRoomType(name: string): Room["type"] {
+function inferRoomType(name: string): RoomType {
   const normalized = name.toLowerCase();
 
   if (/corridor|hall|走道|走廊/.test(normalized)) {
@@ -34,7 +34,7 @@ function inferRoomType(name: string): Room["type"] {
   return "other";
 }
 
-function inferRoomZone(type: Room["type"]): Room["zone"] {
+function inferRoomZone(type: RoomType): FunctionZone {
   if (type === "corridor" || type === "stair" || type === "elevator") {
     return "circulation";
   }
@@ -89,13 +89,13 @@ export function buildRecognizedRoomsFromLoops(
       room: {
         id: `sketch-room-${loop.index + 1}`,
         name: `Room ${index + 1}`,
-        type: "other",
-        zone: "private",
+        type: "other" as const,
+        zone: "private" as const,
         polygon: loop.polygon,
         areaSqm: Math.max(4, Math.round(areaSqm)),
         ceilingHeight: 3,
-        doors: [] as Opening[],
-        windows: [] as Opening[],
+        doors: [],
+        windows: [],
         adjacents: []
       },
       confidence,
@@ -104,25 +104,31 @@ export function buildRecognizedRoomsFromLoops(
   });
 }
 
+function toRoom(entry: RecognizedSketchRoom): Room {
+  const type = entry.room.type ?? inferRoomType(entry.room.name);
+  const polygon = entry.room.polygon as Point[];
+
+  return {
+    id: entry.room.id,
+    name: entry.room.name,
+    type,
+    zone: entry.room.zone ?? inferRoomZone(type),
+    polygon,
+    areaSqm: entry.room.areaSqm ?? Math.max(4, Math.round(polygonArea(polygon))),
+    ceilingHeight: entry.room.ceilingHeight ?? 3,
+    doors: entry.room.doors ?? [],
+    windows: entry.room.windows ?? [],
+    adjacents: entry.room.adjacents ?? []
+  };
+}
+
 export function mergeSketchRoomsIntoVersion(
   currentVersion: PlanVersion,
   recognizedRooms: RecognizedSketchRoom[],
   options?: { append?: boolean }
 ): PlanVersion {
   const append = options?.append ?? true;
-  const mappedRooms: Room[] = recognizedRooms.map((entry) => {
-    const type = entry.room.type ?? inferRoomType(entry.room.name);
-
-    return {
-      ...entry.room,
-      type,
-      zone: entry.room.zone ?? inferRoomZone(type),
-      doors: entry.room.doors ?? [],
-      windows: entry.room.windows ?? [],
-      adjacents: entry.room.adjacents ?? []
-    };
-  });
-
+  const mappedRooms = recognizedRooms.map(toRoom);
   const rooms = append ? [...currentVersion.rooms, ...mappedRooms] : mappedRooms;
   const draft = normalizePlanVersion({
     ...currentVersion,
