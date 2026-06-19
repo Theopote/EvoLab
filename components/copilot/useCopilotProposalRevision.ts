@@ -1,0 +1,149 @@
+"use client";
+
+import { useCallback, useMemo, useState } from "react";
+import { useCopilotTimelineStore } from "@/lib/copilot-timeline-store";
+import { diffRoomIds } from "@/lib/design-decision-log";
+import { useEvoProject } from "@/lib/project-store";
+import type { CopilotFinding, PlanVersion } from "@/lib/project-types";
+import type { PlanChangeProposal } from "@/lib/schemas/plan-change-proposal-schema";
+import { useShallow } from "zustand/react/shallow";
+
+export interface PreparedCopilotProposalInput {
+  prompt: string;
+  baseVersion: PlanVersion;
+  proposal: PlanChangeProposal;
+  findings?: CopilotFinding[];
+  warning?: string;
+  allowedRoomIds?: string[];
+}
+
+interface UseCopilotProposalRevisionOptions {
+  activeVersion?: PlanVersion;
+  onApplied?: (result: {
+    prompt: string;
+    parentVersion: PlanVersion;
+    resultVersion: PlanVersion;
+  }) => void;
+}
+
+export function useCopilotProposalRevision(options: UseCopilotProposalRevisionOptions = {}) {
+  const [pendingProposalId, setPendingProposalId] = useState<string | null>(null);
+  const [pendingMeta, setPendingMeta] = useState<{ allowedRoomIds?: string[] }>({});
+
+  const {
+    lockedElementIds,
+    copilotProposals,
+    registerCopilotProposal,
+    applyCopilotProposal,
+    dismissCopilotProposal,
+    recordDesignDecision
+  } = useEvoProject(
+    useShallow((state) => ({
+      lockedElementIds: state.project.domain.lockedElementIds,
+      copilotProposals: state.project.domain.copilotProposals,
+      registerCopilotProposal: state.registerCopilotProposal,
+      applyCopilotProposal: state.applyCopilotProposal,
+      dismissCopilotProposal: state.dismissCopilotProposal,
+      recordDesignDecision: state.recordDesignDecision
+    }))
+  );
+
+  const pendingProposal = useMemo(() => {
+    if (!pendingProposalId) {
+      return null;
+    }
+
+    const stored = copilotProposals.find((item) => item.id === pendingProposalId);
+
+    if (!stored || stored.status !== "draft") {
+      return null;
+    }
+
+    const baseVersion = stored.baseVersionSnapshot ?? options.activeVersion;
+
+    if (!baseVersion) {
+      return null;
+    }
+
+    return {
+      ...stored,
+      baseVersion,
+      allowedRoomIds: pendingMeta.allowedRoomIds
+    };
+  }, [copilotProposals, options.activeVersion, pendingMeta.allowedRoomIds, pendingProposalId]);
+
+  const prepareProposal = useCallback(
+    (input: PreparedCopilotProposalInput) => {
+      const stored = registerCopilotProposal({
+        prompt: input.prompt,
+        baseVersion: input.baseVersion,
+        proposal: input.proposal,
+        findings: input.findings ?? [],
+        warning: input.warning
+      });
+
+      setPendingProposalId(stored.id);
+      setPendingMeta({ allowedRoomIds: input.allowedRoomIds });
+
+      return stored;
+    },
+    [registerCopilotProposal]
+  );
+
+  const applyPendingProposal = useCallback(
+    (version: PlanVersion, acceptedOperationIds: string[]) => {
+      if (!pendingProposalId) {
+        return undefined;
+      }
+
+      const result = applyCopilotProposal(pendingProposalId, version, acceptedOperationIds);
+
+      if (result) {
+        useCopilotTimelineStore.getState().addEntry({
+          prompt: result.prompt,
+          parentVersionId: result.parentVersion.id,
+          parentVersionLabel: result.parentVersion.label,
+          resultVersionId: result.resultVersion.id,
+          resultVersionLabel: result.resultVersion.label
+        });
+        recordDesignDecision({
+          trigger: "ai_suggestion_accepted",
+          description: pendingProposal?.proposal.intent ?? result.prompt,
+          affectedRoomIds: diffRoomIds(result.parentVersion, result.resultVersion),
+          versionIdBefore: result.parentVersion.id,
+          versionIdAfter: result.resultVersion.id
+        });
+        options.onApplied?.(result);
+      }
+
+      setPendingProposalId(null);
+      setPendingMeta({});
+
+      return result;
+    },
+    [
+      applyCopilotProposal,
+      options,
+      pendingProposal?.proposal.intent,
+      pendingProposalId,
+      recordDesignDecision
+    ]
+  );
+
+  const dismissPendingProposal = useCallback(() => {
+    if (pendingProposalId) {
+      dismissCopilotProposal(pendingProposalId);
+    }
+
+    setPendingProposalId(null);
+    setPendingMeta({});
+  }, [dismissCopilotProposal, pendingProposalId]);
+
+  return {
+    lockedElementIds,
+    pendingProposal,
+    prepareProposal,
+    applyPendingProposal,
+    dismissPendingProposal
+  };
+}

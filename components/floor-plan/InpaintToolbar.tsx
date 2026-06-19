@@ -3,32 +3,31 @@
 import { Eraser, Sparkles } from "lucide-react";
 import { useMemo, useState } from "react";
 import { PlanChangeProposalPanel } from "@/components/copilot/PlanChangeProposalPanel";
+import { useCopilotProposalRevision } from "@/components/copilot/useCopilotProposalRevision";
 import type { ModifyPlanResponse } from "@/lib/copilot-modify-types";
 import { captureInpaintImages } from "@/lib/inpaint-capture";
 import { useInpaintMaskStore } from "@/lib/inpaint-mask-store";
-import { useEvoProject } from "@/lib/project-store";
 import type { PlanVersion } from "@/lib/project-types";
 import { bboxFromStrokes, roomsInSelection } from "@/lib/region-lock";
-import { useShallow } from "zustand/react/shallow";
 
 interface InpaintToolbarProps {
   version?: PlanVersion;
-  onInpaintRevision: (version: PlanVersion, prompt: string) => void;
 }
 
-export function InpaintToolbar({ version, onInpaintRevision }: InpaintToolbarProps) {
+export function InpaintToolbar({ version }: InpaintToolbarProps) {
   const strokes = useInpaintMaskStore((state) => state.strokes);
   const prompt = useInpaintMaskStore((state) => state.prompt);
   const setPrompt = useInpaintMaskStore((state) => state.setPrompt);
   const clearMask = useInpaintMaskStore((state) => state.clearMask);
-  const { lockedElementIds } = useEvoProject(
-    useShallow((state) => ({
-      lockedElementIds: state.project.domain.lockedElementIds
-    }))
-  );
+  const {
+    lockedElementIds,
+    pendingProposal,
+    prepareProposal,
+    applyPendingProposal,
+    dismissPendingProposal
+  } = useCopilotProposalRevision({ activeVersion: version });
   const [isSending, setIsSending] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const [pendingProposal, setPendingProposal] = useState<ModifyPlanResponse | null>(null);
 
   const allowedRoomIds = useMemo(() => {
     if (!version) {
@@ -72,7 +71,14 @@ export function InpaintToolbar({ version, onInpaintRevision }: InpaintToolbarPro
         throw new Error("inpaint-plan did not return a change proposal.");
       }
 
-      setPendingProposal(data);
+      prepareProposal({
+        prompt: prompt.trim(),
+        baseVersion: version,
+        proposal: data.proposal,
+        findings: data.findings ?? [],
+        warning: data.warning,
+        allowedRoomIds
+      });
       setNotice(
         data.warning
           ? `Review the localized change proposal before applying. ${data.warning}`
@@ -85,37 +91,24 @@ export function InpaintToolbar({ version, onInpaintRevision }: InpaintToolbarPro
     }
   }
 
-  function applyProposal(nextVersion: PlanVersion) {
-    if (!pendingProposal) {
-      return;
-    }
-
-    onInpaintRevision(nextVersion, prompt.trim());
-    clearMask();
-    setPendingProposal(null);
-    setNotice(
-      pendingProposal.warning
-        ? `Inpaint applied with note: ${pendingProposal.warning}`
-        : "Masked region updated via accepted operations."
-    );
-  }
-
-  function dismissProposal() {
-    setPendingProposal(null);
-    setNotice("Inpaint proposal dismissed.");
-  }
-
   return (
     <div className="mb-3 rounded border border-warning/35 bg-warning/10 p-3">
       {pendingProposal && version ? (
         <div className="mb-3">
           <PlanChangeProposalPanel
-            allowedRoomIds={allowedRoomIds}
-            baseVersion={version}
+            allowedRoomIds={pendingProposal.allowedRoomIds}
+            baseVersion={pendingProposal.baseVersion}
             lockedElementIds={lockedElementIds}
             proposal={pendingProposal.proposal}
-            onApply={(nextVersion) => applyProposal(nextVersion)}
-            onDismiss={dismissProposal}
+            onApply={(nextVersion, acceptedOperationIds) => {
+              applyPendingProposal(nextVersion, acceptedOperationIds);
+              clearMask();
+              setNotice("Masked region updated via accepted operations.");
+            }}
+            onDismiss={() => {
+              dismissPendingProposal();
+              setNotice("Inpaint proposal dismissed.");
+            }}
           />
         </div>
       ) : null}

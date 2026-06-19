@@ -97,7 +97,6 @@ export function SchemeSplitViewport({
           version={activeVersion}
           activeLevelId={activeLevelId}
           onMarkTransferFloor={(levelId) => setLevelTransferFloor(levelId, true)}
-          onApplyRevision={onInpaintRevision}
         />
       ) : (
         <div className="grid min-h-0 gap-3 lg:grid-cols-2">

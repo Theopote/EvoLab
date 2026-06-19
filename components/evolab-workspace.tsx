@@ -432,7 +432,6 @@ export function EvoLabWorkspace() {
               activeVersion={activeVersion}
               projectType={project.projectType}
               scoringConfig={project.domain.scoringConfig}
-              onApplyRevision={handleInpaintRevision}
             />
           </section>
         );

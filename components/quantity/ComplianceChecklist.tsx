@@ -1,52 +1,51 @@
 "use client";
 
 import { AlertTriangle, CheckCircle2, Sparkles } from "lucide-react";
-import { useState } from "react";
 import { PlanChangeProposalPanel } from "@/components/copilot/PlanChangeProposalPanel";
 import { useComplianceFixAction } from "@/components/copilot/useComplianceFixAction";
+import { useCopilotProposalRevision } from "@/components/copilot/useCopilotProposalRevision";
 import type { ScoringConfig } from "@/lib/building-domain";
 import { complianceFixLabel } from "@/lib/compliance-rules";
 import { isComplianceFixAction } from "@/lib/compliance-fix";
-import { useEvoProject } from "@/lib/project-store";
 import type { ComplianceItem } from "@/lib/quantity-engine";
 import type { PlanVersion } from "@/lib/project-types";
-import type { PlanChangeProposal } from "@/lib/schemas/plan-change-proposal-schema";
-import { useShallow } from "zustand/react/shallow";
 
 interface ComplianceChecklistProps {
   items: ComplianceItem[];
   activeVersion?: PlanVersion;
   projectType?: string;
   scoringConfig?: ScoringConfig;
-  onApplyRevision?: (version: PlanVersion, prompt: string) => void;
 }
 
 export function ComplianceChecklist({
   items,
   activeVersion,
   projectType = "healthcare",
-  scoringConfig,
-  onApplyRevision
+  scoringConfig
 }: ComplianceChecklistProps) {
   const warningCount = items.filter((item) => item.status === "warning").length;
-  const { lockedElementIds } = useEvoProject(
-    useShallow((state) => ({
-      lockedElementIds: state.project.domain.lockedElementIds
-    }))
-  );
-  const [pendingProposal, setPendingProposal] = useState<{
-    prompt: string;
-    proposal: PlanChangeProposal;
-    allowedRoomIds?: string[];
-  } | null>(null);
+  const {
+    lockedElementIds,
+    pendingProposal,
+    prepareProposal,
+    applyPendingProposal,
+    dismissPendingProposal
+  } = useCopilotProposalRevision({ activeVersion });
   const { isComplianceFixing, runComplianceFixAction } = useComplianceFixAction({
     activeVersion,
     projectType,
     scoringConfig,
     onProposalReady: (input) => {
-      setPendingProposal({
+      if (!activeVersion) {
+        return;
+      }
+
+      prepareProposal({
         prompt: input.prompt,
+        baseVersion: activeVersion,
         proposal: input.proposal,
+        findings: input.findings,
+        warning: input.warning,
         allowedRoomIds: input.highlightRoomIds
       });
     }
@@ -54,18 +53,15 @@ export function ComplianceChecklist({
 
   return (
     <section className="rounded border border-line bg-panel/90 p-3">
-      {pendingProposal && activeVersion ? (
+      {pendingProposal ? (
         <div className="mb-3">
           <PlanChangeProposalPanel
             allowedRoomIds={pendingProposal.allowedRoomIds}
-            baseVersion={activeVersion}
+            baseVersion={pendingProposal.baseVersion}
             lockedElementIds={lockedElementIds}
             proposal={pendingProposal.proposal}
-            onApply={(version) => {
-              onApplyRevision?.(version, pendingProposal.prompt);
-              setPendingProposal(null);
-            }}
-            onDismiss={() => setPendingProposal(null)}
+            onApply={applyPendingProposal}
+            onDismiss={dismissPendingProposal}
           />
         </div>
       ) : null}
@@ -92,7 +88,7 @@ export function ComplianceChecklist({
             item.status === "warning" &&
             item.fixActionId &&
             isComplianceFixAction({ id: item.fixActionId, label: "fix" }) &&
-            Boolean(activeVersion && onApplyRevision);
+            Boolean(activeVersion);
 
           return (
             <article className="rounded border border-line bg-[#0b1118] p-3" key={item.id}>

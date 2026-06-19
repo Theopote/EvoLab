@@ -330,9 +330,7 @@ export function FloorPlanCanvas({
 
   return (
     <div className={className}>
-      {inpaintEnabled && onInpaintRevision ? (
-        <InpaintToolbar version={version} onInpaintRevision={onInpaintRevision} />
-      ) : null}
+      {inpaintEnabled ? <InpaintToolbar version={version} /> : null}
       {sketchInputEnabled && onInpaintRevision ? (
         <SketchInputToolbar version={version} onSketchRevision={onInpaintRevision} />
       ) : null}

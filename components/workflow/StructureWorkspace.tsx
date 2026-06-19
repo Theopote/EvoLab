@@ -127,11 +127,7 @@ export function StructureWorkspace({
         </section>
       </div>
 
-      <VerticalAlignmentPanel
-        version={version}
-        activeLevelId={activeLevel?.id}
-        onApplyRevision={onInpaintRevision}
-      />
+      <VerticalAlignmentPanel version={version} activeLevelId={activeLevel?.id} />
     </section>
   );
 }

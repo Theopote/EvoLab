@@ -18,7 +18,7 @@ import type {
 } from "@/lib/project-types";
 import { useCopilotTimelineStore } from "@/lib/copilot-timeline-store";
 import { useCopilotUploadStore } from "@/lib/copilot-upload-store";
-import { diffRoomIds } from "@/lib/design-decision-log";
+import { useCopilotProposalRevision } from "@/components/copilot/useCopilotProposalRevision";
 import { pendingInsightCount } from "@/lib/copilot-insight-queue";
 import { detectCopilotPlan, type CopilotPlan } from "@/lib/copilot-plan";
 import { isImagePinnedFile, readCopilotUpload, type CopilotPinnedFile } from "@/lib/copilot-upload";
@@ -60,34 +60,29 @@ export function CopilotConsole({
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [pinnedFiles, setPinnedFiles] = useState<CopilotPinnedFile[]>([]);
-  const [pendingProposalId, setPendingProposalId] = useState<string | null>(null);
   const [pendingPlan, setPendingPlan] = useState<CopilotPlan | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { addCopilotProposalComment, refreshCopilotInsights, reviewCopilotInsights, scoringConfig } =
+    useEvoProject(
+      useShallow((state) => ({
+        addCopilotProposalComment: state.addCopilotProposalComment,
+        refreshCopilotInsights: state.refreshCopilotInsights,
+        reviewCopilotInsights: state.reviewCopilotInsights,
+        scoringConfig: state.project.domain.scoringConfig
+      }))
+    );
   const {
-    copilotProposals,
     lockedElementIds,
-    registerCopilotProposal,
-    applyCopilotProposal,
-    dismissCopilotProposal,
-    addCopilotProposalComment,
-    refreshCopilotInsights,
-    reviewCopilotInsights,
-    recordDesignDecision,
-    scoringConfig
-  } = useEvoProject(
-    useShallow((state) => ({
-      copilotProposals: state.project.domain.copilotProposals,
-      lockedElementIds: state.project.domain.lockedElementIds,
-      registerCopilotProposal: state.registerCopilotProposal,
-      applyCopilotProposal: state.applyCopilotProposal,
-      dismissCopilotProposal: state.dismissCopilotProposal,
-      addCopilotProposalComment: state.addCopilotProposalComment,
-      refreshCopilotInsights: state.refreshCopilotInsights,
-      reviewCopilotInsights: state.reviewCopilotInsights,
-      recordDesignDecision: state.recordDesignDecision,
-      scoringConfig: state.project.domain.scoringConfig
-    }))
-  );
+    pendingProposal,
+    prepareProposal,
+    applyPendingProposal: applyRevisionProposal,
+    dismissPendingProposal: dismissRevisionProposal
+  } = useCopilotProposalRevision({
+    activeVersion,
+    onApplied: () => {
+      refreshCopilotInsights();
+    }
+  });
   const insightQueue = useEvoProject((state) => state.project.domain.copilotInsightQueue);
   const pendingInsights = pendingInsightCount(insightQueue);
   const appendAssistantMessage = (content: string) => {
@@ -113,7 +108,7 @@ export function CopilotConsole({
         return;
       }
 
-      const stored = registerCopilotProposal({
+      prepareProposal({
         prompt: input.prompt,
         baseVersion: activeVersion,
         proposal: input.proposal,
@@ -121,7 +116,6 @@ export function CopilotConsole({
         warning: input.warning
       });
 
-      setPendingProposalId(stored.id);
       setMessages((current) => [
         ...current,
         {
@@ -145,26 +139,6 @@ export function CopilotConsole({
     },
     onNotice: appendAssistantMessage
   });
-  const pendingProposal = useMemo(() => {
-    if (!pendingProposalId) {
-      return null;
-    }
-
-    const stored = copilotProposals.find((item) => item.id === pendingProposalId);
-
-    if (!stored || stored.status !== "draft") {
-      return null;
-    }
-
-    const baseVersion =
-      projectVersions.find((version) => version.id === stored.baseVersionId) ?? stored.baseVersionSnapshot;
-
-    if (!baseVersion) {
-      return null;
-    }
-
-    return { ...stored, baseVersion };
-  }, [copilotProposals, pendingProposalId, projectVersions]);
   const uploadRequestId = useCopilotUploadStore((state) => state.uploadRequestId);
   const [messages, setMessages] = useState<CopilotMessage[]>([
     {
@@ -371,7 +345,7 @@ export function CopilotConsole({
         throw new Error("modify-plan did not return a change proposal.");
       }
 
-      const stored = registerCopilotProposal({
+      prepareProposal({
         prompt: text,
         baseVersion,
         proposal: data.proposal,
@@ -379,7 +353,6 @@ export function CopilotConsole({
         warning: data.warning
       });
 
-      setPendingProposalId(stored.id);
       setPinnedFiles([]);
       setMessages((current) => [
         ...current,
@@ -416,37 +389,25 @@ export function CopilotConsole({
       return;
     }
 
-    const result = applyCopilotProposal(pendingProposal.id, version, acceptedOperationIds);
+    const intent = pendingProposal.proposal.intent;
+    const result = applyRevisionProposal(version, acceptedOperationIds);
 
     if (!result) {
       return;
     }
 
-    onCopilotRevision(result.resultVersion, result.prompt, result.parentVersion);
-    recordDesignDecision({
-      trigger: "ai_suggestion_accepted",
-      description: pendingProposal.proposal.intent,
-      affectedRoomIds: diffRoomIds(result.parentVersion, result.resultVersion),
-      versionIdBefore: result.parentVersion.id,
-      versionIdAfter: result.resultVersion.id
-    });
-    setPendingProposalId(null);
     setMessages((current) => [
       ...current,
       {
         id: `assistant-applied-${Date.now()}`,
         role: "assistant",
-        content: `Applied selected changes for: ${pendingProposal.proposal.intent}`
+        content: `Applied selected changes for: ${intent}`
       }
     ]);
   }
 
   function dismissPendingProposal() {
-    if (pendingProposal) {
-      dismissCopilotProposal(pendingProposal.id);
-    }
-
-    setPendingProposalId(null);
+    dismissRevisionProposal();
   }
 
   function handleUndo(entryId: string, parentVersionId: string) {
