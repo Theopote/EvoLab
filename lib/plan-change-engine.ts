@@ -3,6 +3,10 @@ import { postProcessPlanVersion } from "@/lib/plan-postprocess";
 import { polygonArea } from "@/lib/plan-validation";
 import type { PlanChangeProposal, PlanOperation } from "@/lib/schemas/plan-change-proposal-schema";
 import type { Opening, PlanVersion, Point, Room } from "@/lib/project-types";
+import {
+  sanitizeAddOpeningOperation,
+  sanitizeResizeOpeningOperation
+} from "@/lib/opening-constraints";
 
 const CORE_TYPES = new Set(["stair", "elevator", "shaft"]);
 const WET_TYPES = new Set(["bathroom", "kitchen"]);
@@ -12,6 +16,7 @@ export interface SkippedPlanOperation {
   operationId: string;
   label: string;
   lockedElementIds: string[];
+  reason?: string;
 }
 
 export interface PlanOperationsReport {
@@ -344,14 +349,20 @@ function applySplitRoom(version: PlanVersion, operation: Extract<PlanOperation, 
 }
 
 function applyAddOpening(version: PlanVersion, operation: Extract<PlanOperation, { type: "add_opening" }>): PlanVersion {
+  const sanitized = sanitizeAddOpeningOperation(version, operation);
+
+  if (!sanitized) {
+    return version;
+  }
+
   const opening: Opening = {
-    wall: operation.wall,
-    position: operation.position,
-    width: operation.width
+    wall: sanitized.wall,
+    position: sanitized.position,
+    width: sanitized.width
   };
 
-  return updateRoomInVersion(version, operation.roomId, (room) => {
-    if (operation.openingKind === "door") {
+  return updateRoomInVersion(version, sanitized.roomId, (room) => {
+    if (sanitized.openingKind === "door") {
       return {
         ...room,
         doors: [...room.doors, opening]
@@ -369,17 +380,23 @@ function applyResizeOpening(
   version: PlanVersion,
   operation: Extract<PlanOperation, { type: "resize_opening" }>
 ): PlanVersion {
-  return updateRoomInVersion(version, operation.roomId, (room) => {
-    if (operation.openingKind === "door") {
+  const sanitized = sanitizeResizeOpeningOperation(version, operation);
+
+  if (!sanitized) {
+    return version;
+  }
+
+  return updateRoomInVersion(version, sanitized.roomId, (room) => {
+    if (sanitized.openingKind === "door") {
       const doors = room.doors.map((door, index) =>
-        index === operation.openingIndex ? { ...door, width: operation.width } : door
+        index === sanitized.openingIndex ? { ...door, width: sanitized.width } : door
       );
 
       return { ...room, doors };
     }
 
     const windows = room.windows.map((window, index) =>
-      index === operation.openingIndex ? { ...window, width: operation.width } : window
+      index === sanitized.openingIndex ? { ...window, width: sanitized.width } : window
     );
 
     return { ...room, windows };
@@ -484,8 +501,42 @@ export function applyPlanOperationsWithReport(
       return version;
     }
 
+    const versionBefore = version;
+
+    if (operation.type === "add_opening" && !sanitizeAddOpeningOperation(version, operation)) {
+      skippedOperations.push({
+        operationId: operation.id,
+        label: operation.label,
+        lockedElementIds: [],
+        reason: "Opening parameters could not be validated against the host wall."
+      });
+      return version;
+    }
+
+    if (operation.type === "resize_opening" && !sanitizeResizeOpeningOperation(version, operation)) {
+      skippedOperations.push({
+        operationId: operation.id,
+        label: operation.label,
+        lockedElementIds: [],
+        reason: "Resized opening would not fit on the host wall."
+      });
+      return version;
+    }
+
+    const nextVersion = applyOperation(version, operation);
+
+    if (nextVersion === versionBefore && (operation.type === "add_opening" || operation.type === "resize_opening")) {
+      skippedOperations.push({
+        operationId: operation.id,
+        label: operation.label,
+        lockedElementIds: [],
+        reason: "Opening operation produced no valid geometry change."
+      });
+      return version;
+    }
+
     appliedOperationIds.push(operation.id);
-    return applyOperation(version, operation);
+    return nextVersion;
   }, baseVersion);
 
   const version = options.skipPostProcess ? reduced : postProcessPlanVersion(reduced);
