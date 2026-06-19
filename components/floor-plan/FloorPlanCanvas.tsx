@@ -31,6 +31,7 @@ import { normalizePlanVersion } from "@/lib/architecture-model";
 import type { GridSnapStep } from "@/lib/plan-snap";
 import { clientToSvgPoint } from "@/components/floor-plan/floor-plan-utils";
 import { useLocalFormEditStore } from "@/lib/local-form-edit-store";
+import { useSketchInputStore } from "@/lib/sketch-input-store";
 import { deriveWallGraph, hitTestWalls } from "@/lib/wall-graph";
 
 export interface FloorPlanCanvasProps {
@@ -62,6 +63,7 @@ export function FloorPlanCanvas({
   const protrusionWidthM = useLocalFormEditStore((state) => state.protrusionWidthM);
   const resetLocalFormEdit = useLocalFormEditStore((state) => state.reset);
   const activeTool = useInteractionStore((state) => state.activeTool);
+  const recognitionStatus = useSketchInputStore((state) => state.recognitionStatus);
   const previewRooms = useEditPreviewStore((state) => state.previewRooms);
   const complianceRoomIds = useEditPreviewStore((state) => state.complianceRoomIds);
   const dragHint = useEditPreviewStore((state) => state.dragHint);
@@ -407,6 +409,8 @@ export function FloorPlanCanvas({
           {traceEnabled ? " / Trace mode" : ""}
           {inpaintEnabled ? " / Inpaint mask" : ""}
           {sketchInputEnabled ? " / Sketch input" : ""}
+          {sketchInputEnabled && recognitionStatus === "pending" ? " / pause to auto-label" : ""}
+          {sketchInputEnabled && recognitionStatus === "recognizing" ? " / recognizing" : ""}
           {reshapeBoundaryEnabled ? " / Boundary reshape span" : ""}
           {addProtrusionEnabled ? " / Protrusion placement" : ""}
           {wallDragEnabled ? " / Drag shared wall" : ""}

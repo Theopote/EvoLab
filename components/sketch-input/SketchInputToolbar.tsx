@@ -1,12 +1,13 @@
 "use client";
 
 import { Eraser, Pencil } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { DiffPreviewOverlay } from "@/components/floor-plan/DiffPreviewOverlay";
-import { captureSketchImage } from "@/lib/sketch-capture";
 import type { PlanVersion } from "@/lib/project-types";
 import type { RecognizedSketchRoom } from "@/lib/schemas/sketch-interpretation-schema";
+import { recognizeSketchInput } from "@/lib/sketch-recognition";
 import { useSketchInputStore } from "@/lib/sketch-input-store";
+import { useSketchAutoRecognition } from "@/lib/use-sketch-auto-recognition";
 
 interface SketchInputToolbarProps {
   version?: PlanVersion;
@@ -16,13 +17,17 @@ interface SketchInputToolbarProps {
 export function SketchInputToolbar({ version, onSketchRevision }: SketchInputToolbarProps) {
   const strokes = useSketchInputStore((state) => state.strokes);
   const ghostLoops = useSketchInputStore((state) => state.ghostLoops);
+  const recognitionStatus = useSketchInputStore((state) => state.recognitionStatus);
   const clearSketch = useSketchInputStore((state) => state.clearSketch);
+  const setSemanticRooms = useSketchInputStore((state) => state.setSemanticRooms);
+  const setRecognitionStatus = useSketchInputStore((state) => state.setRecognitionStatus);
   const [isSending, setIsSending] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [pendingPreview, setPendingPreview] = useState<{
     version: PlanVersion;
     recognizedRooms: RecognizedSketchRoom[];
     warning?: string;
+    auto?: boolean;
   } | null>(null);
   const [confirmedReviewIds, setConfirmedReviewIds] = useState<string[]>([]);
 
@@ -35,51 +40,66 @@ export function SketchInputToolbar({ version, onSketchRevision }: SketchInputToo
   );
 
   const unconfirmedReviewIds = needsReviewRoomIds.filter((roomId) => !confirmedReviewIds.includes(roomId));
+  const isRecognizing = isSending || recognitionStatus === "recognizing";
+
+  const applyRecognitionResult = useCallback(
+    (result: {
+      version: PlanVersion;
+      recognizedRooms: RecognizedSketchRoom[];
+      warnings: string[];
+      auto: boolean;
+    }) => {
+      setSemanticRooms(result.recognizedRooms);
+      setRecognitionStatus("ready");
+      setPendingPreview({
+        version: result.version,
+        recognizedRooms: result.recognizedRooms,
+        warning: result.warnings.join(" ") || undefined,
+        auto: result.auto
+      });
+      setConfirmedReviewIds([]);
+      setNotice(
+        result.auto
+          ? `Auto-recognized ${result.recognizedRooms.length} room(s) after pause. Review before applying.`
+          : "Review recognized rooms before applying the sketch result."
+      );
+    },
+    [setRecognitionStatus, setSemanticRooms]
+  );
+
+  useSketchAutoRecognition({
+    version,
+    enabled: Boolean(version),
+    onRecognized: applyRecognitionResult,
+    onRecognizingChange: (recognizing) => {
+      if (recognizing) {
+        setRecognitionStatus("recognizing");
+      }
+    },
+    onError: (message) => {
+      setRecognitionStatus("error");
+      setNotice(message);
+    }
+  });
 
   async function submitSketchRecognition() {
-    if (!version || ghostLoops.length === 0 || isSending) {
+    if (!version || ghostLoops.length === 0 || isRecognizing) {
       return;
     }
 
     setIsSending(true);
     setNotice(null);
+    setRecognitionStatus("recognizing");
 
     try {
-      const sketchImageBase64 = await captureSketchImage(version, strokes, ghostLoops);
-      const response = await fetch("/api/interpret-sketch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          currentVersion: version,
-          closedLoops: ghostLoops,
-          sketchImageBase64,
-          appendRooms: true
-        })
+      const result = await recognizeSketchInput({
+        version,
+        strokes,
+        ghostLoops
       });
-
-      if (!response.ok) {
-        throw new Error(`interpret-sketch failed with ${response.status}`);
-      }
-
-      const data = (await response.json()) as {
-        version?: PlanVersion;
-        recognizedRooms?: RecognizedSketchRoom[];
-        warnings?: string[];
-        fallback?: boolean;
-      };
-
-      if (!data.version?.rooms) {
-        throw new Error("interpret-sketch did not return a complete PlanVersion.");
-      }
-
-      setPendingPreview({
-        version: data.version,
-        recognizedRooms: data.recognizedRooms ?? [],
-        warning: data.warnings?.join(" ")
-      });
-      setConfirmedReviewIds([]);
-      setNotice("Review recognized rooms before applying the sketch result.");
+      applyRecognitionResult({ ...result, auto: false });
     } catch (error) {
+      setRecognitionStatus("error");
       setNotice(error instanceof Error ? error.message : "Sketch recognition failed.");
     } finally {
       setIsSending(false);
@@ -113,7 +133,8 @@ export function SketchInputToolbar({ version, onSketchRevision }: SketchInputToo
   function rejectPreview() {
     setPendingPreview(null);
     setConfirmedReviewIds([]);
-    setNotice("Sketch preview rejected.");
+    setRecognitionStatus(ghostLoops.length > 0 ? "ready" : "idle");
+    setNotice("Sketch preview rejected. Labels remain on ghost outlines.");
   }
 
   function toggleReviewConfirmation(roomId: string) {
@@ -121,6 +142,15 @@ export function SketchInputToolbar({ version, onSketchRevision }: SketchInputToo
       current.includes(roomId) ? current.filter((id) => id !== roomId) : [...current, roomId]
     );
   }
+
+  const statusHint =
+    recognitionStatus === "pending"
+      ? "Pause 1.5s to auto-label rooms"
+      : recognitionStatus === "recognizing"
+        ? "Recognizing paused sketch..."
+        : recognitionStatus === "ready" && !pendingPreview
+          ? "Rooms labeled — open preview to apply"
+          : null;
 
   return (
     <div className="mb-3 rounded border border-accent/35 bg-accent/8 p-3">
@@ -132,7 +162,7 @@ export function SketchInputToolbar({ version, onSketchRevision }: SketchInputToo
           notice={pendingPreview.warning}
           previewVersion={pendingPreview.version}
           sketchUnderlay={{ strokes, ghostLoops: ghostLoops.map((loop) => loop.polygon) }}
-          title="Sketch recognition preview"
+          title={pendingPreview.auto ? "Auto sketch recognition preview" : "Sketch recognition preview"}
           onAccept={acceptPreview}
           onReject={rejectPreview}
         />
@@ -181,21 +211,27 @@ export function SketchInputToolbar({ version, onSketchRevision }: SketchInputToo
         </button>
       </div>
       <p className="mb-2 text-xs text-muted">
-        Draw closed room loops on the meter grid. Ghost outlines appear when a stroke closes; recognize when ready.
+        Draw closed room loops on the meter grid. Ghost outlines appear immediately; AI labels arrive after a 1.5s
+        pause.
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <button
           className="h-9 rounded bg-accent px-3 text-xs font-medium text-[#061014] disabled:cursor-not-allowed disabled:opacity-50"
-          disabled={isSending || Boolean(pendingPreview) || ghostLoops.length === 0 || !version}
+          disabled={isRecognizing || ghostLoops.length === 0 || !version}
           type="button"
           onClick={() => void submitSketchRecognition()}
         >
-          {isSending ? "Recognizing..." : `Recognize sketch (${ghostLoops.length} loop${ghostLoops.length === 1 ? "" : "s"})`}
+          {isRecognizing
+            ? "Recognizing..."
+            : pendingPreview
+              ? "Re-run recognition"
+              : `Recognize now (${ghostLoops.length} loop${ghostLoops.length === 1 ? "" : "s"})`}
         </button>
         <span className="text-[11px] text-muted">
           {strokes.length} stroke{strokes.length === 1 ? "" : "s"} / scale from active plan grid
         </span>
       </div>
+      {statusHint ? <div className="mt-2 text-xs text-muted">{statusHint}</div> : null}
       {notice ? <div className="mt-2 text-xs text-accent">{notice}</div> : null}
     </div>
   );

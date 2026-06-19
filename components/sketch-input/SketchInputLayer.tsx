@@ -17,6 +17,7 @@ export function SketchInputLayer({ svgRef, version, enabled }: SketchInputLayerP
   const strokes = useSketchInputStore((state) => state.strokes);
   const activeStroke = useSketchInputStore((state) => state.activeStroke);
   const ghostLoops = useSketchInputStore((state) => state.ghostLoops);
+  const semanticByGhostId = useSketchInputStore((state) => state.semanticByGhostId);
   const beginStroke = useSketchInputStore((state) => state.beginStroke);
   const extendStroke = useSketchInputStore((state) => state.extendStroke);
   const endStroke = useSketchInputStore((state) => state.endStroke);
@@ -43,7 +44,11 @@ export function SketchInputLayer({ svgRef, version, enabled }: SketchInputLayerP
 
   return (
     <g data-layer="sketch-input">
-      <GhostPreviewLayer activeGhostPolygon={activeGhostPolygon} ghostLoops={ghostLoops} />
+      <GhostPreviewLayer
+        activeGhostPolygon={activeGhostPolygon}
+        ghostLoops={ghostLoops}
+        semanticByGhostId={semanticByGhostId}
+      />
       {strokes.map((stroke, index) => (
         <polyline
           key={`sketch-stroke-${index}`}
