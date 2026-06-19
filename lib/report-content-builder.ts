@@ -1,4 +1,5 @@
 import { formatCost, calculateCostEstimate } from "@/lib/cost-engine";
+import { groupComplianceItems } from "@/lib/compliance-groups";
 import type { DesignBrief, PlanVersion, ProjectData } from "@/lib/project-types";
 import { calculateQuantities, checkCompliance } from "@/lib/quantity-engine";
 import type { ReportDocument, ReportSection, ReportSectionGrounding } from "@/lib/report-types";
@@ -27,9 +28,10 @@ export function buildReportDocument(input: {
   environmentSurrogate?: EnvironmentSurrogate;
 }): ReportDocument {
   const scored = ensureVersionScores(input.version, scoringInputFromDomain(input.project.domain, input.project.projectType));
-  const quantities = calculateQuantities(scored);
+  const quantities = calculateQuantities(scored, { scope: "building" });
   const cost = calculateCostEstimate(scored, input.project.projectType);
   const compliance = checkCompliance(scored, input.project.domain.codeContext);
+  const complianceGroups = groupComplianceItems(compliance, scored);
   const evolution = summarizeVersionEvolution(input.project, scored);
   const warnings = compliance.filter((item) => item.status === "warning");
 
@@ -155,7 +157,11 @@ export function buildReportDocument(input: {
           id: blockId("section-cost-compliance", "bullets"),
           type: "bullet_list",
           bullets: warnings.length
-            ? warnings.map((item) => item.message)
+            ? complianceGroups.flatMap((group) =>
+                group.items
+                  .filter((item) => item.status === "warning")
+                  .map((item) => `[${group.label}] ${item.message}`)
+              )
             : ["Compliance checks passed without warnings on the active scheme."]
         }
       ]

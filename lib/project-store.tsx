@@ -1124,7 +1124,12 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
           return;
         }
 
-        const fresh = buildCopilotInsightsFromEngines(version, state.project.domain, state.project.projectType);
+        const fresh = buildCopilotInsightsFromEngines(
+          version,
+          state.project.domain,
+          state.project.projectType,
+          state.activeLevelId
+        );
         state.project.domain.copilotInsightQueue = enqueueInsights(state.project.domain.copilotInsightQueue, fresh);
       })
     ),

@@ -1,10 +1,12 @@
 "use client";
 
 import { AlertTriangle, CheckCircle2, Sparkles } from "lucide-react";
+import { useMemo } from "react";
 import { PlanChangeProposalPanel } from "@/components/copilot/PlanChangeProposalPanel";
 import { useComplianceFixAction } from "@/components/copilot/useComplianceFixAction";
 import { useCopilotProposalRevision } from "@/components/copilot/useCopilotProposalRevision";
 import type { ScoringConfig } from "@/lib/building-domain";
+import { groupComplianceItems, summarizeComplianceGroups } from "@/lib/compliance-groups";
 import { complianceFixLabel } from "@/lib/compliance-rules";
 import { isComplianceFixAction } from "@/lib/compliance-fix";
 import type { ComplianceItem } from "@/lib/quantity-engine";
@@ -13,6 +15,7 @@ import type { PlanVersion } from "@/lib/project-types";
 interface ComplianceChecklistProps {
   items: ComplianceItem[];
   activeVersion?: PlanVersion;
+  activeLevelId?: string;
   projectType?: string;
   scoringConfig?: ScoringConfig;
 }
@@ -20,10 +23,12 @@ interface ComplianceChecklistProps {
 export function ComplianceChecklist({
   items,
   activeVersion,
+  activeLevelId,
   projectType = "healthcare",
   scoringConfig
 }: ComplianceChecklistProps) {
-  const warningCount = items.filter((item) => item.status === "warning").length;
+  const groups = useMemo(() => groupComplianceItems(items, activeVersion), [items, activeVersion]);
+  const summary = useMemo(() => summarizeComplianceGroups(groups), [groups]);
   const {
     lockedElementIds,
     pendingProposal,
@@ -51,6 +56,43 @@ export function ComplianceChecklist({
     }
   });
 
+  const renderItem = (item: ComplianceItem) => {
+    const Icon = item.status === "warning" ? AlertTriangle : CheckCircle2;
+    const tone = item.status === "warning" ? "text-warning" : "text-success";
+    const canFix =
+      item.status === "warning" &&
+      item.fixActionId &&
+      isComplianceFixAction({ id: item.fixActionId, label: "fix" }) &&
+      Boolean(activeVersion);
+
+    return (
+      <article className="rounded border border-line bg-[#0b1118] p-3" key={item.id}>
+        <div className="flex gap-3">
+          <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${tone}`} />
+          <div className="min-w-0 flex-1">
+            <h3 className="text-sm font-medium text-slate-100">{item.title}</h3>
+            <p className="mt-1 text-xs leading-5 text-slate-300">{item.message}</p>
+            <p className="mt-2 text-[11px] leading-4 text-muted">{item.basis}</p>
+            {canFix ? (
+              <button
+                className="mt-2 inline-flex items-center gap-1 rounded border border-line px-2 py-1 text-[11px] text-muted hover:border-accent/60 hover:text-accent disabled:opacity-50"
+                disabled={isComplianceFixing || Boolean(pendingProposal)}
+                type="button"
+                onClick={() => void runComplianceFixAction(item.id)}
+              >
+                <Sparkles className="h-3 w-3" />
+                {complianceFixLabel(
+                  item.ruleId ?? item.id,
+                  item.scope === "building_wide" ? "building_wide" : "single_floor"
+                )}
+              </button>
+            ) : null}
+          </div>
+        </div>
+      </article>
+    );
+  };
+
   return (
     <section className="rounded border border-line bg-panel/90 p-3">
       {pendingProposal ? (
@@ -69,52 +111,37 @@ export function ComplianceChecklist({
       <div className="mb-3 flex items-center justify-between">
         <div>
           <h2 className="text-base font-semibold text-white">Compliance Checks</h2>
-          <p className="mt-1 text-xs text-muted">Early-stage rule checks from activeVersion data.</p>
+          <p className="mt-1 text-xs text-muted">
+            {groups.length > 1
+              ? `${summary.levelGroupCount} floor group(s) plus building-wide rules.`
+              : "Early-stage rule checks from activeVersion data."}
+          </p>
         </div>
         <span
           className={`rounded border px-2 py-1 text-xs ${
-            warningCount > 0 ? "border-warning/40 text-warning" : "border-success/40 text-success"
+            summary.totalWarnings > 0 ? "border-warning/40 text-warning" : "border-success/40 text-success"
           }`}
         >
-          {warningCount} warnings
+          {summary.totalWarnings} warnings
         </span>
       </div>
 
-      <div className="space-y-2">
-        {items.map((item) => {
-          const Icon = item.status === "warning" ? AlertTriangle : CheckCircle2;
-          const tone = item.status === "warning" ? "text-warning" : "text-success";
-          const canFix =
-            item.status === "warning" &&
-            item.fixActionId &&
-            isComplianceFixAction({ id: item.fixActionId, label: "fix" }) &&
-            Boolean(activeVersion);
+      <div className="space-y-4">
+        {groups.map((group) => {
+          const isActiveLevel = group.levelId && group.levelId === activeLevelId;
 
           return (
-            <article className="rounded border border-line bg-[#0b1118] p-3" key={item.id}>
-              <div className="flex gap-3">
-                <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${tone}`} />
-                <div className="min-w-0 flex-1">
-                  <h3 className="text-sm font-medium text-slate-100">{item.title}</h3>
-                  <p className="mt-1 text-xs leading-5 text-slate-300">{item.message}</p>
-                  <p className="mt-2 text-[11px] leading-4 text-muted">{item.basis}</p>
-                  {canFix ? (
-                    <button
-                      className="mt-2 inline-flex items-center gap-1 rounded border border-line px-2 py-1 text-[11px] text-muted hover:border-accent/60 hover:text-accent disabled:opacity-50"
-                      disabled={isComplianceFixing || Boolean(pendingProposal)}
-                      type="button"
-                      onClick={() => void runComplianceFixAction(item.id)}
-                    >
-                      <Sparkles className="h-3 w-3" />
-                      {complianceFixLabel(
-                        item.ruleId ?? item.id,
-                        item.scope === "building_wide" ? "building_wide" : "single_floor"
-                      )}
-                    </button>
-                  ) : null}
-                </div>
+            <section className="space-y-2" key={group.id}>
+              <div className="flex items-center justify-between gap-2">
+                <h3 className={`text-xs font-semibold uppercase tracking-[0.14em] ${isActiveLevel ? "text-accent" : "text-muted"}`}>
+                  {group.label}
+                </h3>
+                <span className="text-[11px] text-muted">
+                  {group.warningCount > 0 ? `${group.warningCount} warning(s)` : `${group.successCount} passed`}
+                </span>
               </div>
-            </article>
+              <div className="space-y-2">{group.items.map((item) => renderItem(item))}</div>
+            </section>
           );
         })}
       </div>

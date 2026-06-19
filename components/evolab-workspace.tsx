@@ -429,6 +429,7 @@ export function EvoLabWorkspace() {
             <ComplianceChecklist
               items={complianceItems}
               activeVersion={activeVersion}
+              activeLevelId={activeLevelId}
               projectType={project.projectType}
               scoringConfig={project.domain.scoringConfig}
             />

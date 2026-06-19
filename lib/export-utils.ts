@@ -102,8 +102,14 @@ export function createQuantityCsv(quantities: QuantityResult) {
 }
 
 export function createComplianceCsv(items: ComplianceItem[]) {
-  const header = ["Title", "Status", "Message", "Basis"];
-  const rows = items.map((item) => [item.title, item.status, item.message, item.basis]);
+  const header = ["Floor / Scope", "Title", "Status", "Message", "Basis"];
+  const rows = items.map((item) => [
+    item.levelName ?? (item.scope === "building_wide" ? "Building-wide" : "—"),
+    item.title,
+    item.status,
+    item.message,
+    item.basis
+  ]);
   return [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
 }
 

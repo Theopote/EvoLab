@@ -34,7 +34,7 @@ describe("rules score engine", () => {
   it("uses graph egress distance in compliance checks", () => {
     const egress = computeEgressPathMetrics(baseVersion);
     const compliance = checkCompliance(baseVersion, defaultHealthcareCodeContext);
-    const egressItem = compliance.find((item) => item.id === "egress-distance");
+    const egressItem = compliance.find((item) => item.ruleId === "egress-distance");
 
     expect(egress.maxDistance).toBeGreaterThan(0);
     expect(egress.semanticRouteCount).toBeGreaterThan(0);

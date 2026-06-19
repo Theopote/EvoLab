@@ -109,6 +109,7 @@ describe("scoped scoring and mep routing", () => {
     const mep = routeMepLayout(expanded);
 
     expect(mep.shafts[0]?.levelIds).toEqual(["level-01", "level-02", "level-03", "level-04"]);
+    expect(mep.shafts.length).toBeGreaterThan(0);
     expect(mep.routes.filter((route) => route.levelId === "level-02").length).toBeGreaterThan(0);
     expect(mep.routes.length).toBe(6 * expanded.levels.length);
   });

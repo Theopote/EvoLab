@@ -4,6 +4,7 @@ import { AlertTriangle, CheckCircle2, FileStack, Layers3, Ruler, ScrollText } fr
 import { useMemo, useState } from "react";
 import { ScoreBreakdownPanel } from "@/components/score/ScoreBreakdownPanel";
 import { ScoringConfigPanel } from "@/components/score/ScoringConfigPanel";
+import { groupComplianceItems } from "@/lib/compliance-groups";
 import { useEvoProject } from "@/lib/project-store";
 import type { ComplianceItem, QuantityResult } from "@/lib/quantity-engine";
 import type { PlanVersion, ProjectData } from "@/lib/project-types";
@@ -41,6 +42,10 @@ export function BottomPanel({
   const updateScoringConfig = useEvoProject((state) => state.updateScoringConfig);
   const resetScoringConfig = useEvoProject((state) => state.resetScoringConfig);
   const warningCount = complianceItems.filter((item) => item.status === "warning").length;
+  const complianceGroups = useMemo(
+    () => groupComplianceItems(complianceItems, activeVersion),
+    [complianceItems, activeVersion]
+  );
   const scoringInput = useMemo(() => scoringInputFromDomain(project.domain, project.projectType), [project.domain, project.projectType]);
   const scoredActiveVersion = useMemo(() => activeVersion, [activeVersion, scoringInput]);
   const taskRows = useMemo(
@@ -225,19 +230,31 @@ export function BottomPanel({
         ) : null}
 
         {activeTab === "warnings" ? (
-          <div className="grid gap-2 lg:grid-cols-3">
-            {complianceItems.map((item) => (
-              <div className="rounded border border-line bg-panel/70 p-3" key={item.id}>
-                <div className="mb-1 flex items-center gap-2">
-                  {item.status === "warning" ? (
-                    <AlertTriangle className="h-4 w-4 text-warning" />
-                  ) : (
-                    <CheckCircle2 className="h-4 w-4 text-success" />
-                  )}
-                  <span className="text-sm text-slate-100">{item.title}</span>
+          <div className="space-y-4">
+            {complianceGroups.map((group) => (
+              <section className="space-y-2" key={group.id}>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">{group.label}</h3>
+                  <span className="text-[11px] text-muted">
+                    {group.warningCount > 0 ? `${group.warningCount} warning(s)` : `${group.successCount} passed`}
+                  </span>
                 </div>
-                <div className="text-xs leading-5 text-muted">{item.message}</div>
-              </div>
+                <div className="grid gap-2 lg:grid-cols-3">
+                  {group.items.map((item) => (
+                    <div className="rounded border border-line bg-panel/70 p-3" key={item.id}>
+                      <div className="mb-1 flex items-center gap-2">
+                        {item.status === "warning" ? (
+                          <AlertTriangle className="h-4 w-4 text-warning" />
+                        ) : (
+                          <CheckCircle2 className="h-4 w-4 text-success" />
+                        )}
+                        <span className="text-sm text-slate-100">{item.title}</span>
+                      </div>
+                      <div className="text-xs leading-5 text-muted">{item.message}</div>
+                    </div>
+                  ))}
+                </div>
+              </section>
             ))}
           </div>
         ) : null}

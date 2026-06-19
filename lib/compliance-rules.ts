@@ -124,8 +124,10 @@ function resultBase(
   basis: string,
   extras: Partial<ComplianceResult> = {}
 ): ComplianceResult {
+  const levelId = extras.levelId;
+
   return {
-    id: extras.id ?? ruleId,
+    id: extras.id ?? (levelId ? `${ruleId}-${levelId}` : ruleId),
     ruleId,
     title,
     code,
@@ -703,8 +705,8 @@ export function generateComplianceInsights(results: ComplianceResult[]): Copilot
     .map((result) => ({
       id: `compliance-${result.id}`,
       tone: result.severity === "high" ? "warning" : "info",
-      text: result.message,
-      sub: result.code,
+      text: result.levelName ? `[${result.levelName}] ${result.message}` : result.message,
+      sub: result.levelName ? `${result.code} · ${result.levelName}` : result.code,
       actions: result.fixActionId
         ? [
             {
@@ -715,6 +717,18 @@ export function generateComplianceInsights(results: ComplianceResult[]): Copilot
           ]
         : undefined
     }));
+}
+
+export function prioritizeComplianceResults(results: ComplianceResult[], activeLevelId?: string) {
+  if (!activeLevelId) {
+    return results;
+  }
+
+  return [...results].sort((left, right) => {
+    const leftScore = left.levelId === activeLevelId ? 0 : left.scope === "building_wide" ? 1 : 2;
+    const rightScore = right.levelId === activeLevelId ? 0 : right.scope === "building_wide" ? 1 : 2;
+    return leftScore - rightScore;
+  });
 }
 
 export function findComplianceResultById(
