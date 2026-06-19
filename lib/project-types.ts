@@ -121,6 +121,7 @@ export interface PlanVersionMetadata {
   refinementSummary?: string;
   programCompliant?: boolean;
   programValidationWarnings?: string[];
+  hybridSourceVersionIds?: string[];
 }
 
 export interface TopologyGraphRoom {

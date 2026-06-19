@@ -4,6 +4,7 @@ import { Boxes, Check, GitCompare, Loader2, Sparkles, Wand2 } from "lucide-react
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FloorPlan } from "@/components/floor-plan";
 import { SchemeCompareGrid } from "@/components/comparison/SchemeCompareGrid";
+import { SchemeHybridPanel } from "@/components/comparison/SchemeHybridPanel";
 import { VersionCompareExplainPanel } from "@/components/score/VersionCompareExplainPanel";
 import { listComparableLevelGroups, listComparableLevels } from "@/lib/multi-floor";
 import type { ProgramModel, ProjectDomain } from "@/lib/building-domain";
@@ -35,6 +36,7 @@ interface VersionCompareGridProps {
   onSelectVersion: (version: PlanVersion) => void;
   onGenerateModel: (version: PlanVersion) => void;
   onRefineVersion: (version: PlanVersion) => void;
+  onHybridAccepted?: (version: PlanVersion, summary: string) => void;
 }
 
 function useVersionCompareWorker(
@@ -139,7 +141,8 @@ export function VersionCompareGrid({
   onCompareLevelChange,
   onSelectVersion,
   onGenerateModel,
-  onRefineVersion
+  onRefineVersion,
+  onHybridAccepted
 }: VersionCompareGridProps) {
   const [compareIds, setCompareIds] = useState<string[]>([]);
   const [compareScope, setCompareScope] = useState<VersionCompareScope>("selected-level");
@@ -355,6 +358,15 @@ export function VersionCompareGrid({
 
         {comparedVersions.length ? (
           <section className="mt-4 space-y-3">
+            {compareScope === "selected-level" && comparedVersions.length === 2 && onHybridAccepted ? (
+              <SchemeHybridPanel
+                levelId={resolvedLevelId}
+                versionA={comparedVersions[0]!}
+                versionB={comparedVersions[1]!}
+                onHybridAccepted={onHybridAccepted}
+              />
+            ) : null}
+
             {compareScope === "selected-level" && comparedVersions.length >= 2 ? (
               <SchemeCompareGrid
                 versions={comparedVersions}
