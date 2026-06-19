@@ -9,6 +9,7 @@ export type ActiveTool =
   | "model"
   | "trace"
   | "inpaint"
+  | "sketch_input"
   | "reshape_boundary"
   | "add_protrusion";
 

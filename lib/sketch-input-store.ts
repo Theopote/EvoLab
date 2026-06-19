@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import type { Point } from "@/lib/project-types";
-import { polygonArea } from "@/lib/plan-validation";
 import { processSketchStrokes, type ProcessedLoop } from "@/lib/sketch-processing";
 
 export interface GhostLoop extends ProcessedLoop {

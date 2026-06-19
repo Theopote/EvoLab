@@ -1,6 +1,6 @@
 "use client";
 
-import { Boxes, DraftingCompass, MousePointer2, Sparkles, Spline, SquarePlus, Upload, Wand2, Waypoints } from "lucide-react";
+import { Boxes, DraftingCompass, MousePointer2, Pencil, Sparkles, Spline, SquarePlus, Upload, Wand2, Waypoints } from "lucide-react";
 import type { ActiveTool } from "@/lib/interaction-store";
 import { useInteractionStore } from "@/lib/interaction-store";
 import { useCopilotUploadStore } from "@/lib/copilot-upload-store";
@@ -17,6 +17,7 @@ const tools: {
   { label: "Outline", title: "Draw outline", icon: DraftingCompass, tool: "outline", phases: ["brief_site", "scheme"] },
   { label: "Trace", title: "Trace room vertices", icon: Wand2, tool: "trace", phases: ["scheme"] },
   { label: "Inpaint", title: "AI inpaint brush", icon: Sparkles, tool: "inpaint", phases: ["scheme"] },
+  { label: "Sketch", title: "Tablet sketch room input", icon: Pencil, tool: "sketch_input", phases: ["scheme"] },
   { label: "Reshape", title: "Boundary reshape along wall span", icon: Spline, tool: "reshape_boundary", phases: ["scheme"] },
   { label: "Protrude", title: "Add bay window or bump-out", icon: SquarePlus, tool: "add_protrusion", phases: ["scheme"] },
   { label: "Upload", title: "Upload drawing", icon: Upload, tool: "upload", phases: ["brief_site", "scheme"] },

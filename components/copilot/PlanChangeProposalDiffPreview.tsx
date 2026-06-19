@@ -10,17 +10,20 @@ interface PlanChangeProposalDiffPreviewProps {
   previewVersion: PlanVersion;
   highlightRoomIds?: string[];
   focusedRoomIds?: string[];
+  reviewRoomIds?: string[];
 }
 
 export function PlanChangeProposalDiffPreview({
   baseVersion,
   previewVersion,
   highlightRoomIds = [],
-  focusedRoomIds = []
+  focusedRoomIds = [],
+  reviewRoomIds = []
 }: PlanChangeProposalDiffPreviewProps) {
   const changes = useMemo(() => summarizeRoomChanges(baseVersion, previewVersion), [baseVersion, previewVersion]);
   const highlight = useMemo(() => new Set(highlightRoomIds), [highlightRoomIds]);
   const focused = useMemo(() => new Set(focusedRoomIds), [focusedRoomIds]);
+  const review = useMemo(() => new Set(reviewRoomIds), [reviewRoomIds]);
 
   return (
     <div className="rounded border border-line bg-[#081018] p-2">
@@ -71,7 +74,8 @@ export function PlanChangeProposalDiffPreview({
           const isAdded = changes.added.includes(room.id);
           const isModified = changes.modified.includes(room.id);
           const isFocused = focused.has(room.id);
-          const isHighlighted = highlight.has(room.id) || isFocused;
+          const isReview = review.has(room.id);
+          const isHighlighted = highlight.has(room.id) || isFocused || isReview;
 
           if (!isAdded && !isModified && !isHighlighted) {
             return (
@@ -85,16 +89,24 @@ export function PlanChangeProposalDiffPreview({
             );
           }
 
-          const fill = isAdded
-            ? "rgba(56,189,248,0.28)"
-            : isFocused
-              ? "rgba(52,211,153,0.42)"
-              : "rgba(52,211,153,0.24)";
-          const stroke = isAdded ? "#38bdf8" : isFocused ? "#34d399" : "#10b981";
+          const fill = isReview
+            ? "rgba(251,146,60,0.18)"
+            : isAdded
+              ? "rgba(56,189,248,0.28)"
+              : isFocused
+                ? "rgba(52,211,153,0.42)"
+                : "rgba(52,211,153,0.24)";
+          const stroke = isReview ? "#fb923c" : isAdded ? "#38bdf8" : isFocused ? "#34d399" : "#10b981";
 
           return (
             <g key={room.id}>
-              <polygon fill={fill} points={polygonPoints(room.polygon)} stroke={stroke} strokeWidth={isFocused ? "0.34" : "0.22"} />
+              <polygon
+                fill={fill}
+                points={polygonPoints(room.polygon)}
+                stroke={stroke}
+                strokeDasharray={isReview ? "0.7 0.4" : undefined}
+                strokeWidth={isFocused || isReview ? "0.34" : "0.22"}
+              />
               <text fill="#e2e8f0" fontSize="1.4" textAnchor="middle" x={centroid(room.polygon)[0]} y={centroid(room.polygon)[1]}>
                 {room.name.split(" ")[0]}
               </text>

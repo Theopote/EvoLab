@@ -12,6 +12,8 @@ import { RoomFillLayer } from "@/components/floor-plan/layers/RoomFillLayer";
 import { SelectionLayer } from "@/components/floor-plan/layers/SelectionLayer";
 import { InpaintMaskLayer } from "@/components/floor-plan/layers/InpaintMaskLayer";
 import { InpaintToolbar } from "@/components/floor-plan/InpaintToolbar";
+import { SketchInputLayer } from "@/components/sketch-input/SketchInputLayer";
+import { SketchInputToolbar } from "@/components/sketch-input/SketchInputToolbar";
 import { ReshapeBoundaryToolbar } from "@/components/floor-plan/ReshapeBoundaryToolbar";
 import { AddProtrusionToolbar } from "@/components/floor-plan/AddProtrusionToolbar";
 import { BoundarySpanLayer } from "@/components/floor-plan/layers/BoundarySpanLayer";
@@ -29,6 +31,7 @@ import { normalizePlanVersion } from "@/lib/architecture-model";
 import type { GridSnapStep } from "@/lib/plan-snap";
 import { clientToSvgPoint } from "@/components/floor-plan/floor-plan-utils";
 import { useLocalFormEditStore } from "@/lib/local-form-edit-store";
+import { useSketchInputStore } from "@/lib/sketch-input-store";
 import { deriveWallGraph, hitTestWalls } from "@/lib/wall-graph";
 
 export interface FloorPlanCanvasProps {
@@ -111,6 +114,18 @@ export function FloorPlanCanvas({
       resetLocalFormEdit();
     };
   }, [activeTool, resetLocalFormEdit]);
+
+  useEffect(() => {
+    if (activeTool === "sketch_input") {
+      return;
+    }
+
+    return () => {
+      if (useSketchInputStore.getState().strokes.length > 0 || useSketchInputStore.getState().ghostLoops.length > 0) {
+        useSketchInputStore.getState().clearSketch();
+      }
+    };
+  }, [activeTool]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -220,20 +235,22 @@ export function FloorPlanCanvas({
     : undefined;
   const traceEnabled = interactive && activeTool === "trace";
   const inpaintEnabled = interactive && activeTool === "inpaint";
+  const sketchInputEnabled = interactive && activeTool === "sketch_input";
   const reshapeBoundaryEnabled = interactive && activeTool === "reshape_boundary";
   const addProtrusionEnabled = interactive && activeTool === "add_protrusion";
   const localFormEditEnabled = reshapeBoundaryEnabled || addProtrusionEnabled;
+  const drawingToolEnabled = inpaintEnabled || sketchInputEnabled;
   const directWallDragEnabled =
-    interactive && !inpaintEnabled && !localFormEditEnabled && (activeTool === "select" || activeTool === "trace");
+    interactive && !drawingToolEnabled && !localFormEditEnabled && (activeTool === "select" || activeTool === "trace");
   const roomTopologyEnabled =
     interactive &&
     activeTool === "select" &&
-    !inpaintEnabled &&
+    !drawingToolEnabled &&
     !localFormEditEnabled &&
     Boolean(selectedRoom && !lockedElementIds.includes(selectedRoom.id));
   const geometryEditEnabled =
     interactive &&
-    !inpaintEnabled &&
+    !drawingToolEnabled &&
     !localFormEditEnabled &&
     (activeTool === "select" || activeTool === "trace") &&
     Boolean(selectedRoom && !lockedElementIds.includes(selectedRoom.id));
@@ -252,7 +269,7 @@ export function FloorPlanCanvas({
   const openingEditEnabled =
     interactive &&
     activeTool === "select" &&
-    !inpaintEnabled &&
+    !drawingToolEnabled &&
     !localFormEditEnabled &&
     Boolean(selectedOpeningId) &&
     Boolean(
@@ -284,6 +301,9 @@ export function FloorPlanCanvas({
     <div className={className}>
       {inpaintEnabled && onInpaintRevision ? (
         <InpaintToolbar version={version} onInpaintRevision={onInpaintRevision} />
+      ) : null}
+      {sketchInputEnabled && onInpaintRevision ? (
+        <SketchInputToolbar version={version} onSketchRevision={onInpaintRevision} />
       ) : null}
       {reshapeBoundaryEnabled && onInpaintRevision ? (
         <ReshapeBoundaryToolbar
@@ -324,7 +344,7 @@ export function FloorPlanCanvas({
           onPointerLeave={interactive ? handleCanvasPointerLeave : undefined}
           onPointerMove={interactive ? handleCanvasPointerMove : undefined}
           onClick={() => {
-            if (interactive && !traceEnabled && !inpaintEnabled && !localFormEditEnabled) {
+            if (interactive && !traceEnabled && !drawingToolEnabled && !localFormEditEnabled) {
               clearSelection();
             }
           }}
@@ -335,7 +355,7 @@ export function FloorPlanCanvas({
             rooms={rooms}
             selectedRoomId={selectedRoomId}
             violationRoomIds={complianceRoomIds}
-            onSelectRoom={interactive && !inpaintEnabled && !addProtrusionEnabled ? selectRoom : interactive && reshapeBoundaryEnabled ? selectRoom : undefined}
+            onSelectRoom={interactive && !drawingToolEnabled && !addProtrusionEnabled ? selectRoom : interactive && reshapeBoundaryEnabled ? selectRoom : undefined}
           />
           <WallLayer
             walls={previewWalls}
@@ -347,7 +367,7 @@ export function FloorPlanCanvas({
             gridSnapEnabled={gridSnapEnabled}
             gridStep={gridStep}
             svgRef={svgRef}
-            onSelectWall={interactive && !inpaintEnabled && !localFormEditEnabled ? selectWall : undefined}
+            onSelectWall={interactive && !drawingToolEnabled && !localFormEditEnabled ? selectWall : undefined}
             onRoomsGeometryCancel={handleRoomsGeometryCancel}
             onRoomsGeometryCommit={handleRoomsGeometryCommit}
             onRoomsGeometryPreview={handleRoomsGeometryPreview}
@@ -356,7 +376,7 @@ export function FloorPlanCanvas({
             openings={level?.openings ?? []}
             walls={previewWalls}
             selectedOpeningId={selectedOpeningId}
-            onSelectOpening={interactive && !inpaintEnabled && !localFormEditEnabled ? selectOpening : undefined}
+            onSelectOpening={interactive && !drawingToolEnabled && !localFormEditEnabled ? selectOpening : undefined}
           />
           <CoreSymbolLayer rooms={rooms} />
           <LabelLayer version={visibleVersion} />
@@ -379,6 +399,7 @@ export function FloorPlanCanvas({
             onOpeningCenterChange={(openingId, center) => updateOpening(openingId, { center })}
           />
           <InpaintMaskLayer svgRef={svgRef} version={version} enabled={inpaintEnabled} />
+          <SketchInputLayer svgRef={svgRef} version={version} enabled={sketchInputEnabled} />
           <BoundarySpanLayer
             enabled={reshapeBoundaryEnabled && Boolean(selectedRoom && !lockedElementIds.includes(selectedRoom.id))}
             room={selectedRoom}
@@ -398,6 +419,7 @@ export function FloorPlanCanvas({
           {hoveredWallDraggable && !previewRooms ? " / Drag wall line" : ""}
           {traceEnabled ? " / Trace mode" : ""}
           {inpaintEnabled ? " / Inpaint mask" : ""}
+          {sketchInputEnabled ? " / Sketch input" : ""}
           {reshapeBoundaryEnabled ? " / Boundary reshape span" : ""}
           {addProtrusionEnabled ? " / Protrusion placement" : ""}
           {wallDragEnabled ? " / Drag shared wall" : ""}
