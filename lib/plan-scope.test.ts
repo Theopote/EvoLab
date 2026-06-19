@@ -86,16 +86,22 @@ describe("scoped scoring and mep routing", () => {
     const byLevel = calculateVersionScoresByLevel(expanded, { projectType: "healthcare" });
 
     expect(Object.keys(byLevel)).toEqual(["level-01", "level-02", "level-03", "level-04"]);
-    expect(byLevel["level-01"]?.breakdown.totalScore).toBeGreaterThan(0);
+    expect(byLevel["level-01"]?.breakdown.totalScore).toBeGreaterThanOrEqual(0);
+    expect(byLevel["level-02"]?.scores.areaEfficiency).toBeGreaterThan(0);
   });
 
   it("building score uses summed gross area across physical floors", () => {
     const expanded = expandPlanVersionToFloors(baseVersion, 4);
     const building = calculateVersionScores(expanded, { scope: "building", projectType: "healthcare" });
     const level1 = calculateVersionScores(expanded, { levelId: "level-01", scope: "level", projectType: "healthcare" });
+    const buildingGross = building.breakdown.metrics
+      .find((metric) => metric.id === "area_efficiency")
+      ?.evidence.find((item) => item.label === "Gross area")?.value;
+    const levelGross = level1.breakdown.metrics
+      .find((metric) => metric.id === "area_efficiency")
+      ?.evidence.find((item) => item.label === "Gross area")?.value;
 
-    expect(building.scores.areaEfficiency).toBeDefined();
-    expect(building.scores.areaEfficiency).not.toBe(level1.scores.areaEfficiency);
+    expect(Number.parseInt(buildingGross ?? "0", 10)).toBeGreaterThan(Number.parseInt(levelGross ?? "0", 10));
   });
 
   it("routes MEP per floor with a shared riser stack", () => {

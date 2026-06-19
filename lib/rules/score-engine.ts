@@ -24,6 +24,7 @@ import {
   type PlanScopeKind,
   versionForScoringScope
 } from "@/lib/plan-scope";
+import type { ComplianceResult } from "@/lib/compliance-rules";
 
 export interface ScoreEngineOptions {
   issues?: PlanValidationIssue[];
@@ -53,6 +54,27 @@ const buildMetricContribution = (
   summary: metric.summary,
   evidence: metric.evidence
 });
+
+function filterComplianceResultsForScope(results: ComplianceResult[], context: ScoringContext) {
+  if (context.scope === "building" || !context.scope) {
+    return results;
+  }
+
+  if (context.scope === "floor_group") {
+    const levelIds = new Set(context.version.levels.map((level) => level.id));
+    return results.filter(
+      (result) =>
+        result.scope === "building_wide" ||
+        !result.levelId ||
+        (result.levelId && levelIds.has(result.levelId))
+    );
+  }
+
+  const levelId = context.levelId ?? context.version.levels[0]?.id;
+  return results.filter(
+    (result) => result.scope === "building_wide" || !result.levelId || result.levelId === levelId
+  );
+}
 
 function resolveScoreScope(version: PlanVersion, options: ScoreEngineOptions): PlanScopeKind {
   return resolvePlanScope(version, {
@@ -104,7 +126,10 @@ export const calculateVersionScores = (
     buildingType: options.projectType ?? options.program?.projectType ?? "healthcare",
     scoringConfig: options.scoringConfig
   });
-  const complianceResults = runComplianceCheck(complianceContext);
+  const complianceResults = filterComplianceResultsForScope(
+    runComplianceCheck(complianceContext),
+    context
+  );
   const validationErrors = (context.issues ?? []).filter((issue) => issue.severity === "error").length;
   const riskCount = computeRiskCount(complianceResults, validationErrors);
 

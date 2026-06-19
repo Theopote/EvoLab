@@ -143,7 +143,7 @@ export function MepCanvas({ activeLayers, version, activeLevelId }: MepCanvasPro
               </g>
             ))}
 
-          {version.rooms.map((room) => {
+          {displayRooms.map((room) => {
             const [x, y] = centroid(room);
             return (
               <text
