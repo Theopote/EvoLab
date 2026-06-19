@@ -194,6 +194,8 @@ export interface Wall {
 export interface OpeningElement {
   id: string;
   wallId: string;
+  wallEdgeId?: string;
+  positionOnEdge?: number;
   type: "door" | "window" | "opening";
   center: Point;
   width: number;

@@ -86,6 +86,14 @@ export const ResizeOpeningOperationSchema = BaseOperationSchema.extend({
   width: z.number().positive().max(6)
 });
 
+export const MergeRoomOperationSchema = BaseOperationSchema.extend({
+  type: z.literal("merge_room"),
+  primaryRoomId: z.string().min(1),
+  secondaryRoomId: z.string().min(1),
+  mergedRoomId: z.string().min(1).optional(),
+  mergedRoomName: z.string().min(1).optional()
+});
+
 export const PlanOperationSchema = z.discriminatedUnion("type", [
   MoveCoreOperationSchema,
   ShiftRoomsOperationSchema,
@@ -94,6 +102,7 @@ export const PlanOperationSchema = z.discriminatedUnion("type", [
   UpdateRoomOperationSchema,
   OptimizeEgressOperationSchema,
   SplitRoomOperationSchema,
+  MergeRoomOperationSchema,
   AddOpeningOperationSchema,
   ResizeOpeningOperationSchema
 ]);

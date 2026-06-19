@@ -51,6 +51,31 @@ describe("plan-change-engine", () => {
     expect(changes.modified).toContain("office-01");
   });
 
+  it("merges adjacent rooms", () => {
+    const left = baseVersion.rooms.find((room) => room.id === "office-01");
+    const right = baseVersion.rooms.find((room) => room.id === "meeting-01");
+
+    if (!left || !right) {
+      return;
+    }
+
+    const operation: PlanOperation = {
+      id: "op-merge-office",
+      type: "merge_room",
+      label: "Merge office and meeting",
+      targetRoomIds: ["office-01", "meeting-01"],
+      primaryRoomId: "office-01",
+      secondaryRoomId: "meeting-01",
+      mergedRoomName: "Office suite"
+    };
+
+    const next = applyPlanOperations(baseVersion, [operation], { skipPostProcess: true });
+    const changes = summarizeRoomChanges(baseVersion, next);
+
+    expect(next.rooms.some((room) => room.name === "Office suite")).toBe(true);
+    expect(changes.removed.length).toBeGreaterThan(0);
+  });
+
   it("adds a door opening to a room", () => {
     const operation: PlanOperation = {
       id: "op-add-door",

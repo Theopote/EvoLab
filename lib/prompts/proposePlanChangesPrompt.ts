@@ -34,6 +34,7 @@ Allowed PlanOperation types (use only these):
 5. update_room — roomId, patch with name/type/zone only (no polygon edits)
 6. optimize_egress — note only; use when intent is egress-focused but geometry should be adjusted via shift_rooms/widen_corridor
 7. split_room — roomId, splitAxis horizontal|vertical, splitRatio 0.15-0.85, secondRoomName (optional secondRoomId)
+8. merge_room — primaryRoomId, secondaryRoomId, mergedRoomName (optional mergedRoomId). Rooms must share a full interior wall.
 8. add_opening — roomId, openingKind door|window, wall, position 0-1, width in meters
 9. resize_opening — roomId, openingKind, openingIndex, width in meters
 

@@ -13,6 +13,7 @@ import { SelectionLayer } from "@/components/floor-plan/layers/SelectionLayer";
 import { InpaintMaskLayer } from "@/components/floor-plan/layers/InpaintMaskLayer";
 import { InpaintToolbar } from "@/components/floor-plan/InpaintToolbar";
 import { ParametricOpeningToolbar } from "@/components/floor-plan/ParametricOpeningToolbar";
+import { RoomTopologyToolbar } from "@/components/floor-plan/RoomTopologyToolbar";
 import { WallLayer } from "@/components/floor-plan/layers/WallLayer";
 import { getViewBox } from "@/components/floor-plan/floor-plan-utils";
 import { useEvoProject } from "@/lib/project-store";
@@ -67,6 +68,8 @@ export function FloorPlanCanvas({
     selectOpening,
     clearSelection,
     applyLevelRoomsGeometry,
+    splitActiveRoom,
+    mergeActiveRoomWith,
     addParametricOpening,
     updateOpening,
     lockedElementIds
@@ -81,6 +84,8 @@ export function FloorPlanCanvas({
       selectOpening: state.selectOpening,
       clearSelection: state.clearSelection,
       applyLevelRoomsGeometry: state.applyLevelRoomsGeometry,
+      splitActiveRoom: state.splitActiveRoom,
+      mergeActiveRoomWith: state.mergeActiveRoomWith,
       addParametricOpening: state.addParametricOpening,
       updateOpening: state.updateOpening,
       lockedElementIds: state.project.domain.lockedElementIds
@@ -200,6 +205,11 @@ export function FloorPlanCanvas({
   const inpaintEnabled = interactive && activeTool === "inpaint";
   const directWallDragEnabled =
     interactive && !inpaintEnabled && (activeTool === "select" || activeTool === "trace");
+  const roomTopologyEnabled =
+    interactive &&
+    activeTool === "select" &&
+    !inpaintEnabled &&
+    Boolean(selectedRoom && !lockedElementIds.includes(selectedRoom.id));
   const geometryEditEnabled =
     interactive &&
     !inpaintEnabled &&
@@ -251,6 +261,15 @@ export function FloorPlanCanvas({
     <div className={className}>
       {inpaintEnabled && onInpaintRevision ? (
         <InpaintToolbar version={version} onInpaintRevision={onInpaintRevision} />
+      ) : null}
+      {roomTopologyEnabled && selectedRoom ? (
+        <RoomTopologyToolbar
+          disabled={Boolean(previewRooms)}
+          room={selectedRoom}
+          rooms={sourceRooms}
+          onMerge={mergeActiveRoomWith}
+          onSplit={splitActiveRoom}
+        />
       ) : null}
       {parametricOpeningEnabled && selectedWall ? (
         <ParametricOpeningToolbar

@@ -14,6 +14,11 @@ import type {
   Wall
 } from "@/lib/project-types";
 import { edgeKey, extractWallsFromRooms, polygonEdges } from "@/lib/wall-extractor";
+import {
+  normalizeOpeningElements,
+  remapOpeningByWallEdge,
+  wallEdgeIdFromWall
+} from "@/lib/opening-edge-utils";
 
 export type PlanVersionDraft = Omit<PlanVersion, "levels" | "building"> &
   Partial<Pick<PlanVersion, "levels" | "building">>;
@@ -144,6 +149,8 @@ function createOpenings(rooms: Room[], walls: Wall[]) {
       openings.push({
         id: `${opening.type}-${room.id}-${openings.length + 1}`,
         wallId: wall.id,
+        wallEdgeId: wallEdgeIdFromWall(wall),
+        positionOnEdge: opening.position,
         type: opening.type,
         center: lerpPoint(wall.start, wall.end, opening.position),
         width: opening.width,
@@ -158,31 +165,8 @@ function createOpenings(rooms: Room[], walls: Wall[]) {
 }
 
 export function remapOpenings(previousOpenings: OpeningElement[], previousWalls: Wall[], nextWalls: Wall[]) {
-  const previousWallById = new Map(previousWalls.map((wall) => [wall.id, wall]));
-  const nextWallByKey = new Map(nextWalls.map((wall) => [edgeKey(wall.start, wall.end), wall]));
-
   return previousOpenings
-    .map((opening) => {
-      const previousWall = previousWallById.get(opening.wallId);
-
-      if (!previousWall) {
-        return opening;
-      }
-
-      const nextWall = nextWallByKey.get(edgeKey(previousWall.start, previousWall.end));
-
-      if (!nextWall) {
-        return undefined;
-      }
-
-      const t = paramOnWall(opening.center, previousWall);
-
-      return {
-        ...opening,
-        wallId: nextWall.id,
-        center: lerpPoint(nextWall.start, nextWall.end, t)
-      };
-    })
+    .map((opening) => remapOpeningByWallEdge(opening, previousWalls, nextWalls))
     .filter((opening): opening is OpeningElement => Boolean(opening));
 }
 
@@ -235,10 +219,11 @@ export function normalizePlanVersion(version: PlanVersionDraft): PlanVersion {
       : version.rooms.filter((room) => room.levelId === levelId);
     const roomsForLevel = levelRooms.length ? levelRooms : index === 0 ? version.rooms : [];
     const walls = extractWallsFromRooms(roomsForLevel, version.outline);
-    const openings =
+    const rawOpenings =
       sourceLevel.openings.length > 0 && sourceLevel.walls.length > 0
         ? remapOpenings(sourceLevel.openings, sourceLevel.walls, walls)
         : createOpenings(roomsForLevel, walls);
+    const openings = normalizeOpeningElements(rawOpenings, walls);
     const rooms = attachElementRefs(roomsForLevel, walls, openings, levelId);
     const boundary: Boundary = {
       id: `boundary-${levelId}`,

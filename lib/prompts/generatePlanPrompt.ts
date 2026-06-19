@@ -63,7 +63,7 @@ Room schema constraints:
 Wall and opening constraints:
 - Walls must be independent Wall elements when available; do not rely only on room polygon edges.
 - Shared room boundaries must become one Wall with both roomIds, not duplicate walls.
-- OpeningElement must attach to wallId.
+- OpeningElement should attach to wallId when available, and may include wallEdgeId plus positionOnEdge (0-1) for stable edge binding.
 - Door and window geometry should be OpeningElement objects attached to wallId when available.
 
 The server will validate, normalize, repair, and rescore the returned PlanVersion. Prefer conservative rectangular or orthogonal geometry over expressive but invalid geometry.

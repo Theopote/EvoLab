@@ -144,6 +144,12 @@ interface EvoProjectStore {
   updateRoom: (roomId: string, patch: Partial<Room>) => void;
   updateRoomGeometry: (roomId: string, patch: Partial<Room>) => void;
   applyLevelRoomsGeometry: (rooms: Room[]) => void;
+  splitActiveRoom: (input: {
+    axis: "horizontal" | "vertical";
+    splitRatio: number;
+    secondRoomName: string;
+  }) => void;
+  mergeActiveRoomWith: (neighborRoomId: string, mergedName?: string) => void;
   addParametricOpening: (input: {
     roomId: string;
     kind: "door" | "window";
@@ -354,6 +360,24 @@ function recordVersionChangeSet(
   );
 }
 
+function commitTopologyVersionDraft(state: EvoProjectStore, operation: PlanOperation) {
+  if (!state.activeVersion) {
+    return;
+  }
+
+  const normalized = normalizePlanVersion(state.activeVersion);
+  const nextVersion = applyPlanOperations(normalized, [operation], { skipPostProcess: true });
+  const committedVersion = normalizePlanVersion(nextVersion);
+
+  state.project.versions = state.project.versions.map((item) =>
+    item.id === committedVersion.id ? committedVersion : item
+  );
+  state.project.activeVersionId = committedVersion.id;
+  recordGeometryVersionChangeSet(state, normalized, committedVersion);
+  bumpGeometryRevision(state);
+  refreshDerivedDraft(state);
+}
+
 function isElementLocked(state: EvoProjectStore, elementId: string) {
   return state.project.domain.lockedElementIds.includes(elementId);
 }
@@ -401,7 +425,7 @@ function bumpGeometryRevision(state: EvoProjectStore) {
 
 const ROOM_GEOMETRY_KEYS = new Set(["polygon", "doors", "windows"]);
 const WALL_GEOMETRY_KEYS = new Set(["start", "end", "thickness", "height"]);
-const OPENING_GEOMETRY_KEYS = new Set(["center", "width", "height", "sillHeight", "wallId"]);
+const OPENING_GEOMETRY_KEYS = new Set(["center", "width", "height", "sillHeight", "wallId", "wallEdgeId", "positionOnEdge"]);
 
 function patchTouchesGeometry<T extends object>(patch: Partial<T>, geometryKeys: Set<string>) {
   return Object.keys(patch).some((key) => geometryKeys.has(key));
@@ -553,6 +577,8 @@ function createInitialState(): Omit<
   | "updateRoom"
   | "updateRoomGeometry"
   | "applyLevelRoomsGeometry"
+  | "splitActiveRoom"
+  | "mergeActiveRoomWith"
   | "addParametricOpening"
   | "updateWall"
   | "updateOpening"
@@ -1102,6 +1128,55 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
 
         bumpGeometryRevision(state);
         refreshDerivedDraft(state);
+      })
+    ),
+  splitActiveRoom: (input) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        const roomId = state.selectedRoomId;
+
+        if (!roomId || isElementLocked(state, roomId)) {
+          return;
+        }
+
+        commitTopologyVersionDraft(state, {
+          id: `op-split-${Date.now()}`,
+          type: "split_room",
+          label: `Split ${roomId}`,
+          targetRoomIds: [roomId],
+          roomId,
+          splitAxis: input.axis,
+          splitRatio: input.splitRatio,
+          secondRoomName: input.secondRoomName
+        });
+      })
+    ),
+  mergeActiveRoomWith: (neighborRoomId, mergedName) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        const roomId = state.selectedRoomId;
+
+        if (!roomId || isElementLocked(state, roomId) || isElementLocked(state, neighborRoomId)) {
+          return;
+        }
+
+        const room = state.activeVersion?.rooms.find((item) => item.id === roomId);
+        const neighbor = state.activeVersion?.rooms.find((item) => item.id === neighborRoomId);
+
+        if (!room || !neighbor) {
+          return;
+        }
+
+        commitTopologyVersionDraft(state, {
+          id: `op-merge-${Date.now()}`,
+          type: "merge_room",
+          label: `Merge ${room.name} + ${neighbor.name}`,
+          targetRoomIds: [roomId, neighborRoomId],
+          primaryRoomId: roomId,
+          secondaryRoomId: neighborRoomId,
+          mergedRoomName: mergedName ?? `${room.name} + ${neighbor.name}`
+        });
+        state.selectedRoomId = roomId;
       })
     ),
   addParametricOpening: (input) =>

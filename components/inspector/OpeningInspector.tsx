@@ -332,6 +332,17 @@ export function OpeningInspector() {
           copied={copied === "wallId"}
           onCopy={() => copyValue("wallId", opening.wallId)}
         />
+        <ReadOnlyField
+          label="wallEdgeId"
+          value={opening.wallEdgeId ?? "-"}
+          canCopy={Boolean(opening.wallEdgeId)}
+          copied={copied === "wallEdgeId"}
+          onCopy={() => opening.wallEdgeId && copyValue("wallEdgeId", opening.wallEdgeId)}
+        />
+        <ReadOnlyField
+          label="positionOnEdge"
+          value={opening.positionOnEdge !== undefined ? opening.positionOnEdge.toFixed(3) : "-"}
+        />
         <ReadOnlyField label="wall length" value={wall ? `${wallLengthMeters.toFixed(2)} m` : "-"} />
         <NumberField
           label="width (m)"

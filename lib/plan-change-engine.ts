@@ -7,6 +7,7 @@ import {
   sanitizeAddOpeningOperation,
   sanitizeResizeOpeningOperation
 } from "@/lib/opening-constraints";
+import { mergeAdjacentRooms, splitRectRoom } from "@/lib/room-topology-ops";
 
 const CORE_TYPES = new Set(["stair", "elevator", "shaft"]);
 const WET_TYPES = new Set(["bathroom", "kitchen"]);
@@ -132,85 +133,28 @@ function updateRoomsInVersion(
   return replaceRoomsInVersion(version, nextRooms);
 }
 
-function splitRectRoom(
-  room: Room,
-  axis: "horizontal" | "vertical",
-  ratio: number,
-  secondRoom: { id: string; name: string }
-): { first: Room; second: Room } | undefined {
-  const bounds = roomBounds(room.polygon);
-  const spanX = bounds.maxX - bounds.minX;
-  const spanY = bounds.maxY - bounds.minY;
+function applyMergeRoom(version: PlanVersion, operation: Extract<PlanOperation, { type: "merge_room" }>): PlanVersion {
+  const primary = version.rooms.find((item) => item.id === operation.primaryRoomId);
+  const secondary = version.rooms.find((item) => item.id === operation.secondaryRoomId);
 
-  if (spanX < 2 || spanY < 2) {
-    return undefined;
+  if (!primary || !secondary) {
+    return version;
   }
 
-  if (axis === "vertical") {
-    const cutX = bounds.minX + spanX * ratio;
-    const firstPolygon: Point[] = [
-      [bounds.minX, bounds.minY],
-      [cutX, bounds.minY],
-      [cutX, bounds.maxY],
-      [bounds.minX, bounds.maxY]
-    ];
-    const secondPolygon: Point[] = [
-      [cutX, bounds.minY],
-      [bounds.maxX, bounds.minY],
-      [bounds.maxX, bounds.maxY],
-      [cutX, bounds.maxY]
-    ];
+  const merged = mergeAdjacentRooms(primary, secondary, {
+    id: operation.mergedRoomId ?? operation.primaryRoomId,
+    name: operation.mergedRoomName ?? `${primary.name} + ${secondary.name}`
+  });
 
-    return {
-      first: {
-        ...room,
-        polygon: firstPolygon,
-        areaSqm: Number(polygonArea(firstPolygon).toFixed(1))
-      },
-      second: {
-        ...room,
-        id: secondRoom.id,
-        name: secondRoom.name,
-        polygon: secondPolygon,
-        areaSqm: Number(polygonArea(secondPolygon).toFixed(1)),
-        doors: [],
-        windows: [],
-        adjacents: room.adjacents
-      }
-    };
+  if (!merged) {
+    return version;
   }
 
-  const cutY = bounds.minY + spanY * ratio;
-  const firstPolygon: Point[] = [
-    [bounds.minX, bounds.minY],
-    [bounds.maxX, bounds.minY],
-    [bounds.maxX, cutY],
-    [bounds.minX, cutY]
-  ];
-  const secondPolygon: Point[] = [
-    [bounds.minX, cutY],
-    [bounds.maxX, cutY],
-    [bounds.maxX, bounds.maxY],
-    [bounds.minX, bounds.maxY]
-  ];
+  const nextRooms = version.rooms
+    .filter((item) => item.id !== primary.id && item.id !== secondary.id)
+    .concat([merged]);
 
-  return {
-    first: {
-      ...room,
-      polygon: firstPolygon,
-      areaSqm: Number(polygonArea(firstPolygon).toFixed(1))
-    },
-    second: {
-      ...room,
-      id: secondRoom.id,
-      name: secondRoom.name,
-      polygon: secondPolygon,
-      areaSqm: Number(polygonArea(secondPolygon).toFixed(1)),
-      doors: [],
-      windows: [],
-      adjacents: room.adjacents
-    }
-  };
+  return replaceRoomsInVersion(version, nextRooms);
 }
 
 function applyMoveCore(version: PlanVersion, operation: Extract<PlanOperation, { type: "move_core" }>): PlanVersion {
@@ -419,6 +363,8 @@ function applyOperation(version: PlanVersion, operation: PlanOperation): PlanVer
       return applyOptimizeEgress(version, operation);
     case "split_room":
       return applySplitRoom(version, operation);
+    case "merge_room":
+      return applyMergeRoom(version, operation);
     case "add_opening":
       return applyAddOpening(version, operation);
     case "resize_opening":
@@ -600,6 +546,8 @@ export function operationSummary(operation: PlanOperation): string {
       return operation.note ?? operation.label;
     case "split_room":
       return `Split ${operation.roomId} ${operation.splitAxis} at ${Math.round(operation.splitRatio * 100)}%`;
+    case "merge_room":
+      return `Merge ${operation.primaryRoomId} + ${operation.secondaryRoomId}`;
     case "add_opening":
       return `Add ${operation.openingKind} on ${operation.wall} wall (${operation.width}m)`;
     case "resize_opening":

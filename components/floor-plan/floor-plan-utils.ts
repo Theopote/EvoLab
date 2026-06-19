@@ -1,4 +1,5 @@
 import type { OpeningElement, PlanVersion, Point, Room, Wall } from "@/lib/project-types";
+import { resolveWallForOpening } from "@/lib/opening-edge-utils";
 
 export const zoneColors: Record<Room["zone"], string> = {
   public: "rgba(79, 181, 200, 0.24)",
@@ -43,7 +44,7 @@ export function wallNormal(wall: Wall): Point {
 }
 
 export function findOpeningWall(opening: OpeningElement, walls: Wall[]) {
-  return walls.find((wall) => wall.id === opening.wallId);
+  return resolveWallForOpening(opening, walls);
 }
 
 export function openingSegment(opening: OpeningElement, wall: Wall): { start: Point; end: Point } {
