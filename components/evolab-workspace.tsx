@@ -346,7 +346,6 @@ export function EvoLabWorkspace() {
           storeyStack={project.domain.storeyStack}
           verticalCirculation={project.domain.verticalCirculation}
           onLevelChange={setActiveLevel}
-          onInpaintRevision={handleInpaintRevision}
           onUpdateStructuralSystem={updateStructuralSystem}
         />
       );
@@ -526,18 +525,6 @@ export function EvoLabWorkspace() {
     }
   }
 
-  function handleInpaintRevision(
-    version: Parameters<typeof updateActiveVersion>[0],
-    prompt: string
-  ) {
-    if (!activeVersion) {
-      updateActiveVersion(version, { summary: prompt, source: "ai" });
-      return;
-    }
-
-    handleCopilotRevision(version, prompt, activeVersion);
-  }
-
   function handleCopilotRevision(
     version: Parameters<typeof updateActiveVersion>[0],
     prompt: string,
@@ -574,7 +561,6 @@ export function EvoLabWorkspace() {
           activeVersion={activeVersion}
           activeLevelId={activeLevelId}
           onLevelChange={setActiveLevel}
-          onInpaintRevision={handleInpaintRevision}
         />
         <PlanResultGrid
           outline={outline}

@@ -18,7 +18,6 @@ interface StructureWorkspaceProps {
   storeyStack?: StoreyStack;
   verticalCirculation?: VerticalCirculationSystem;
   onLevelChange: (levelId: string) => void;
-  onInpaintRevision?: (version: PlanVersion, prompt: string) => void;
   onUpdateStructuralSystem?: (patch: Pick<StructuralSystem, "gridSpacingMeters" | "maxSpanMeters">) => void;
 }
 
@@ -29,7 +28,6 @@ export function StructureWorkspace({
   storeyStack,
   verticalCirculation,
   onLevelChange,
-  onInpaintRevision,
   onUpdateStructuralSystem
 }: StructureWorkspaceProps) {
   if (!version) {

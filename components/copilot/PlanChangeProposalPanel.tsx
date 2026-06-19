@@ -151,6 +151,10 @@ export function PlanChangeProposalPanel({
             </div>
           ) : null}
 
+          {applyNotice ? (
+            <div className="rounded border border-warning/30 bg-warning/5 p-2 text-[11px] text-warning">{applyNotice}</div>
+          ) : null}
+
           {report.skippedOperations.length ? (
             <div className="rounded border border-warning/30 bg-warning/5 p-2 text-[11px] text-warning">
               {report.skippedOperations.map((item) => (

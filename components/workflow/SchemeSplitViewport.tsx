@@ -15,14 +15,12 @@ interface SchemeSplitViewportProps {
   activeVersion?: PlanVersion;
   activeLevelId?: string;
   onLevelChange: (levelId: string) => void;
-  onInpaintRevision?: (version: PlanVersion, prompt: string) => void;
 }
 
 export function SchemeSplitViewport({
   activeVersion,
   activeLevelId,
-  onLevelChange,
-  onInpaintRevision
+  onLevelChange
 }: SchemeSplitViewportProps) {
   const [viewportMode, setViewportMode] = useState<ViewportMode>("split");
   const setLevelTransferFloor = useEvoProject((state) => state.setLevelTransferFloor);
@@ -102,11 +100,7 @@ export function SchemeSplitViewport({
         <div className="grid min-h-0 gap-3 lg:grid-cols-2">
           <article className="min-h-[420px] overflow-hidden rounded border border-line bg-[#0b1118] p-2">
             <div className="mb-2 text-[11px] uppercase tracking-[0.12em] text-muted">2D Plan</div>
-            <FloorPlan
-              levelId={activeLevelId}
-              version={activeVersion}
-              onInpaintRevision={onInpaintRevision}
-            />
+            <FloorPlan levelId={activeLevelId} version={activeVersion} />
           </article>
           <article className="min-h-[420px] overflow-hidden rounded border border-line bg-[#081018]">
             <div className="flex items-center justify-between gap-3 border-b border-line px-3 py-2">

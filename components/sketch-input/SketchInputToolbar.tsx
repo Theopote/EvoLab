@@ -2,45 +2,54 @@
 
 import { Eraser, Pencil } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
-import { DiffPreviewOverlay } from "@/components/floor-plan/DiffPreviewOverlay";
+import { PlanChangeProposalPanel } from "@/components/copilot/PlanChangeProposalPanel";
+import { useCopilotProposalRevision } from "@/components/copilot/useCopilotProposalRevision";
 import type { PlanVersion } from "@/lib/project-types";
 import type { RecognizedSketchRoom } from "@/lib/schemas/sketch-interpretation-schema";
+import {
+  buildProposalFromVersionPreview,
+  defaultAcceptedOperationIdsForSketch
+} from "@/lib/proposal-from-preview";
 import { recognizeSketchInput } from "@/lib/sketch-recognition";
 import { useSketchInputStore } from "@/lib/sketch-input-store";
 import { useSketchAutoRecognition } from "@/lib/use-sketch-auto-recognition";
 
 interface SketchInputToolbarProps {
   version?: PlanVersion;
-  onSketchRevision: (version: PlanVersion, prompt: string) => void;
 }
 
-export function SketchInputToolbar({ version, onSketchRevision }: SketchInputToolbarProps) {
+export function SketchInputToolbar({ version }: SketchInputToolbarProps) {
   const strokes = useSketchInputStore((state) => state.strokes);
   const ghostLoops = useSketchInputStore((state) => state.ghostLoops);
   const recognitionStatus = useSketchInputStore((state) => state.recognitionStatus);
   const clearSketch = useSketchInputStore((state) => state.clearSketch);
   const setSemanticRooms = useSketchInputStore((state) => state.setSemanticRooms);
   const setRecognitionStatus = useSketchInputStore((state) => state.setRecognitionStatus);
+  const {
+    lockedElementIds,
+    pendingProposal,
+    prepareProposal,
+    applyPendingProposal,
+    dismissPendingProposal
+  } = useCopilotProposalRevision({ activeVersion: version });
   const [isSending, setIsSending] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const [pendingPreview, setPendingPreview] = useState<{
-    version: PlanVersion;
-    recognizedRooms: RecognizedSketchRoom[];
-    warning?: string;
-    auto?: boolean;
-  } | null>(null);
-  const [confirmedReviewIds, setConfirmedReviewIds] = useState<string[]>([]);
+  const [recognizedRooms, setRecognizedRooms] = useState<RecognizedSketchRoom[]>([]);
+  const [applyNotice, setApplyNotice] = useState<string | undefined>();
 
   const needsReviewRoomIds = useMemo(
-    () =>
-      pendingPreview?.recognizedRooms
-        .filter((entry) => entry.confidence === "needs_review")
-        .map((entry) => entry.room.id) ?? [],
-    [pendingPreview]
+    () => recognizedRooms.filter((entry) => entry.confidence === "needs_review").map((entry) => entry.room.id),
+    [recognizedRooms]
   );
-
-  const unconfirmedReviewIds = needsReviewRoomIds.filter((roomId) => !confirmedReviewIds.includes(roomId));
   const isRecognizing = isSending || recognitionStatus === "recognizing";
+
+  const defaultAcceptedOperationIds = useMemo(() => {
+    if (!pendingProposal) {
+      return undefined;
+    }
+
+    return defaultAcceptedOperationIdsForSketch(pendingProposal.proposal, needsReviewRoomIds);
+  }, [needsReviewRoomIds, pendingProposal]);
 
   const applyRecognitionResult = useCallback(
     (result: {
@@ -49,22 +58,40 @@ export function SketchInputToolbar({ version, onSketchRevision }: SketchInputToo
       warnings: string[];
       auto: boolean;
     }) => {
+      if (!version) {
+        return;
+      }
+
+      const prompt = `Sketch input recognized ${result.recognizedRooms.length} room(s).`;
+      const proposal = buildProposalFromVersionPreview(version, result.version, prompt, {
+        focusRoomIds: result.recognizedRooms.map((entry) => entry.room.id)
+      });
+
+      if (!proposal?.operations.length) {
+        setRecognitionStatus("error");
+        setNotice("Sketch recognition did not produce reviewable operations.");
+        return;
+      }
+
       setSemanticRooms(result.recognizedRooms);
       setRecognitionStatus("ready");
-      setPendingPreview({
-        version: result.version,
-        recognizedRooms: result.recognizedRooms,
+      setRecognizedRooms(result.recognizedRooms);
+      setApplyNotice(result.warnings.join(" ") || undefined);
+      prepareProposal({
+        prompt,
+        baseVersion: version,
+        proposal,
+        findings: [],
         warning: result.warnings.join(" ") || undefined,
-        auto: result.auto
+        allowedRoomIds: result.recognizedRooms.map((entry) => entry.room.id)
       });
-      setConfirmedReviewIds([]);
       setNotice(
         result.auto
-          ? `Auto-recognized ${result.recognizedRooms.length} room(s) after pause. Review before applying.`
-          : "Review recognized rooms before applying the sketch result."
+          ? `Auto-recognized ${result.recognizedRooms.length} room(s). Review operations before applying.`
+          : "Review recognized room operations before applying."
       );
     },
-    [setRecognitionStatus, setSemanticRooms]
+    [prepareProposal, setRecognitionStatus, setSemanticRooms, version]
   );
 
   useSketchAutoRecognition({
@@ -106,94 +133,47 @@ export function SketchInputToolbar({ version, onSketchRevision }: SketchInputToo
     }
   }
 
-  function acceptPreview() {
-    if (!pendingPreview) {
-      return;
-    }
-
-    if (unconfirmedReviewIds.length > 0) {
-      setNotice("Confirm every orange room before applying the sketch result.");
-      return;
-    }
-
-    onSketchRevision(
-      pendingPreview.version,
-      `Sketch input recognized ${pendingPreview.recognizedRooms.length} room(s).`
-    );
-    clearSketch();
-    setPendingPreview(null);
-    setConfirmedReviewIds([]);
-    setNotice(
-      pendingPreview.warning
-        ? `Sketch applied with fallback: ${pendingPreview.warning}`
-        : "Sketch rooms applied to the active plan."
-    );
-  }
-
-  function rejectPreview() {
-    setPendingPreview(null);
-    setConfirmedReviewIds([]);
-    setRecognitionStatus(ghostLoops.length > 0 ? "ready" : "idle");
-    setNotice("Sketch preview rejected. Labels remain on ghost outlines.");
-  }
-
-  function toggleReviewConfirmation(roomId: string) {
-    setConfirmedReviewIds((current) =>
-      current.includes(roomId) ? current.filter((id) => id !== roomId) : [...current, roomId]
-    );
-  }
-
   const statusHint =
     recognitionStatus === "pending"
       ? "Pause 1.5s to auto-label rooms"
       : recognitionStatus === "recognizing"
         ? "Recognizing paused sketch..."
-        : recognitionStatus === "ready" && !pendingPreview
+        : recognitionStatus === "ready" && !pendingProposal
           ? "Rooms labeled — open preview to apply"
           : null;
 
   return (
     <div className="mb-3 rounded border border-accent/35 bg-accent/8 p-3">
-      {pendingPreview && version ? (
-        <DiffPreviewOverlay
-          baseVersion={version}
-          highlightRoomIds={needsReviewRoomIds}
-          needsReviewRoomIds={needsReviewRoomIds}
-          notice={pendingPreview.warning}
-          previewVersion={pendingPreview.version}
-          sketchUnderlay={{ strokes, ghostLoops: ghostLoops.map((loop) => loop.polygon) }}
-          title={pendingPreview.auto ? "Auto sketch recognition preview" : "Sketch recognition preview"}
-          onAccept={acceptPreview}
-          onReject={rejectPreview}
-        />
-      ) : null}
-      {pendingPreview && unconfirmedReviewIds.length > 0 ? (
-        <div className="mb-3 rounded border border-warning/35 bg-warning/10 p-2">
-          <p className="mb-2 text-xs text-warning">
-            {unconfirmedReviewIds.length} room(s) need manual confirmation before apply.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {pendingPreview.recognizedRooms
-              .filter((entry) => entry.confidence === "needs_review")
-              .map((entry) => {
-                const confirmed = confirmedReviewIds.includes(entry.room.id);
-
-                return (
-                  <button
-                    key={entry.room.id}
-                    className={`rounded border px-2 py-1 text-[11px] ${
-                      confirmed
-                        ? "border-accent/50 text-accent"
-                        : "border-warning/50 text-warning hover:border-accent/50 hover:text-accent"
-                    }`}
-                    type="button"
-                    onClick={() => toggleReviewConfirmation(entry.room.id)}
-                  >
-                    {confirmed ? "Confirmed" : "Confirm"} {entry.room.name}
-                  </button>
-                );
-              })}
-          </div>
+      {pendingProposal && version ? (
+        <div className="mb-3">
+          {needsReviewRoomIds.length > 0 ? (
+            <p className="mb-2 text-xs text-warning">
+              {needsReviewRoomIds.length} room(s) marked needs_review start unchecked. Confirm each operation before
+              applying.
+            </p>
+          ) : null}
+          <PlanChangeProposalPanel
+            allowedRoomIds={pendingProposal.allowedRoomIds}
+            applyNotice={applyNotice}
+            baseVersion={pendingProposal.baseVersion}
+            defaultAcceptedOperationIds={defaultAcceptedOperationIds}
+            lockedElementIds={lockedElementIds}
+            proposal={pendingProposal.proposal}
+            onApply={(nextVersion, acceptedOperationIds) => {
+              applyPendingProposal(nextVersion, acceptedOperationIds);
+              clearSketch();
+              setRecognizedRooms([]);
+              setApplyNotice(undefined);
+              setNotice("Sketch rooms applied via accepted operations.");
+            }}
+            onDismiss={() => {
+              dismissPendingProposal();
+              setRecognizedRooms([]);
+              setApplyNotice(undefined);
+              setRecognitionStatus(ghostLoops.length > 0 ? "ready" : "idle");
+              setNotice("Sketch proposal dismissed. Labels remain on ghost outlines.");
+            }}
+          />
         </div>
       ) : null}
       <div className="mb-2 flex items-center justify-between gap-3">
@@ -211,8 +191,7 @@ export function SketchInputToolbar({ version, onSketchRevision }: SketchInputToo
         </button>
       </div>
       <p className="mb-2 text-xs text-muted">
-        Draw closed room loops on the meter grid. Ghost outlines appear immediately; AI labels arrive after a 1.5s
-        pause.
+        Draw closed room loops on the meter grid. Ghost outlines appear immediately; AI labels arrive after a 1.5s pause.
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <button
@@ -223,7 +202,7 @@ export function SketchInputToolbar({ version, onSketchRevision }: SketchInputToo
         >
           {isRecognizing
             ? "Recognizing..."
-            : pendingPreview
+            : pendingProposal
               ? "Re-run recognition"
               : `Recognize now (${ghostLoops.length} loop${ghostLoops.length === 1 ? "" : "s"})`}
         </button>

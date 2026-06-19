@@ -42,7 +42,6 @@ export interface FloorPlanCanvasProps {
   levelId?: string;
   selectedRoomId?: string;
   interactive?: boolean;
-  onInpaintRevision?: (version: PlanVersion, prompt: string) => void;
   viewBoxOverride?: string;
   onViewBoxChange?: (viewBox: string) => void;
   enableComparisonPan?: boolean;
@@ -58,7 +57,6 @@ export function FloorPlanCanvas({
   levelId: levelIdProp,
   selectedRoomId: selectedRoomIdProp,
   interactive = true,
-  onInpaintRevision,
   viewBoxOverride,
   onViewBoxChange,
   enableComparisonPan = false
@@ -331,20 +329,11 @@ export function FloorPlanCanvas({
   return (
     <div className={className}>
       {inpaintEnabled ? <InpaintToolbar version={version} /> : null}
-      {sketchInputEnabled && onInpaintRevision ? (
-        <SketchInputToolbar version={version} onSketchRevision={onInpaintRevision} />
+      {sketchInputEnabled ? <SketchInputToolbar version={version} /> : null}
+      {reshapeBoundaryEnabled ? (
+        <ReshapeBoundaryToolbar levelId={levelId} roomId={selectedRoomId} version={version} />
       ) : null}
-      {reshapeBoundaryEnabled && onInpaintRevision ? (
-        <ReshapeBoundaryToolbar
-          levelId={levelId}
-          roomId={selectedRoomId}
-          version={version}
-          onApplyRevision={onInpaintRevision}
-        />
-      ) : null}
-      {addProtrusionEnabled && onInpaintRevision ? (
-        <AddProtrusionToolbar levelId={levelId} version={version} onApplyRevision={onInpaintRevision} />
-      ) : null}
+      {addProtrusionEnabled ? <AddProtrusionToolbar levelId={levelId} version={version} /> : null}
       {roomTopologyEnabled && selectedRoom ? (
         <RoomTopologyToolbar
           disabled={Boolean(previewRooms)}
