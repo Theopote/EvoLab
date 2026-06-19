@@ -105,4 +105,24 @@ describe("plan-change-engine", () => {
     expect(report.skippedOperations).toHaveLength(1);
     expect(report.skippedOperations[0]?.lockedElementIds).toEqual(["office-01"]);
   });
+
+  it("clamps oversized opening operations instead of trusting raw AI width", () => {
+    const operation: PlanOperation = {
+      id: "op-clamped-door",
+      type: "add_opening",
+      label: "Add wide door",
+      targetRoomIds: ["office-01"],
+      roomId: "office-01",
+      openingKind: "door",
+      wall: "east",
+      position: 0.99,
+      width: 20
+    };
+
+    const report = applyPlanOperationsWithReport(baseVersion, [operation], { skipPostProcess: true });
+    const office = report.version.rooms.find((room) => room.id === "office-01");
+
+    expect(report.appliedOperationIds).toEqual(["op-clamped-door"]);
+    expect(office?.doors.at(-1)?.width).toBeLessThan(20);
+  });
 });
