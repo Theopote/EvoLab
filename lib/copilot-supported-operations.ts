@@ -9,6 +9,8 @@ export const COPILOT_SUPPORTED_OPERATION_TYPES = [
   "add_opening",
   "resize_opening",
   "update_room_polygon",
+  "add_room",
+  "add_protrusion",
   "optimize_egress"
 ] as const;
 

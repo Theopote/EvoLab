@@ -19,6 +19,8 @@ interface PlanChangeProposalPanelProps {
   proposal: PlanChangeProposal;
   lockedElementIds?: string[];
   allowedRoomIds?: string[];
+  defaultAcceptedOperationIds?: string[];
+  applyNotice?: string;
   onApply: (version: PlanVersion, acceptedOperationIds: string[]) => void;
   onDismiss: () => void;
   onAddComment?: (text: string) => void;
@@ -29,6 +31,8 @@ export function PlanChangeProposalPanel({
   proposal,
   lockedElementIds = [],
   allowedRoomIds,
+  defaultAcceptedOperationIds,
+  applyNotice,
   onApply,
   onDismiss,
   onAddComment
@@ -40,19 +44,19 @@ export function PlanChangeProposalPanel({
     const unlocked = proposal.operations
       .filter((operation) => !isOperationBlockedByLocks(operation, lockedElementIds, baseVersion))
       .map((operation) => operation.id);
+    const initial = defaultAcceptedOperationIds ?? unlocked;
 
-    return new Set(unlocked);
+    return new Set(initial.filter((operationId) => unlocked.includes(operationId)));
   });
 
   useEffect(() => {
-    setAcceptedIds(
-      new Set(
-        proposal.operations
-          .filter((operation) => !isOperationBlockedByLocks(operation, lockedElementIds, baseVersion))
-          .map((operation) => operation.id)
-      )
-    );
-  }, [baseVersion, proposal, lockedElementIds]);
+    const unlocked = proposal.operations
+      .filter((operation) => !isOperationBlockedByLocks(operation, lockedElementIds, baseVersion))
+      .map((operation) => operation.id);
+    const initial = defaultAcceptedOperationIds ?? unlocked;
+
+    setAcceptedIds(new Set(initial.filter((operationId) => unlocked.includes(operationId))));
+  }, [baseVersion, defaultAcceptedOperationIds, proposal, lockedElementIds]);
 
   const preview = useMemo(
     () =>

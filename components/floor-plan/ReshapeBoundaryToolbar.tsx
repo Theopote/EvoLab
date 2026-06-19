@@ -2,9 +2,12 @@
 
 import { Eraser, Spline } from "lucide-react";
 import { useMemo, useState } from "react";
+import { PlanChangeProposalPanel } from "@/components/copilot/PlanChangeProposalPanel";
+import { useCopilotProposalRevision } from "@/components/copilot/useCopilotProposalRevision";
+import type { CopilotFinding } from "@/lib/project-types";
 import type { PlanVersion } from "@/lib/project-types";
-import { DiffPreviewOverlay } from "@/components/floor-plan/DiffPreviewOverlay";
 import { useLocalFormEditStore } from "@/lib/local-form-edit-store";
+import { buildProposalFromVersionPreview } from "@/lib/proposal-from-preview";
 import { spanIncludesSharedEdge } from "@/lib/reshape-boundary";
 import { deriveWallGraph } from "@/lib/wall-graph";
 
@@ -12,29 +15,24 @@ interface ReshapeBoundaryToolbarProps {
   version?: PlanVersion;
   roomId?: string;
   levelId?: string;
-  onApplyRevision: (version: PlanVersion, prompt: string) => void;
 }
 
-export function ReshapeBoundaryToolbar({
-  version,
-  roomId,
-  levelId,
-  onApplyRevision
-}: ReshapeBoundaryToolbarProps) {
+export function ReshapeBoundaryToolbar({ version, roomId, levelId }: ReshapeBoundaryToolbarProps) {
   const boundarySpan = useLocalFormEditStore((state) => state.boundarySpan);
   const reshapePrompt = useLocalFormEditStore((state) => state.reshapePrompt);
   const setReshapePrompt = useLocalFormEditStore((state) => state.setReshapePrompt);
   const clearBoundarySpan = useLocalFormEditStore((state) => state.clearBoundarySpan);
+  const {
+    lockedElementIds,
+    pendingProposal,
+    prepareProposal,
+    applyPendingProposal,
+    dismissPendingProposal
+  } = useCopilotProposalRevision({ activeVersion: version });
   const [isSending, setIsSending] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [openingPolicy, setOpeningPolicy] = useState<"preserve" | "remove">("preserve");
-  const [pendingPreview, setPendingPreview] = useState<{
-    version: PlanVersion;
-    prompt: string;
-    warning?: string;
-    openingRepairs?: string[];
-    affectedOpeningIds?: string[];
-  } | null>(null);
+  const [applyNotice, setApplyNotice] = useState<string | undefined>();
 
   const sharedEdgeBlocked = useMemo(() => {
     if (!version || !boundarySpan || !roomId) {
@@ -76,6 +74,7 @@ export function ReshapeBoundaryToolbar({
         warning?: string;
         openingRepairs?: string[];
         affectedOpeningIds?: string[];
+        findings?: CopilotFinding[];
         error?: string;
       };
 
@@ -83,14 +82,32 @@ export function ReshapeBoundaryToolbar({
         throw new Error(data.error ?? `reshape-boundary failed with ${response.status}`);
       }
 
-      setPendingPreview({
-        version: data.version,
+      const proposal = buildProposalFromVersionPreview(version, data.version, reshapePrompt.trim());
+
+      if (!proposal?.operations.length) {
+        throw new Error("Boundary reshape did not produce reviewable operations.");
+      }
+
+      prepareProposal({
         prompt: reshapePrompt.trim(),
-        warning: data.warning,
-        openingRepairs: data.openingRepairs,
-        affectedOpeningIds: data.affectedOpeningIds
+        baseVersion: version,
+        proposal,
+        findings: data.findings ?? [],
+        warning: data.warning
       });
-      setNotice("Review the boundary reshape diff before accepting.");
+
+      setApplyNotice(
+        [
+          data.warning,
+          data.affectedOpeningIds?.length
+            ? `Affected openings: ${data.affectedOpeningIds.join(", ")}`
+            : undefined,
+          data.openingRepairs?.length ? `Opening updates: ${data.openingRepairs.join(" ")}` : undefined
+        ]
+          .filter(Boolean)
+          .join(" ")
+      );
+      setNotice("Review each boundary reshape operation before applying.");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Boundary reshape failed.");
     } finally {
@@ -98,44 +115,28 @@ export function ReshapeBoundaryToolbar({
     }
   }
 
-  function acceptPreview() {
-    if (!pendingPreview) {
-      return;
-    }
-
-    onApplyRevision(pendingPreview.version, pendingPreview.prompt);
-    clearBoundarySpan();
-    setPendingPreview(null);
-    setNotice(pendingPreview.warning ? `Applied with note: ${pendingPreview.warning}` : "Boundary reshape applied.");
-  }
-
-  function rejectPreview() {
-    setPendingPreview(null);
-    setNotice("Boundary reshape preview rejected.");
-  }
-
   return (
     <div className="mb-3 rounded border border-sky-500/35 bg-sky-500/10 p-3">
-      {pendingPreview && version ? (
-        <DiffPreviewOverlay
-          baseVersion={version}
-          highlightRoomIds={roomId ? [roomId] : []}
-          notice={[
-            pendingPreview.warning,
-            pendingPreview.affectedOpeningIds?.length
-              ? `Affected openings: ${pendingPreview.affectedOpeningIds.join(", ")}`
-              : undefined,
-            pendingPreview.openingRepairs?.length
-              ? `Opening updates: ${pendingPreview.openingRepairs.join(" ")}`
-              : undefined
-          ]
-            .filter(Boolean)
-            .join(" ")}
-          previewVersion={pendingPreview.version}
-          title="Boundary reshape preview"
-          onAccept={acceptPreview}
-          onReject={rejectPreview}
-        />
+      {pendingProposal && version ? (
+        <div className="mb-3">
+          <PlanChangeProposalPanel
+            applyNotice={applyNotice}
+            baseVersion={pendingProposal.baseVersion}
+            lockedElementIds={lockedElementIds}
+            proposal={pendingProposal.proposal}
+            onApply={(nextVersion, acceptedOperationIds) => {
+              applyPendingProposal(nextVersion, acceptedOperationIds);
+              clearBoundarySpan();
+              setApplyNotice(undefined);
+              setNotice("Boundary reshape applied via accepted operations.");
+            }}
+            onDismiss={() => {
+              dismissPendingProposal();
+              setApplyNotice(undefined);
+              setNotice("Boundary reshape proposal dismissed.");
+            }}
+          />
+        </div>
       ) : null}
       <div className="mb-2 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-sky-300">
@@ -183,7 +184,7 @@ export function ReshapeBoundaryToolbar({
       <div className="flex flex-wrap items-center gap-2">
         <input
           className="h-9 min-w-[240px] flex-1 rounded border border-line bg-[#0b1118] px-2 text-sm text-slate-100 outline-none focus:border-accent/70"
-          disabled={isSending || Boolean(pendingPreview)}
+          disabled={isSending || Boolean(pendingProposal)}
           placeholder='e.g. round this corner into a smooth arc'
           value={reshapePrompt}
           onChange={(event) => setReshapePrompt(event.target.value)}
@@ -192,7 +193,7 @@ export function ReshapeBoundaryToolbar({
           className="h-9 rounded bg-accent px-3 text-xs font-medium text-[#061014] disabled:cursor-not-allowed disabled:opacity-50"
           disabled={
             isSending ||
-            Boolean(pendingPreview) ||
+            Boolean(pendingProposal) ||
             !boundarySpan ||
             !reshapePrompt.trim() ||
             !version ||
