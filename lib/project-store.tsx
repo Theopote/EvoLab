@@ -41,7 +41,7 @@ export function useEvoProject<T>(selector: (state: EvoProjectStore) => T): T;
 export function useEvoProject<T>(selector?: (state: EvoProjectStore) => T) {
   if (!selector) {
     return useEvoProjectStore((state) => state as T);
-  }
+}
 
   return useEvoProjectStore(useShallow(selector));
 }
