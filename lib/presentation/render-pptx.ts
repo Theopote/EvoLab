@@ -83,7 +83,13 @@ function addContentSlide(pptx: import("pptxgenjs").default, slide: PresentationS
   const template = resolvePresentationTemplate(deck.templateId);
   const page = pptx.addSlide();
   const imageHeavy = Boolean(slide.images?.length && slide.images.length >= 2);
-  const tablePrimary = Boolean(slide.table && (slide.kind === "cost" || slide.kind === "quantities" || slide.kind === "evolution"));
+  const tablePrimary = Boolean(
+    slide.table &&
+      (slide.kind === "cost" ||
+        slide.kind === "quantities" ||
+        slide.kind === "evolution" ||
+        slide.kind === "compare")
+  );
 
   page.background = { color: template.pptx.contentBackground };
   page.addText(slide.title, {

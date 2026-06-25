@@ -18,10 +18,11 @@ export function ReportOutlineSidebar({
   onOpenReportEditor
 }: ReportOutlineSidebarProps) {
   const openPresentation = onOpenPresentation ?? onOpenSheets;
-  const { project, activeVersion, brief } = useProjectState((state) => ({
+  const { project, activeVersion, brief, compareVersionIds } = useProjectState((state) => ({
     project: state.project,
     activeVersion: state.activeVersion,
-    brief: state.brief
+    brief: state.brief,
+    compareVersionIds: state.compareVersionIds
   }));
   const { siteContext, buildableEnvelope, environmentSurrogate, outline } = useSiteState((state) => ({
     siteContext: state.siteContext,
@@ -43,9 +44,10 @@ export function ReportOutlineSidebar({
       siteContext,
       envelope: buildableEnvelope,
       environmentSurrogate,
-      outline
+      outline,
+      compareVersionIds
     }).slides;
-  }, [activeVersion, brief, buildableEnvelope, environmentSurrogate, outline, project, siteContext]);
+  }, [activeVersion, brief, buildableEnvelope, compareVersionIds, environmentSurrogate, outline, project, siteContext]);
 
   if (!activeVersion) {
     return (

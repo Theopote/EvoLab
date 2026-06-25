@@ -108,7 +108,7 @@ export function renderExplodedDiagram(version: PlanVersion) {
   </svg>`;
 }
 
-export function renderFlowDiagram(version: PlanVersion, projectType = "healthcare") {
+export function renderFlowDiagram(version: PlanVersion, projectType = "healthcare", legendLabel?: string) {
   const analysis = computeAnalysis(version, ["primary_flow", "staff_flow", "egress_path", "sightline"], {
     projectType
   });
@@ -156,7 +156,7 @@ export function renderFlowDiagram(version: PlanVersion, projectType = "healthcar
     ${rooms}
     ${paths}
     ${egress}
-    <text x="2" y="-4" fill="#94a3b8" font-size="1.4">Patient flow · Staff flow · Sightline · Egress</text>
+    <text x="2" y="-4" fill="#94a3b8" font-size="1.4">${escapeXml(legendLabel ?? "Primary flow · Staff flow · Sightline · Egress")}</text>
   </svg>`;
 }
 
@@ -285,5 +285,171 @@ export function renderEvolutionDiagram(version: PlanVersion) {
     ${panel(0, "1 · Topology", topologyRooms.join("\n"))}
     ${panel(panelWidth + panelGap, "2 · Geometry", geometryRooms)}
     ${panel((panelWidth + panelGap) * 2, "3 · Refinement", refinedRooms)}
+  </svg>`;
+}
+
+const topologyZoneColors: Record<string, string> = {
+  public: "#4fb5c8",
+  semi_public: "#84cc16",
+  private: "#a78bfa",
+  service: "#e6a23c",
+  circulation: "#94a3b8"
+};
+
+const facadeEdgeColors: Record<string, string> = {
+  curtain_wall: "#38bdf8",
+  punched_window: "#34d399",
+  solid: "#94a3b8",
+  mixed: "#fbbf24"
+};
+
+const mepSystemColors: Record<string, string> = {
+  hvac: "#5eead4",
+  plumbing_supply: "#38bdf8",
+  plumbing_drain: "#60a5fa",
+  electrical: "#fbbf24",
+  elv: "#a78bfa",
+  fire: "#f87171"
+};
+
+export function renderTopologyDiagram(graph: import("@/lib/project-types").TopologyGraph) {
+  const centerX = 420;
+  const centerY = 280;
+  const ringRadius = Math.max(140, graph.rooms.length * 18);
+  const nodes = graph.rooms.map((room, index) => {
+    const angle = (Math.PI * 2 * index) / graph.rooms.length - Math.PI / 2;
+    const areaScale = Math.sqrt(Math.max(room.targetAreaSqm, 8));
+    return {
+      room,
+      x: centerX + Math.cos(angle) * ringRadius,
+      y: centerY + Math.sin(angle) * ringRadius,
+      radius: Math.min(56, Math.max(28, areaScale * 2.4))
+    };
+  });
+  const nodeById = new Map(nodes.map((node) => [node.room.id, node]));
+
+  const edges = graph.edges
+    .map((edge) => {
+      const from = nodeById.get(edge.from);
+      const to = nodeById.get(edge.to);
+      if (!from || !to) {
+        return "";
+      }
+
+      const stroke =
+        edge.relationship === "direct" ? "#e2e8f0" : edge.relationship === "near" ? "#94a3b8" : "#475569";
+      const dash = edge.relationship === "separated" ? ' stroke-dasharray="4 3"' : "";
+
+      return `<line x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" stroke="${stroke}" stroke-width="1.2"${dash} />`;
+    })
+    .join("\n");
+
+  const bubbles = nodes
+    .map(({ room, x, y, radius }) => {
+      const fill = topologyZoneColors[room.zone] ?? "#94a3b8";
+      return `
+        <g>
+          <circle cx="${x}" cy="${y}" r="${radius}" fill="${fill}" fill-opacity="0.72" stroke="#e2e8f0" stroke-width="1" />
+          <text x="${x}" y="${y - 4}" fill="#f8fafc" font-size="11" text-anchor="middle">${escapeXml(room.name)}</text>
+          <text x="${x}" y="${y + 10}" fill="#cbd5e1" font-size="9" text-anchor="middle">${room.targetAreaSqm} sqm</text>
+        </g>`;
+    })
+    .join("\n");
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 840 560" role="img">
+    <rect width="100%" height="100%" fill="#081018" />
+    ${edges}
+    ${bubbles}
+    <text x="16" y="24" fill="#94a3b8" font-size="13">${escapeXml(graph.label)} · ${escapeXml(graph.strategy)}</text>
+  </svg>`;
+}
+
+export function renderFacadeDiagram(
+  version: PlanVersion,
+  facadeEnvelope?: import("@/lib/building-domain").FacadeEnvelope
+) {
+  const padding = 10;
+  const width = version.overallBounds.width + padding * 2;
+  const height = version.overallBounds.height + padding * 2;
+  const { width: planWidth, height: planHeight } = version.overallBounds;
+  const edgeSegments = {
+    north: [
+      [0, 0],
+      [planWidth, 0]
+    ] as const,
+    south: [
+      [0, planHeight],
+      [planWidth, planHeight]
+    ] as const,
+    east: [
+      [planWidth, 0],
+      [planWidth, planHeight]
+    ] as const,
+    west: [
+      [0, 0],
+      [0, planHeight]
+    ] as const
+  };
+
+  const zones = facadeEnvelope?.zones ?? [];
+  const facadeLines = zones
+    .map((zone) => {
+      const segment = edgeSegments[zone.edge];
+      const color = facadeEdgeColors[zone.strategy] ?? "#94a3b8";
+      return `<line x1="${segment[0][0]}" y1="${segment[0][1]}" x2="${segment[1][0]}" y2="${segment[1][1]}" stroke="${color}" stroke-linecap="round" stroke-width="1.4" />`;
+    })
+    .join("\n");
+
+  const rooms = version.rooms
+    .map(
+      (room) =>
+        `<polygon points="${polygonPoints(room.polygon)}" fill="rgba(255,255,255,0.03)" stroke="#475569" stroke-width="0.25" />`
+    )
+    .join("\n");
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-padding} ${-padding} ${width} ${height}" role="img">
+    <rect width="100%" height="100%" fill="#081018" />
+    <polygon points="${polygonPoints(version.outline)}" fill="rgba(255,255,255,0.02)" stroke="#64748b" stroke-width="0.35" />
+    ${rooms}
+    ${facadeLines}
+    <text x="2" y="-4" fill="#94a3b8" font-size="1.3">Facade strategy by perimeter edge</text>
+  </svg>`;
+}
+
+export function renderSystemsDiagram(version: PlanVersion, mep?: import("@/lib/project-types").MepLayout) {
+  const padding = 10;
+  const width = version.overallBounds.width + padding * 2;
+  const height = version.overallBounds.height + padding * 2;
+
+  const rooms = version.rooms
+    .map((room) => {
+      const isService = room.zone === "service" || room.type === "shaft" || room.type === "equipment_room";
+      return isService
+        ? `<polygon points="${polygonPoints(room.polygon)}" fill="rgba(230,162,60,0.22)" stroke="#e6a23c" stroke-width="0.35" />`
+        : `<polygon points="${polygonPoints(room.polygon)}" fill="rgba(255,255,255,0.02)" stroke="#475569" stroke-width="0.2" />`;
+    })
+    .join("\n");
+
+  const routes = (mep?.routes ?? [])
+    .map(
+      (route, index) =>
+        `<polyline points="${route.path.map((point) => point.join(",")).join(" ")}" fill="none" stroke="${mepSystemColors[route.system] ?? "#94a3b8"}" stroke-width="${0.55 + index * 0.01}" />`
+    )
+    .join("\n");
+
+  const shafts = (mep?.shafts ?? [])
+    .map(
+      (shaft) =>
+        `<circle cx="${shaft.position[0]}" cy="${shaft.position[1]}" r="1.2" fill="#f97316" stroke="#fff7ed" stroke-width="0.2" />`
+    )
+    .join("\n");
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-padding} ${-padding} ${width} ${height}" role="img">
+    <rect width="100%" height="100%" fill="#081018" />
+    <polygon points="${polygonPoints(version.outline)}" fill="rgba(255,255,255,0.02)" stroke="#64748b" stroke-width="0.35" />
+    ${rooms}
+    ${routes}
+    ${shafts}
+    <text x="2" y="-4" fill="#94a3b8" font-size="1.3">MEP routes and shafts on plan</text>
   </svg>`;
 }

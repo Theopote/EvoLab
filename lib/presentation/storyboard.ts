@@ -1,14 +1,19 @@
 import { formatCost, calculateCostEstimate } from "@/lib/cost-engine";
 import { createPlanSvg } from "@/lib/export-utils";
 import { calculateQuantities } from "@/lib/quantity-engine";
+import { buildCompareSlide } from "@/lib/presentation/compare-slide";
 import {
   renderEnvironmentDiagram,
   renderEvolutionDiagram,
   renderExplodedDiagram,
+  renderFacadeDiagram,
   renderFlowDiagram,
   renderIsometricDiagram,
+  renderSystemsDiagram,
+  renderTopologyDiagram,
   renderZoneDiagram
 } from "@/lib/presentation/diagrams";
+import { getFlowSlideCopy } from "@/lib/presentation/flow-copy";
 import { createModelSlidePlaceholder } from "@/lib/presentation/model-slide";
 import type { PresentationDeck, PresentationSlide, StoryboardRequest } from "@/lib/presentation/types";
 import { summarizeVersionEvolution } from "@/lib/presentation/version-evolution";
@@ -32,10 +37,17 @@ export function buildPresentationDeck(input: {
   envelope?: BuildableEnvelope;
   environmentSurrogate?: EnvironmentSurrogate;
   outline?: Point[];
+  compareVersionIds?: string[];
 }): PresentationDeck {
   const quantities = calculateQuantities(input.version);
   const cost = calculateCostEstimate(input.version, input.project.projectType);
   const evolution = summarizeVersionEvolution(input.project, input.version);
+  const flowCopy = getFlowSlideCopy(input.project.projectType);
+  const topologyGraph = input.version.metadata?.topologyGraph;
+  const facadeEnvelope = input.project.domain.facadeEnvelope;
+  const mep = input.version.mep;
+  const compareSlide = buildCompareSlide(input.project, input.version, input.compareVersionIds);
+
   const slides: PresentationSlide[] = [
     {
       id: "slide-cover",
@@ -82,6 +94,22 @@ export function buildPresentationDeck(input: {
             }
           : undefined
     },
+    ...(topologyGraph
+      ? [
+          {
+            id: "slide-topology",
+            kind: "topology" as const,
+            title: "Room Topology",
+            subtitle: topologyGraph.strategy,
+            bullets: [
+              topologyGraph.topology.circulation,
+              topologyGraph.topology.core,
+              `${topologyGraph.rooms.length} rooms · ${topologyGraph.edges.length} adjacency edges`
+            ],
+            svg: renderTopologyDiagram(topologyGraph)
+          }
+        ]
+      : []),
     {
       id: "slide-massing",
       kind: "massing",
@@ -125,14 +153,46 @@ export function buildPresentationDeck(input: {
     {
       id: "slide-flow",
       kind: "flow",
-      title: "Circulation & Sightline",
-      subtitle: "Patient / staff flow with egress and sight cones",
-      bullets: [
-        "Blue: patient route · Purple: staff route · Green: egress paths · Pink: sightline cone",
-        "Derived from graph pathfinding and raycasting analysis."
-      ],
-      svg: renderFlowDiagram(input.version)
+      title: flowCopy.title,
+      subtitle: flowCopy.subtitle,
+      bullets: flowCopy.bullets,
+      svg: renderFlowDiagram(input.version, input.project.projectType, flowCopy.legendLabel)
     },
+    {
+      id: "slide-facade",
+      kind: "facade",
+      title: "Facade & Envelope",
+      subtitle: facadeEnvelope?.orientationStrategy ?? "Perimeter facade strategy",
+      bullets: facadeEnvelope?.zones.length
+        ? [
+            `${facadeEnvelope.zones.length} facade zones · default WWR ${Math.round((facadeEnvelope.defaultWindowRatio ?? 0.35) * 100)}%`,
+            facadeEnvelope.orientationStrategy ?? "Orientation strategy from facade workspace.",
+            "Edge colors: curtain wall · punched window · solid · mixed."
+          ]
+        : [
+            "Configure facade zones in the Facade workspace to enrich this slide.",
+            "Default window-to-wall ratios and perimeter strategies export with the deck."
+          ],
+      svg: renderFacadeDiagram(input.version, facadeEnvelope)
+    },
+    {
+      id: "slide-systems",
+      kind: "systems",
+      title: "Building Systems",
+      subtitle: mep?.strategy?.systemConcept ?? "MEP routing overview",
+      bullets: mep
+        ? [
+            `${mep.routes.length} routes · ${mep.shafts.length} shafts`,
+            mep.strategy?.shaftLogic ?? "Shaft logic recorded when MEP is generated.",
+            mep.strategy?.routingLogic ?? "Routes connect service rooms and vertical risers."
+          ]
+        : [
+            "Generate MEP in the Systems workspace to populate routes and shafts.",
+            "Service rooms, shafts, and risers will appear on this systems slide."
+          ],
+      svg: renderSystemsDiagram(input.version, mep)
+    },
+    ...(compareSlide ? [compareSlide] : []),
     {
       id: "slide-environment",
       kind: "analysis",
@@ -234,6 +294,7 @@ export function toStoryboardRequest(input: {
   envelope?: BuildableEnvelope;
   environmentSurrogate?: EnvironmentSurrogate;
   outline?: Point[];
+  compareVersionIds?: string[];
 }): StoryboardRequest {
   const quantities = calculateQuantities(input.version);
   const cost = calculateCostEstimate(input.version, input.project.projectType);

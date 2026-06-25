@@ -13,7 +13,7 @@ Input includes:
 Return three fields:
 1. storyArc: 4-8 short chapter labels for the overall presentation arc
 2. slideCopy: rewritten title/subtitle/bullets for the most important slides
-   - include slide-cover, slide-site, slide-evolution, slide-massing, slide-zones, slide-flow, slide-cost when present
+   - include slide-cover, slide-site, slide-evolution, slide-topology, slide-massing, slide-zones, slide-flow, slide-facade, slide-systems, slide-compare, slide-cost when present
    - each slideCopy entry must reference an existing slideId from slideCatalog
    - bullets should be specific to the project data, not generic filler
 3. narrative: 4-8 closing design narrative bullets for the final narrative slide

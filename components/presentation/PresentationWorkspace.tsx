@@ -15,10 +15,11 @@ import { usePresentationUiStore } from "@/lib/presentation-ui-store";
 import { useProjectState, useSiteState } from "@/lib/project-store";
 
 export function PresentationWorkspace() {
-  const { project, activeVersion, brief } = useProjectState((state) => ({
+  const { project, activeVersion, brief, compareVersionIds } = useProjectState((state) => ({
     project: state.project,
     activeVersion: state.activeVersion,
-    brief: state.brief
+    brief: state.brief,
+    compareVersionIds: state.compareVersionIds
   }));
   const { outline, siteContext, zoning, buildableEnvelope, environmentSurrogate } = useSiteState((state) => ({
     outline: state.outline,
@@ -56,9 +57,10 @@ export function PresentationWorkspace() {
       siteContext,
       envelope: buildableEnvelope,
       environmentSurrogate,
-      outline
+      outline,
+      compareVersionIds
     });
-  }, [activeVersion, brief, buildableEnvelope, environmentSurrogate, outline, project, siteContext]);
+  }, [activeVersion, brief, buildableEnvelope, compareVersionIds, environmentSurrogate, outline, project, siteContext]);
 
   const currentDeck = deck ?? localDeck;
   const exportDeck = currentDeck ? { ...currentDeck, templateId } : undefined;
