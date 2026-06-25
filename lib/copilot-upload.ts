@@ -1,4 +1,4 @@
-import type { AnthropicImageMediaType } from "@/lib/anthropic-tool";
+import type { AnthropicImageMediaType } from "@/lib/anthropic-types";
 import type { PlanImportSource } from "@/lib/plan-import/types";
 import { detectImportSource } from "@/lib/plan-import/detect-source";
 

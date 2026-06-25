@@ -43,8 +43,7 @@ export function ImportImageCorrectionPanel({ file, onBack, onContinue }: ImportI
         ...draftFile,
         base64: rotated.base64,
         previewUrl: rotated.dataUrl,
-        mediaType: rotated.mediaType,
-        byteLength: rotated.byteLength
+        mediaType: rotated.mediaType
       });
       setPerspectiveQuad(createDefaultPerspectiveQuad());
     } catch (caught) {
@@ -97,8 +96,7 @@ export function ImportImageCorrectionPanel({ file, onBack, onContinue }: ImportI
         ...draftFile,
         base64: corrected.base64,
         previewUrl: corrected.dataUrl,
-        mediaType: corrected.mediaType,
-        byteLength: corrected.byteLength
+        mediaType: corrected.mediaType
       });
       setPerspectiveQuad(createDefaultPerspectiveQuad());
       setDetectNotice(undefined);

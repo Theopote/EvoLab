@@ -96,6 +96,8 @@ export function ImportPerspectiveEditor({ imageUrl, quad, onQuadChange }: Import
       return;
     }
 
+    const cornerIndex = activeCorner;
+
     function onPointerMove(event: PointerEvent) {
       const container = containerRef.current;
       const currentLayout = layoutRef.current;
@@ -108,7 +110,7 @@ export function ImportPerspectiveEditor({ imageUrl, quad, onQuadChange }: Import
       const x = (event.clientX - containerRect.left - currentLayout.offsetX) / currentLayout.displayWidth;
       const y = (event.clientY - containerRect.top - currentLayout.offsetY) / currentLayout.displayHeight;
       const nextPoint: ImagePoint = [clamp(x, 0, 1), clamp(y, 0, 1)];
-      onQuadChangeRef.current(updateQuadCorner(quadRef.current, activeCorner, nextPoint));
+      onQuadChangeRef.current(updateQuadCorner(quadRef.current, cornerIndex, nextPoint));
     }
 
     function onPointerUp() {
