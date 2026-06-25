@@ -8,7 +8,7 @@ import { SiteContextBuildings, SiteEnvelopeMesh } from "@/components/viewer-3d/S
 import { buildCaptureViews } from "@/lib/presentation/capture-views";
 import type { PresentationCaptureImage } from "@/lib/presentation-capture-store";
 import { usePresentationCaptureStore } from "@/lib/presentation-capture-store";
-import { useEvoProject } from "@/lib/project-store";
+import { useProjectState } from "@/lib/project-store";
 
 function CaptureRig({ spanMeters }: { spanMeters: number }) {
   const { gl, camera, scene } = useThree();
@@ -79,7 +79,7 @@ function CaptureRig({ spanMeters }: { spanMeters: number }) {
 
 export function PresentationCaptureCanvas() {
   const status = usePresentationCaptureStore((state) => state.status);
-  const activeVersion = useEvoProject((state) => state.activeVersion);
+  const activeVersion = useProjectState((state) => state.activeVersion);
 
   if (status !== "capturing" || !activeVersion) {
     return null;

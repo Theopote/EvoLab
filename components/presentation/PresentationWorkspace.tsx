@@ -2,7 +2,6 @@
 
 import { Camera, Download, FileText, Layers, Loader2, Presentation, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { useShallow } from "zustand/react/shallow";
 import { PresentationCaptureCanvas } from "@/components/presentation/PresentationCaptureCanvas";
 import { attachModelCaptures } from "@/lib/presentation/merge-captures";
 import { MODEL_SLIDE_ID, extractModelCaptures } from "@/lib/presentation/model-slide";
@@ -13,22 +12,21 @@ import { presentationTemplates } from "@/lib/presentation/templates";
 import type { PresentationDeck, PresentationTemplateId } from "@/lib/presentation/types";
 import { usePresentationCaptureStore } from "@/lib/presentation-capture-store";
 import { usePresentationUiStore } from "@/lib/presentation-ui-store";
-import { useEvoProject } from "@/lib/project-store";
+import { useProjectState, useSiteState } from "@/lib/project-store";
 
 export function PresentationWorkspace() {
-  const { project, activeVersion, brief, outline, siteContext, zoning, buildableEnvelope, environmentSurrogate } =
-    useEvoProject(
-    useShallow((state) => ({
-      project: state.project,
-      activeVersion: state.activeVersion,
-      brief: state.brief,
-      outline: state.outline,
-      siteContext: state.siteContext,
-      zoning: state.zoning,
-      buildableEnvelope: state.buildableEnvelope,
-      environmentSurrogate: state.environmentSurrogate
-    }))
-  );
+  const { project, activeVersion, brief } = useProjectState((state) => ({
+    project: state.project,
+    activeVersion: state.activeVersion,
+    brief: state.brief
+  }));
+  const { outline, siteContext, zoning, buildableEnvelope, environmentSurrogate } = useSiteState((state) => ({
+    outline: state.outline,
+    siteContext: state.siteContext,
+    zoning: state.zoning,
+    buildableEnvelope: state.buildableEnvelope,
+    environmentSurrogate: state.environmentSurrogate
+  }));
   const captureStatus = usePresentationCaptureStore((state) => state.status);
   const captureImages = usePresentationCaptureStore((state) => state.images);
   const captureError = usePresentationCaptureStore((state) => state.error);

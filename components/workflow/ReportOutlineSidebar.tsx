@@ -1,10 +1,9 @@
 "use client";
 
 import { useMemo } from "react";
-import { useShallow } from "zustand/react/shallow";
 import { buildPresentationDeck } from "@/lib/presentation/storyboard";
 import { usePresentationUiStore } from "@/lib/presentation-ui-store";
-import { useEvoProject } from "@/lib/project-store";
+import { useProjectState, useSiteState } from "@/lib/project-store";
 
 interface ReportOutlineSidebarProps {
   onOpenSheets: () => void;
@@ -12,17 +11,17 @@ interface ReportOutlineSidebarProps {
 }
 
 export function ReportOutlineSidebar({ onOpenSheets, onOpenReportEditor }: ReportOutlineSidebarProps) {
-  const { project, activeVersion, brief, siteContext, buildableEnvelope, environmentSurrogate, outline } = useEvoProject(
-    useShallow((state) => ({
-      project: state.project,
-      activeVersion: state.activeVersion,
-      brief: state.brief,
-      siteContext: state.siteContext,
-      buildableEnvelope: state.buildableEnvelope,
-      environmentSurrogate: state.environmentSurrogate,
-      outline: state.outline
-    }))
-  );
+  const { project, activeVersion, brief } = useProjectState((state) => ({
+    project: state.project,
+    activeVersion: state.activeVersion,
+    brief: state.brief
+  }));
+  const { siteContext, buildableEnvelope, environmentSurrogate, outline } = useSiteState((state) => ({
+    siteContext: state.siteContext,
+    buildableEnvelope: state.buildableEnvelope,
+    environmentSurrogate: state.environmentSurrogate,
+    outline: state.outline
+  }));
   const requestFocusSlide = usePresentationUiStore((state) => state.requestFocusSlide);
 
   const slides = useMemo(() => {

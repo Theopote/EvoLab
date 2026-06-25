@@ -1,10 +1,9 @@
 "use client";
 
 import { ArrowUpRight, Boxes, Layers3 } from "lucide-react";
-import { useShallow } from "zustand/react/shallow";
 import { EnvironmentOverlay } from "@/components/site/EnvironmentOverlay";
 import type { PlanVersion, Room } from "@/lib/project-types";
-import { useEvoProject } from "@/lib/project-store";
+import { useSiteState } from "@/lib/project-store";
 import { calculateQuantities } from "@/lib/quantity-engine";
 
 interface MassingPanelProps {
@@ -54,15 +53,13 @@ export function MassingPanel({ activeVersion, onOpenModel }: MassingPanelProps) 
     environmentSurrogate,
     showSiteContextLayer,
     showEnvironmentOverlay
-  } = useEvoProject(
-    useShallow((state) => ({
-      siteContext: state.siteContext,
-      buildableEnvelope: state.buildableEnvelope,
-      environmentSurrogate: state.environmentSurrogate,
-      showSiteContextLayer: state.showSiteContextLayer,
-      showEnvironmentOverlay: state.showEnvironmentOverlay
-    }))
-  );
+  } = useSiteState((state) => ({
+    siteContext: state.siteContext,
+    buildableEnvelope: state.buildableEnvelope,
+    environmentSurrogate: state.environmentSurrogate,
+    showSiteContextLayer: state.showSiteContextLayer,
+    showEnvironmentOverlay: state.showEnvironmentOverlay
+  }));
 
   if (!activeVersion) {
     return (
