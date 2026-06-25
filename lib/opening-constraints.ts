@@ -4,7 +4,8 @@ import {
   openingPositionLimits,
   validateOpeningDraft
 } from "@/lib/opening-wall-utils";
-import type { Opening, PlanVersion, PlanVersionDraft, Room, Wall } from "@/lib/project-types";
+import type { PlanVersionDraft } from "@/lib/architecture-model";
+import type { Opening, PlanVersion, Room, Wall } from "@/lib/project-types";
 import { edgeKey, polygonEdges } from "@/lib/wall-extractor";
 import type { PlanOperation } from "@/lib/schemas/plan-change-proposal-schema";
 

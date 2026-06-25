@@ -39,7 +39,7 @@ export function createWallDragSession(
   wall: Wall,
   originalRooms: Room[]
 ): WallDragSession | null {
-  const svgElement = event.currentTarget.ownerSVGElement;
+  const svgElement = (event.currentTarget as SVGSVGElement).ownerSVGElement ?? (event.currentTarget as SVGSVGElement);
 
   if (!svgElement) {
     return null;

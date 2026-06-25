@@ -4,6 +4,7 @@ import { FileUp, Loader2, Upload } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { readCopilotUpload, type CopilotPinnedFile } from "@/lib/copilot-upload";
 import { useCopilotUploadStore } from "@/lib/copilot-upload-store";
+import { analyzePlanFromUpload } from "@/lib/plan-import-client";
 import type { PlanVersion } from "@/lib/project-types";
 
 export interface ImportWorkspaceResult {
@@ -68,43 +69,23 @@ export function ImportWorkspace({ onImported }: ImportWorkspaceProps) {
     setNotice(null);
 
     try {
-      const response = await fetch("/api/analyze-plan", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fileBase64: pinnedFile.base64,
-          fileName: pinnedFile.fileName,
-          sourceType: pinnedFile.sourceType
-        })
+      const result = await analyzePlanFromUpload({
+        fileBase64: pinnedFile.base64,
+        fileName: pinnedFile.fileName,
+        sourceType: pinnedFile.sourceType
       });
 
-      if (!response.ok) {
-        throw new Error(`Import failed with status ${response.status}.`);
-      }
-
-      const data = (await response.json()) as {
-        version?: PlanVersion;
-        warnings?: string[];
-        confidence?: number;
-        importPath?: "vision" | "structured";
-        sourceType?: string;
-      };
-
-      if (!data.version?.rooms) {
-        throw new Error("Import did not return a recognizable plan version.");
-      }
-
       onImported({
-        version: data.version,
-        fileName: pinnedFile.fileName,
-        warnings: data.warnings,
-        confidence: data.confidence,
-        importPath: data.importPath,
-        sourceType: data.sourceType
+        version: result.version,
+        fileName: result.fileName,
+        warnings: result.warnings,
+        confidence: result.confidence,
+        importPath: result.importPath,
+        sourceType: result.sourceType
       });
 
       setPinnedFile(null);
-      setNotice(`Imported ${data.version.label} from ${pinnedFile.fileName}.`);
+      setNotice(`Imported ${result.version.label} from ${pinnedFile.fileName}.`);
     } catch (importError) {
       setError(importError instanceof Error ? importError.message : "Import failed.");
     } finally {
@@ -154,11 +135,7 @@ export function ImportWorkspace({ onImported }: ImportWorkspaceProps) {
         {pinnedFile ? (
           <div className="mt-4 rounded border border-line bg-[#0b1118] p-3">
             <div className="flex items-start gap-3">
-              <img
-                alt=""
-                className="h-14 w-14 rounded border border-line object-cover"
-                src={pinnedFile.previewUrl}
-              />
+              <img alt="" className="h-14 w-14 rounded border border-line object-cover" src={pinnedFile.previewUrl} />
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-medium text-slate-100">{pinnedFile.fileName}</div>
                 <div className="mt-1 text-xs uppercase tracking-wide text-muted">{pinnedFile.sourceType}</div>
@@ -170,7 +147,7 @@ export function ImportWorkspace({ onImported }: ImportWorkspaceProps) {
               type="button"
               onClick={() => void runImport()}
             >
-              {isImporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <SparklesIcon />}
+              {isImporting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               {isImporting ? "Recognizing plan…" : "Run import"}
             </button>
           </div>
@@ -184,13 +161,5 @@ export function ImportWorkspace({ onImported }: ImportWorkspaceProps) {
         {error ? <p className="mt-3 text-xs text-warning">{error}</p> : null}
       </aside>
     </section>
-  );
-}
-
-function SparklesIcon() {
-  return (
-    <svg aria-hidden className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-      <path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
   );
 }

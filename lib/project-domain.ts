@@ -440,8 +440,16 @@ export function syncProjectDomain(domain: ProjectDomain | undefined, input: Proj
     },
     program: programFromBrief(input.brief, activeVersion?.metadata?.topologyGraph ?? undefined),
     storeyStack: activeVersion ? buildStoreyStack(activeVersion) : base.storeyStack,
-    structuralSystem: activeVersion ? buildStructuralSystem(activeVersion) : base.structuralSystem,
-    facadeEnvelope: activeVersion ? buildFacadeEnvelope(activeVersion) : base.facadeEnvelope,
+    structuralSystem: base.structuralSystem?.userEdited
+      ? base.structuralSystem
+      : activeVersion
+        ? buildStructuralSystem(activeVersion)
+        : base.structuralSystem,
+    facadeEnvelope: base.facadeEnvelope?.userEdited
+      ? base.facadeEnvelope
+      : activeVersion
+        ? buildFacadeEnvelope(activeVersion)
+        : base.facadeEnvelope,
     verticalCirculation: activeVersion ? buildVerticalCirculation(activeVersion) : base.verticalCirculation,
     schedules: activeVersion
       ? [buildScheduleBundle(activeVersion), ...base.schedules.filter((item) => item.versionId !== activeVersion.id)]

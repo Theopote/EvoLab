@@ -1,5 +1,5 @@
-import type { ProgramAdjacencyRule } from "@/lib/building-domain";
 import type { PlanTopologyVersion, TopologyEdge, TopologyRoom } from "@/lib/schemas/plan-version-schema";
+import type { PackAdjacencyRule } from "@/lib/typology/types";
 import type { RoomType } from "@/lib/project-types";
 import type { TopologyRoomTemplate, TopologyStrategyTemplate, TypologyPack } from "@/lib/typology/types";
 
@@ -89,7 +89,7 @@ export function buildTopologyEdgesFromPack(pack: TypologyPack, rooms: TopologyRo
 
 function applyAdjacencyRule(
   rooms: TopologyRoom[],
-  rule: ProgramAdjacencyRule,
+  rule: PackAdjacencyRule,
   addEdge: (from: string, to: string, relationship?: TopologyEdge["relationship"]) => void
 ) {
   const relationship = rule.relationship === "must" ? "direct" : rule.relationship === "prefer" ? "near" : "separated";

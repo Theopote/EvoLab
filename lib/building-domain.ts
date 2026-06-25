@@ -171,6 +171,8 @@ export interface StructuralSystem {
   columns: StructuralColumn[];
   beams: StructuralBeam[];
   shearWalls: StructuralShearWall[];
+  /** When true, syncProjectDomain preserves manual edits instead of rebuilding from plan. */
+  userEdited?: boolean;
 }
 
 export interface FacadeZone {
@@ -186,6 +188,8 @@ export interface FacadeEnvelope {
   zones: FacadeZone[];
   defaultWindowRatio: number;
   orientationStrategy?: string;
+  /** When true, syncProjectDomain preserves manual edits instead of rebuilding from plan. */
+  userEdited?: boolean;
 }
 
 export interface StairRun {

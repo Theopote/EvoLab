@@ -25,7 +25,7 @@ const COLUMN_CONTAINER_TYPES = new Set<Room["type"]>([
 ]);
 
 function isPointElement(position: Point | Point[]): position is Point {
-  return !Array.isArray(position[0]);
+  return typeof position[0] === "number";
 }
 
 function levelSortKey(level: Level) {

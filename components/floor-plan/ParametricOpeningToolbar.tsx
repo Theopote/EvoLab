@@ -49,7 +49,7 @@ export function ParametricOpeningToolbar({
   const [roomId, setRoomId] = useState(attachedRooms[0]?.id ?? "");
   const selectedRoom = attachedRooms.find((room) => room.id === roomId) ?? attachedRooms[0];
   const orientation = selectedRoom ? orientationForWall(wall, selectedRoom) : undefined;
-  const resolvedWall = selectedRoom && orientation ? findWallForRoomOrientation(selectedRoom, orientation, walls) : wall;
+  const resolvedWall = selectedRoom && orientation ? findWallForRoomOrientation(selectedRoom, orientation, walls) ?? wall : wall;
   const maxWidth = Math.max(0.4, wallLength(resolvedWall) - 0.2);
 
   function place(kind: "door" | "window") {

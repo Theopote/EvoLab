@@ -18,7 +18,7 @@ function versionWithArea(areaSqm: number): PlanVersion {
       [10, 10],
       [0, 10]
     ],
-    overallBounds: { minX: 0, minY: 0, maxX: 10, maxY: 10 },
+    overallBounds: { width: 10, height: 10 },
     rooms: [
       {
         id: "room-a",
@@ -56,7 +56,13 @@ function versionWithArea(areaSqm: number): PlanVersion {
       cores: [],
       grids: []
     },
-    scores: {}
+    scores: {
+      areaEfficiency: 0,
+      circulationScore: 0,
+      daylightScore: 0,
+      mepAlignmentScore: 0,
+      riskCount: 0
+    }
   };
 }
 

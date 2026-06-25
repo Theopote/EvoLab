@@ -15,6 +15,7 @@ import { MassingPanel } from "@/components/massing-panel";
 import { MepCanvas } from "@/components/mep/MepCanvas";
 import { MepLayerList } from "@/components/mep/MepLayerList";
 import { PlanResultGrid } from "@/components/plan-editor/PlanResultGrid";
+import { OutlineCanvas } from "@/components/plan-editor/OutlineCanvas";
 import { ChangeSetApprovalPanel } from "@/components/quantity/ChangeSetApprovalPanel";
 import { ComplianceChecklist } from "@/components/quantity/ComplianceChecklist";
 import { ProgramCompliancePanel } from "@/components/quantity/ProgramCompliancePanel";
@@ -25,11 +26,11 @@ import { PresentationWorkspace } from "@/components/presentation/PresentationWor
 import { VersionCompareGrid } from "@/components/version-compare/VersionCompareGrid";
 import { ReportEditor } from "@/components/report-editor/ReportEditor";
 import { BubbleDiagramCanvas } from "@/components/workflow/BubbleDiagramCanvas";
+import { FacadeEditorPanel } from "@/components/workflow/FacadeEditorPanel";
+import { StructureEditorPanel } from "@/components/workflow/StructureEditorPanel";
 import {
-  FacadePreviewPanel,
   ProgramWorkspace,
-  SiteWorkspace,
-  StructurePreviewPanel
+  SiteWorkspace
 } from "@/components/workflow/DomainWorkspaces";
 import { ImportWorkspace } from "@/components/workflow/ImportWorkspace";
 import { PhaseSubNav } from "@/components/workflow/PhaseSubNav";
@@ -97,7 +98,11 @@ export function EvoLabWorkspace() {
     returnToPlanGeneration,
     updateScoringConfig,
     resetScoringConfig,
-    setLevelTransferFloor
+    setLevelTransferFloor,
+    updateFacadeEnvelope,
+    updateStructuralSystem,
+    resetDerivedEnvelopeSystems,
+    updateTopologyGraph
   } = useEvoProject(
     useShallow((state) => ({
       project: state.project,
@@ -149,7 +154,11 @@ export function EvoLabWorkspace() {
       returnToPlanGeneration: state.returnToPlanGeneration,
       updateScoringConfig: state.updateScoringConfig,
       resetScoringConfig: state.resetScoringConfig,
-      setLevelTransferFloor: state.setLevelTransferFloor
+      setLevelTransferFloor: state.setLevelTransferFloor,
+      updateFacadeEnvelope: state.updateFacadeEnvelope,
+      updateStructuralSystem: state.updateStructuralSystem,
+      resetDerivedEnvelopeSystems: state.resetDerivedEnvelopeSystems,
+      updateTopologyGraph: state.updateTopologyGraph
     }))
   );
   const [reportEditorOpen, setReportEditorOpen] = useState(false);
@@ -328,18 +337,30 @@ export function EvoLabWorkspace() {
         <BubbleDiagramCanvas
           programLabel={project.domain.program.label}
           topology={activeVersion?.metadata?.topologyGraph}
+          onTopologyChange={updateTopologyGraph}
         />
       );
     }
 
     if (activeTab === "Facade") {
-      return <FacadePreviewPanel facade={project.domain.facadeEnvelope} />;
+      return (
+        <FacadeEditorPanel
+          facade={project.domain.facadeEnvelope}
+          onChange={updateFacadeEnvelope}
+          onResetFromPlan={resetDerivedEnvelopeSystems}
+        />
+      );
     }
 
     if (activeTab === "Structure") {
       return (
         <section className="grid min-h-full grid-cols-[minmax(0,1fr)_minmax(360px,0.9fr)] gap-4">
-          <StructurePreviewPanel levelCount={activeVersion?.levels.length} structure={project.domain.structuralSystem} />
+          <StructureEditorPanel
+            levelCount={activeVersion?.levels.length}
+            structure={project.domain.structuralSystem}
+            onChange={updateStructuralSystem}
+            onResetFromPlan={resetDerivedEnvelopeSystems}
+          />
           {activeVersion ? (
             <VerticalAlignmentPanel
               activeLevelId={activeLevelId}

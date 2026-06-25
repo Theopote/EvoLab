@@ -20,6 +20,7 @@ import { useCopilotUploadStore } from "@/lib/copilot-upload-store";
 import { diffRoomIds } from "@/lib/design-decision-log";
 import { pendingInsightCount } from "@/lib/copilot-insight-queue";
 import { detectCopilotPlan, type CopilotPlan } from "@/lib/copilot-plan";
+import { analyzePlanFromUpload } from "@/lib/plan-import-client";
 import { normalizeWorkspaceTab } from "@/lib/workflow-navigation";
 import { isImagePinnedFile, readCopilotUpload, type CopilotPinnedFile } from "@/lib/copilot-upload";
 import { useShallow } from "zustand/react/shallow";
@@ -193,42 +194,21 @@ export function CopilotConsole({
     ]);
 
     try {
-      const response = await fetch("/api/analyze-plan", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fileBase64: file.base64,
-          fileName: file.fileName,
-          sourceType: file.sourceType
-        })
+      const result = await analyzePlanFromUpload({
+        fileBase64: file.base64,
+        fileName: file.fileName,
+        sourceType: file.sourceType
       });
 
-      if (!response.ok) {
-        throw new Error(`analyze-plan failed with ${response.status}`);
-      }
-
-      const data = (await response.json()) as {
-        version?: PlanVersion;
-        warnings?: string[];
-        confidence?: number;
-        importPath?: "vision" | "structured";
-        sourceType?: string;
-      };
-
-      if (!data.version?.rooms) {
-        throw new Error("analyze-plan did not return a complete PlanVersion.");
-      }
-
-      const analyzedVersion = data.version;
-      onAnalyzedVersion(analyzedVersion, { fileName: file.fileName });
+      onAnalyzedVersion(result.version, { fileName: file.fileName });
       setPinnedFiles([]);
       setMessages((current) => [
         ...current,
         {
           id: `assistant-analyze-${Date.now()}`,
           role: "assistant",
-          content: `Imported ${analyzedVersion.label} from ${file.fileName} via ${data.importPath ?? "import"}${
-            data.warnings?.length ? ` (${data.warnings.join(" ")})` : ""
+          content: `Imported ${result.version.label} from ${file.fileName} via ${result.importPath ?? "import"}${
+            result.warnings?.length ? ` (${result.warnings.join(" ")})` : ""
           }.`
         }
       ]);

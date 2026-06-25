@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { normalizePlanVersion } from "@/lib/architecture-model";
 import { requestAnthropicTool } from "@/lib/anthropic-tool";
 import { normalizeImageInputs } from "@/lib/image-input";
 import { commitLevelRoomsToVersion, resolveLevelRooms } from "@/lib/level-rooms";
@@ -119,7 +120,8 @@ export async function POST(request: Request) {
     }
 
     const allowedIds = new Set(body.allowedRoomIds ?? []);
-    const mergedVersion = mergeInpaintResult(body.currentVersion, data.version, {
+    const aiVersion = normalizePlanVersion(data.version);
+    const mergedVersion = mergeInpaintResult(body.currentVersion, aiVersion, {
       allowedRoomIds: allowedIds,
       levelId: body.levelId
     });

@@ -84,12 +84,14 @@ describe("vertical alignment fix package", () => {
       return;
     }
 
+    const columnPosition: [number, number] = column.position;
+
     const violations = validateStructuralConstraints(expanded, expanded.levels[0]!.id, {
       lockedPositions: [
         {
           id: column.id,
           kind: "column",
-          position: column.position,
+          position: columnPosition,
           label: column.label
         }
       ]

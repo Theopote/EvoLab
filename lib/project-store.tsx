@@ -9,7 +9,7 @@ import {
   applyRoomPatchToVersion,
   getResolvedLevel
 } from "@/lib/level-rooms";
-import type { ScheduleBundle, StoredCopilotProposal, ScoringConfig } from "@/lib/building-domain";
+import type { ScheduleBundle, StoredCopilotProposal, ScoringConfig, FacadeEnvelope, StructuralSystem } from "@/lib/building-domain";
 import {
   addCopilotProposalComment as addCopilotProposalCommentInDomain,
   appendCopilotProposal,
@@ -63,6 +63,7 @@ import type {
   Point,
   ProjectData,
   Room,
+  TopologyGraph,
   Wall,
   WorkspaceTab
 } from "@/lib/project-types";
@@ -148,6 +149,10 @@ interface EvoProjectStore {
   updateBrief: (brief: DesignBrief) => void;
   updateScoringConfig: (patch: Partial<ScoringConfig>) => void;
   resetScoringConfig: () => void;
+  updateFacadeEnvelope: (patch: Partial<FacadeEnvelope>) => void;
+  updateStructuralSystem: (patch: Partial<StructuralSystem>) => void;
+  resetDerivedEnvelopeSystems: () => void;
+  updateTopologyGraph: (graph: TopologyGraph) => void;
   setWorkflowPhase: (phase: WorkflowPhaseId) => void;
   toggleCompareVersion: (versionId: string) => void;
   setActiveAnalysisLayers: (layers: AnalysisLayerId[]) => void;
@@ -534,6 +539,10 @@ function createInitialState(): Omit<
   | "updateBrief"
   | "updateScoringConfig"
   | "resetScoringConfig"
+  | "updateFacadeEnvelope"
+  | "updateStructuralSystem"
+  | "resetDerivedEnvelopeSystems"
+  | "updateTopologyGraph"
   | "setWorkflowPhase"
   | "toggleCompareVersion"
   | "setActiveAnalysisLayers"
@@ -803,6 +812,77 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
         state.project.domain.scoringConfig = createDefaultScoringConfig(state.project.projectType);
         rescoreProjectVersions(state);
         refreshDerivedDraft(state);
+      })
+    ),
+  updateFacadeEnvelope: (patch) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        const current = state.project.domain.facadeEnvelope;
+
+        if (!current) {
+          return;
+        }
+
+        state.project.domain.facadeEnvelope = {
+          ...current,
+          ...patch,
+          userEdited: true
+        };
+      })
+    ),
+  updateStructuralSystem: (patch) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        const current = state.project.domain.structuralSystem;
+
+        if (!current) {
+          return;
+        }
+
+        state.project.domain.structuralSystem = {
+          ...current,
+          ...patch,
+          userEdited: true
+        };
+      })
+    ),
+  resetDerivedEnvelopeSystems: () =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        if (state.project.domain.facadeEnvelope) {
+          state.project.domain.facadeEnvelope.userEdited = false;
+        }
+
+        if (state.project.domain.structuralSystem) {
+          state.project.domain.structuralSystem.userEdited = false;
+        }
+
+        refreshDomainDraft(state);
+      })
+    ),
+  updateTopologyGraph: (graph) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        const currentVersion = state.activeVersion;
+
+        if (!currentVersion) {
+          return;
+        }
+
+        commitNormalizedVersionDraft(
+          state,
+          normalizePlanVersion({
+            ...currentVersion,
+            metadata: {
+              ...currentVersion.metadata,
+              topologyGraph: graph
+            }
+          }),
+          false,
+          true,
+          "Updated bubble diagram adjacency",
+          "user"
+        );
       })
     ),
   setWorkflowPhase: (phase) =>

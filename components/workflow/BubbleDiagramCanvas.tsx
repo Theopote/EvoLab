@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo } from "react";
-import type { TopologyGraph, TopologyGraphRoom } from "@/lib/project-types";
+import { useEffect, useMemo, useState, type PointerEvent } from "react";
+import type { TopologyGraph, TopologyGraphEdge, TopologyGraphRoom } from "@/lib/project-types";
 
 interface BubbleDiagramCanvasProps {
   topology?: TopologyGraph;
   programLabel?: string;
+  onTopologyChange?: (topology: TopologyGraph) => void;
 }
 
 interface LayoutNode {
@@ -24,10 +25,6 @@ const zoneColors: Record<TopologyGraphRoom["zone"], string> = {
 };
 
 function layoutNodes(rooms: TopologyGraphRoom[]): LayoutNode[] {
-  if (rooms.length === 0) {
-    return [];
-  }
-
   const centerX = 420;
   const centerY = 280;
   const ringRadius = Math.max(140, rooms.length * 18);
@@ -44,8 +41,43 @@ function layoutNodes(rooms: TopologyGraphRoom[]): LayoutNode[] {
   });
 }
 
-export function BubbleDiagramCanvas({ topology, programLabel }: BubbleDiagramCanvasProps) {
-  const nodes = useMemo(() => layoutNodes(topology?.rooms ?? []), [topology?.rooms]);
+function edgeKey(from: string, to: string) {
+  return [from, to].sort().join("|");
+}
+
+export function BubbleDiagramCanvas({ topology, programLabel, onTopologyChange }: BubbleDiagramCanvasProps) {
+  const [nodePositions, setNodePositions] = useState<Record<string, { x: number; y: number }>>({});
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!topology?.rooms.length) {
+      setNodePositions({});
+      return;
+    }
+
+    const layout = layoutNodes(topology.rooms);
+    setNodePositions(Object.fromEntries(layout.map((node) => [node.room.id, { x: node.x, y: node.y }])));
+    setSelectedIds([]);
+  }, [topology?.id, topology?.rooms.length]);
+
+  const nodes = useMemo(() => {
+    if (!topology?.rooms.length) {
+      return [];
+    }
+
+    return topology.rooms.map((room, index) => {
+      const fallback = layoutNodes(topology.rooms)[index];
+      const position = nodePositions[room.id] ?? { x: fallback.x, y: fallback.y };
+      return {
+        room,
+        x: position.x,
+        y: position.y,
+        radius: fallback.radius
+      };
+    });
+  }, [topology?.rooms, nodePositions]);
+
   const nodeById = useMemo(() => new Map(nodes.map((node) => [node.room.id, node])), [nodes]);
 
   if (!topology?.rooms.length) {
@@ -54,12 +86,72 @@ export function BubbleDiagramCanvas({ topology, programLabel }: BubbleDiagramCan
         <div className="max-w-md">
           <h2 className="text-base font-semibold text-white">Bubble diagram</h2>
           <p className="mt-2 text-sm leading-6 text-muted">
-            Generate a scheme or import a plan to populate topology. The bubble view reads from the active version
-            metadata graph.
+            Generate a scheme or import a plan to populate topology. Drag bubbles to rearrange and click pairs to toggle
+            adjacency.
           </p>
         </div>
       </div>
     );
+  }
+
+  function toggleSelection(roomId: string) {
+    setSelectedIds((current) => {
+      if (current.includes(roomId)) {
+        return current.filter((id) => id !== roomId);
+      }
+
+      if (current.length === 1) {
+        return [current[0], roomId];
+      }
+
+      return [roomId];
+    });
+  }
+
+  function toggleEdge(from: string, to: string) {
+    if (!topology || !onTopologyChange) {
+      return;
+    }
+
+    const key = edgeKey(from, to);
+    const existing = topology.edges.find((edge) => edgeKey(edge.from, edge.to) === key);
+
+    const edges: TopologyGraphEdge[] = existing
+      ? topology.edges.filter((edge) => edgeKey(edge.from, edge.to) !== key)
+      : [...topology.edges, { from, to, relationship: "direct" }];
+
+    onTopologyChange({ ...topology, edges });
+    setSelectedIds([]);
+  }
+
+  function handleNodePointerDown(roomId: string) {
+    setDraggingId(roomId);
+    toggleSelection(roomId);
+  }
+
+  function handlePointerMove(event: PointerEvent<SVGSVGElement>) {
+    if (!draggingId) {
+      return;
+    }
+
+    const svg = event.currentTarget;
+    const point = svg.createSVGPoint();
+    point.x = event.clientX;
+    point.y = event.clientY;
+    const transformed = point.matrixTransform(svg.getScreenCTM()?.inverse());
+
+    setNodePositions((current) => ({
+      ...current,
+      [draggingId]: { x: transformed.x, y: transformed.y }
+    }));
+  }
+
+  function handlePointerUp() {
+    if (selectedIds.length === 2 && onTopologyChange) {
+      toggleEdge(selectedIds[0], selectedIds[1]);
+    }
+
+    setDraggingId(null);
   }
 
   return (
@@ -69,13 +161,19 @@ export function BubbleDiagramCanvas({ topology, programLabel }: BubbleDiagramCan
           <h2 className="text-base font-semibold text-white">{topology.label || "Program bubble"}</h2>
           <p className="mt-1 text-xs text-muted">
             {programLabel ? `${programLabel} · ` : ""}
-            {topology.rooms.length} spaces · {topology.edges.length} adjacencies
+            Drag bubbles · select two to toggle adjacency · {topology.edges.length} edges
           </p>
         </div>
         <span className="rounded border border-line px-2 py-1 text-xs text-muted">{topology.strategy}</span>
       </div>
 
-      <svg className="h-[560px] w-full rounded border border-line bg-[#0b1118]" viewBox="0 0 840 560">
+      <svg
+        className="h-[560px] w-full rounded border border-line bg-[#0b1118] touch-none"
+        viewBox="0 0 840 560"
+        onPointerLeave={() => setDraggingId(null)}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+      >
         {topology.edges.map((edge) => {
           const from = nodeById.get(edge.from);
           const to = nodeById.get(edge.to);
@@ -97,24 +195,35 @@ export function BubbleDiagramCanvas({ topology, programLabel }: BubbleDiagramCan
           );
         })}
 
-        {nodes.map((node) => (
-          <g key={node.room.id}>
-            <circle
-              cx={node.x}
-              cy={node.y}
-              fill={`${zoneColors[node.room.zone]}33`}
-              r={node.radius}
-              stroke={zoneColors[node.room.zone]}
-              strokeWidth={2}
-            />
-            <text fill="#e2e8f0" fontSize="12" textAnchor="middle" x={node.x} y={node.y - 4}>
-              {node.room.name}
-            </text>
-            <text fill="#94a3b8" fontSize="10" textAnchor="middle" x={node.x} y={node.y + 12}>
-              {node.room.targetAreaSqm} sqm
-            </text>
-          </g>
-        ))}
+        {nodes.map((node) => {
+          const isSelected = selectedIds.includes(node.room.id);
+
+          return (
+            <g
+              key={node.room.id}
+              onPointerDown={(event) => {
+                event.currentTarget.setPointerCapture(event.pointerId);
+                handleNodePointerDown(node.room.id);
+              }}
+              style={{ cursor: "grab" }}
+            >
+              <circle
+                cx={node.x}
+                cy={node.y}
+                fill={`${zoneColors[node.room.zone]}${isSelected ? "66" : "33"}`}
+                r={node.radius}
+                stroke={isSelected ? "#f8fafc" : zoneColors[node.room.zone]}
+                strokeWidth={isSelected ? 3 : 2}
+              />
+              <text fill="#e2e8f0" fontSize="12" pointerEvents="none" textAnchor="middle" x={node.x} y={node.y - 4}>
+                {node.room.name}
+              </text>
+              <text fill="#94a3b8" fontSize="10" pointerEvents="none" textAnchor="middle" x={node.x} y={node.y + 12}>
+                {node.room.targetAreaSqm} sqm
+              </text>
+            </g>
+          );
+        })}
       </svg>
     </section>
   );
