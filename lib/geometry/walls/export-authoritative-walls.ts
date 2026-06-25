@@ -24,7 +24,7 @@ function cloneOpening(opening: OpeningElement): OpeningElement {
   return {
     ...opening,
     center: clonePoint(opening.center),
-    roomIds: [...opening.roomIds]
+    roomIds: [...(opening.roomIds ?? [])]
   };
 }
 
