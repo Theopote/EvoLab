@@ -141,9 +141,12 @@ export function useCopilotProposalRevision(options: UseCopilotProposalRevisionOp
 
   return {
     lockedElementIds,
+    copilotProposals,
     pendingProposal,
+    pendingProposalId,
     prepareProposal,
     applyPendingProposal,
-    dismissPendingProposal
+    dismissPendingProposal,
+    selectPendingProposal: setPendingProposalId
   };
 }

@@ -57,8 +57,6 @@ export function EvoLabWorkspace() {
     environmentSurrogate,
     activeTab,
     workflowPhase,
-    briefSiteSubview,
-    quantifySubview,
     compareVersionIds,
     compareModeOpen,
     selectedProposalId,
@@ -116,8 +114,6 @@ export function EvoLabWorkspace() {
       environmentSurrogate: state.environmentSurrogate,
       activeTab: state.activeTab,
       workflowPhase: state.workflowPhase,
-      briefSiteSubview: state.briefSiteSubview,
-      quantifySubview: state.quantifySubview,
       compareVersionIds: state.compareVersionIds,
       compareModeOpen: state.compareModeOpen,
       selectedProposalId: state.selectedProposalId,
@@ -171,21 +167,30 @@ export function EvoLabWorkspace() {
         project={project}
         workflowPhase={workflowPhase}
         onPhaseChange={setWorkflowPhase}
-        onOpenReviews={() => setWorkflowPhase("review")}
+        onOpenReviews={() => {
+          setWorkflowPhase("quantify");
+          setActiveTab("Review");
+        }}
       />
       <PhaseSubNav phase={workflowPhase} activeTab={activeTab} onTabChange={setActiveTab} />
       <section className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_auto_218px] overflow-hidden">
         <div className="grid min-h-0 grid-cols-[260px_minmax(0,1fr)_300px] overflow-hidden">
           <WorkflowLeftSidebar
             phase={workflowPhase}
+            activeTab={activeTab}
             versions={project.versions}
             activeVersionId={project.activeVersionId}
             compareVersionIds={compareVersionIds}
             onSelectVersion={setActiveVersion}
             onToggleCompare={toggleCompareVersion}
+            onTabChange={setActiveTab}
+            onImportTab={() => {
+              setWorkflowPhase("import");
+              setActiveTab("Import");
+            }}
             onOpenSheets={() => {
               setWorkflowPhase("deliver");
-              setActiveTab(tabForDeliverSubview("sheets"));
+              setActiveTab(tabForDeliverSubview("presentation"));
             }}
             onOpenReportEditor={() => setReportEditorOpen(true)}
           />
@@ -215,7 +220,6 @@ export function EvoLabWorkspace() {
           activeTab={activeTab}
           outline={outline}
           projectType={project.projectType}
-          onCopilotRevision={handleCopilotRevision}
           onAnalyzedVersion={handleAnalyzedVersion}
           onSelectVersion={setActiveVersion}
           onTabChange={setActiveTab}
@@ -268,7 +272,7 @@ export function EvoLabWorkspace() {
       );
     }
 
-    if (workflowPhase === "review") {
+    if (activeTab === "Review") {
       return (
         <ReviewWorkspace
           changeSets={project.domain.changeSets}
@@ -287,38 +291,38 @@ export function EvoLabWorkspace() {
       );
     }
 
-    if (workflowPhase === "brief_site") {
-      if (briefSiteSubview === "program") {
-        return (
-          <ProgramWorkspace
-            brief={brief}
-            program={project.domain.program}
-            outline={outline}
-            outlineClosed={outlineClosed}
-            zoning={zoning}
-            versions={project.versions}
-            activeVersionId={project.activeVersionId}
-            activeVersion={activeVersion}
-            onBriefChange={updateBrief}
-            onGenerated={appendGeneratedVersions}
-            onSelectVersion={setActiveVersion}
-          />
-        );
-      }
+    if (workflowPhase === "import" || activeTab === "Import") {
+      return (
+        <IntakeWorkspace
+          onImportComplete={handleImportComplete}
+          onContinueToScheme={() => {
+            setWorkflowPhase("scheme");
+            setActiveTab(tabForSchemeSubview("plan"));
+            useInteractionStore.getState().setActiveTool("trace");
+          }}
+        />
+      );
+    }
 
-      if (briefSiteSubview === "intake") {
-        return (
-          <IntakeWorkspace
-            onImportComplete={handleImportComplete}
-            onContinueToScheme={() => {
-              setWorkflowPhase("scheme");
-              setActiveTab(tabForSchemeSubview("plan"));
-              useInteractionStore.getState().setActiveTool("trace");
-            }}
-          />
-        );
-      }
+    if (workflowPhase === "program" || activeTab === "Program") {
+      return (
+        <ProgramWorkspace
+          brief={brief}
+          program={project.domain.program}
+          outline={outline}
+          outlineClosed={outlineClosed}
+          zoning={zoning}
+          versions={project.versions}
+          activeVersionId={project.activeVersionId}
+          activeVersion={activeVersion}
+          onBriefChange={updateBrief}
+          onGenerated={appendGeneratedVersions}
+          onSelectVersion={setActiveVersion}
+        />
+      );
+    }
 
+    if (workflowPhase === "site" || activeTab === "Site") {
       return (
         <SiteWorkspace
           outline={outline}
@@ -372,11 +376,8 @@ export function EvoLabWorkspace() {
     if (activeTab === "Furniture") {
       return (
         <FurnitureWorkspace
-          version={activeVersion}
-          activeLevelId={activeLevelId}
-          furnitureLayout={project.domain.furnitureLayout}
-          onLevelChange={setActiveLevel}
-          onMoveFurnitureItem={(itemId, position) => updateFurnitureItem(itemId, { position })}
+          layout={project.domain.furnitureLayout}
+          activeVersion={activeVersion}
         />
       );
     }
@@ -421,26 +422,7 @@ export function EvoLabWorkspace() {
       );
     }
 
-    if (activeTab === "Quantity" && workflowPhase === "quantify") {
-      if (quantifySubview === "schedules") {
-        return <ScheduleWorkspace activeSchedule={activeSchedule} />;
-      }
-
-      if (quantifySubview === "compliance") {
-        return (
-          <section className="grid min-h-full grid-cols-[minmax(0,1fr)_minmax(380px,0.85fr)] gap-4">
-            <ProgramCompliancePanel program={project.domain.program} activeVersion={activeVersion} />
-            <ComplianceChecklist
-              items={complianceItems}
-              activeVersion={activeVersion}
-              activeLevelId={activeLevelId}
-              projectType={project.projectType}
-              scoringConfig={project.domain.scoringConfig}
-            />
-          </section>
-        );
-      }
-
+    if (activeTab === "Quantity") {
       return quantities ? (
         <QuantityTable quantities={quantities} activeSchedule={activeSchedule} includeSchedules={false} />
       ) : (
@@ -570,21 +552,6 @@ export function EvoLabWorkspace() {
         resultVersionLabel: version.label
       });
     }
-  }
-
-  function handleCopilotRevision(
-    version: Parameters<typeof updateActiveVersion>[0],
-    prompt: string,
-    parentVersion: NonNullable<typeof activeVersion>
-  ) {
-    updateActiveVersion(version, { summary: prompt, source: "ai" });
-    useCopilotTimelineStore.getState().addEntry({
-      prompt,
-      parentVersionId: parentVersion.id,
-      parentVersionLabel: parentVersion.label,
-      resultVersionId: version.id,
-      resultVersionLabel: version.label
-    });
   }
 
   function SchemeWorkspace() {

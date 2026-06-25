@@ -9,7 +9,7 @@ import {
   applyRoomPatchToVersion,
   getResolvedLevel
 } from "@/lib/level-rooms";
-import type { ScheduleBundle, StoredCopilotProposal, ScoringConfig, FacadeEnvelope, StructuralSystem } from "@/lib/building-domain";
+import type { ScheduleBundle, StoredCopilotProposal, ScoringConfig, FacadeEnvelope, StructuralSystem, FurnitureItem } from "@/lib/building-domain";
 import {
   addCopilotProposalComment as addCopilotProposalCommentInDomain,
   appendCopilotProposal,
@@ -122,6 +122,8 @@ interface EvoProjectStore {
   brief: DesignBrief;
   workflowPhase: WorkflowPhase;
   compareVersionIds: string[];
+  compareModeOpen: boolean;
+  selectedProposalId?: string;
   activeTab: WorkspaceTab;
   activeAnalysisLayers: AnalysisLayerId[];
   activeMepLayers: MepLayerId[];
@@ -150,11 +152,18 @@ interface EvoProjectStore {
   updateScoringConfig: (patch: Partial<ScoringConfig>) => void;
   resetScoringConfig: () => void;
   updateFacadeEnvelope: (patch: Partial<FacadeEnvelope>) => void;
+  updateFacadeZone: (
+    zoneId: string,
+    patch: Partial<Pick<FacadeEnvelope["zones"][number], "strategy" | "targetWindowRatio">>
+  ) => void;
+  updateFurnitureItem: (itemId: string, patch: Partial<FurnitureItem>) => void;
   updateStructuralSystem: (patch: Partial<StructuralSystem>) => void;
   resetDerivedEnvelopeSystems: () => void;
   updateTopologyGraph: (graph: TopologyGraph) => void;
   setWorkflowPhase: (phase: WorkflowPhaseId) => void;
   toggleCompareVersion: (versionId: string) => void;
+  setCompareModeOpen: (open: boolean) => void;
+  selectCopilotProposal: (proposalId?: string) => void;
   setActiveAnalysisLayers: (layers: AnalysisLayerId[]) => void;
   setActiveMepLayers: (layers: MepLayerId[]) => void;
   setActiveLevel: (levelId: string) => void;
@@ -615,6 +624,8 @@ function createInitialState(): Omit<
     brief: defaultBrief,
     workflowPhase: "site",
     compareVersionIds: [],
+    compareModeOpen: false,
+    selectedProposalId: undefined,
     activeTab: "Plan",
     activeAnalysisLayers: ["function_zones", "primary_flow", "egress_path", "daylight"],
     activeMepLayers: ["hvac", "plumbing_supply", "plumbing_drain", "electrical", "shafts", "equipment_rooms"],
@@ -830,6 +841,37 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
         };
       })
     ),
+  updateFacadeZone: (zoneId, patch) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        const current = state.project.domain.facadeEnvelope;
+
+        if (!current) {
+          return;
+        }
+
+        state.project.domain.facadeEnvelope = {
+          ...current,
+          userEdited: true,
+          zones: current.zones.map((zone) => (zone.id === zoneId ? { ...zone, ...patch } : zone))
+        };
+      })
+    ),
+  updateFurnitureItem: (itemId, patch) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        const layout = state.project.domain.furnitureLayout;
+
+        if (!layout) {
+          return;
+        }
+
+        state.project.domain.furnitureLayout = {
+          ...layout,
+          items: layout.items.map((item) => (item.id === itemId ? { ...item, ...patch } : item))
+        };
+      })
+    ),
   updateStructuralSystem: (patch) =>
     set(
       produce<EvoProjectStore>((state) => {
@@ -901,6 +943,18 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
         }
 
         state.compareVersionIds = [...state.compareVersionIds, versionId].slice(-2);
+      })
+    ),
+  setCompareModeOpen: (open) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        state.compareModeOpen = open;
+      })
+    ),
+  selectCopilotProposal: (proposalId) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        state.selectedProposalId = proposalId;
       })
     ),
   setActiveAnalysisLayers: (layers) =>

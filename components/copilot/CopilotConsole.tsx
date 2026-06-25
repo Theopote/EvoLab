@@ -32,7 +32,6 @@ interface CopilotConsoleProps {
   activeTab: WorkspaceTab;
   outline: Point[];
   projectType: string;
-  onCopilotRevision: (version: PlanVersion, prompt: string, parentVersion: PlanVersion) => void;
   onAnalyzedVersion: (version: PlanVersion, source: { fileName: string; prompt?: string }) => void;
   onSelectVersion: (version: PlanVersion) => void;
   onTabChange: (tab: WorkspaceTab) => void;
@@ -52,7 +51,6 @@ export function CopilotConsole({
   activeTab,
   outline,
   projectType,
-  onCopilotRevision,
   onAnalyzedVersion,
   onSelectVersion,
   onTabChange,
@@ -75,10 +73,12 @@ export function CopilotConsole({
     );
   const {
     lockedElementIds,
+    copilotProposals,
     pendingProposal,
     prepareProposal,
     applyPendingProposal: applyRevisionProposal,
-    dismissPendingProposal: dismissRevisionProposal
+    dismissPendingProposal: dismissRevisionProposal,
+    selectPendingProposal
   } = useCopilotProposalRevision({
     activeVersion,
     onApplied: () => {
@@ -672,7 +672,7 @@ export function CopilotConsole({
             <CopilotProposalHistoryPanel
               activeProposalId={pendingProposal?.id}
               proposals={copilotProposals}
-              onSelectProposal={setPendingProposalId}
+              onSelectProposal={selectPendingProposal}
             />
             <AiTimelinePanel
               versions={projectVersions}
