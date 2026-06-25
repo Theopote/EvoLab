@@ -110,7 +110,7 @@ function wallFirstDraft(overrides?: Partial<Level>): PlanVersionDraft {
 
 describe("resolve-level-walls", () => {
   it("preserves authoritative walls when openings align", () => {
-    const level = wallFirstDraft().levels[0]!;
+    const level = wallFirstDraft().levels![0]!;
 
     expect(shouldPreserveAuthoritativeWalls(level)).toBe(true);
     expect(openingsAlignWithWalls(level.openings, level.walls)).toBe(true);
@@ -122,7 +122,7 @@ describe("resolve-level-walls", () => {
   });
 
   it("falls back to room extraction when an opening does not resolve", () => {
-    const level = wallFirstDraft().levels[0]!;
+    const level = wallFirstDraft().levels![0]!;
     const brokenOpening: OpeningElement = {
       ...authoritativeOpening,
       wallId: "missing-wall",
@@ -164,7 +164,7 @@ describe("normalizePlanVersion wall preservation", () => {
       ...wallFirstDraft(),
       levels: [
         {
-          ...wallFirstDraft().levels[0]!,
+          ...wallFirstDraft().levels![0]!,
           walls: [],
           openings: []
         }
@@ -179,7 +179,7 @@ describe("normalizePlanVersion wall preservation", () => {
 
   it("falls back to room-derived walls when openings no longer align", () => {
     const draft = wallFirstDraft();
-    draft.levels[0]!.openings = [
+    draft.levels![0]!.openings = [
       {
         ...authoritativeOpening,
         wallId: "missing-wall",
