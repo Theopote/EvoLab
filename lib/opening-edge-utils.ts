@@ -65,6 +65,21 @@ export function remapOpeningByWallEdge(
   nextWalls: Wall[]
 ): OpeningElement | undefined {
   const normalized = normalizeOpeningElement(opening, previousWalls);
+  const positionOnEdge = normalized.positionOnEdge ?? 0.5;
+  const nextWallById = nextWalls.find((wall) => wall.id === normalized.wallId);
+
+  if (nextWallById) {
+    return normalizeOpeningElement(
+      {
+        ...normalized,
+        wallId: nextWallById.id,
+        positionOnEdge,
+        center: openingCenterFromPosition(nextWallById, positionOnEdge)
+      },
+      nextWalls
+    );
+  }
+
   const nextWall = resolveWallForOpening(
     { ...normalized, wallId: "", wallEdgeId: normalized.wallEdgeId },
     nextWalls
@@ -73,8 +88,6 @@ export function remapOpeningByWallEdge(
   if (!nextWall) {
     return undefined;
   }
-
-  const positionOnEdge = normalized.positionOnEdge ?? 0.5;
 
   return normalizeOpeningElement(
     {

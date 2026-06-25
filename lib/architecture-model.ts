@@ -19,7 +19,6 @@ import { isLevelLinkedToStandardGroup } from "@/lib/standard-floor-group";
 import { syncVerticalElements } from "@/lib/vertical-elements";
 import { edgeKey, extractWallsFromRooms, polygonEdges } from "@/lib/wall-extractor";
 import {
-  resolveLevelRawOpenings,
   resolveLevelWalls,
   shouldPreserveAuthoritativeWalls
 } from "@/lib/geometry/walls/resolve-level-walls";
@@ -238,7 +237,9 @@ export function normalizePlanVersion(version: PlanVersionDraft): PlanVersion {
     const walls = resolveLevelWalls(sourceLevel, roomsForLevel, levelOutline);
     const preservedWalls = shouldPreserveAuthoritativeWalls(sourceLevel);
     const rawOpenings = preservedWalls
-      ? resolveLevelRawOpenings(sourceLevel, roomsForLevel, walls, createOpenings)
+      ? sourceLevel.openings.length > 0
+        ? remapOpenings(sourceLevel.openings, sourceLevel.walls, walls)
+        : createOpenings(roomsForLevel, walls)
       : sourceLevel.openings.length > 0 && sourceLevel.walls.length > 0
         ? remapOpenings(sourceLevel.openings, sourceLevel.walls, walls)
         : createOpenings(roomsForLevel, walls);

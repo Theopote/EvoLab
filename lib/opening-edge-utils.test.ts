@@ -67,4 +67,28 @@ describe("opening edge utils", () => {
     expect(remapped?.wallId).toBe("wall-regenerated");
     expect(remapped?.positionOnEdge).toBeCloseTo(0.4, 2);
   });
+
+  it("remaps openings by stable wall id when endpoints move", () => {
+    const opening: OpeningElement = {
+      id: "door-1",
+      wallId: "cad-wall-1",
+      wallEdgeId: wallEdgeIdFromWall(wall),
+      positionOnEdge: 0.5,
+      type: "door",
+      center: [5, 0],
+      width: 1,
+      height: 2.1
+    };
+    const movedWall: Wall = {
+      ...wall,
+      id: "cad-wall-1",
+      start: [1, 0],
+      end: [11, 0]
+    };
+
+    const remapped = remapOpeningByWallEdge(opening, [{ ...wall, id: "cad-wall-1" }], [movedWall]);
+
+    expect(remapped?.wallId).toBe("cad-wall-1");
+    expect(remapped?.center[0]).toBeCloseTo(6, 2);
+  });
 });

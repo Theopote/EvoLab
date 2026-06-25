@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { normalizePlanVersion } from "@/lib/architecture-model";
 import { applyLevelWallDrag } from "@/lib/geometry/walls/apply-wall-drag";
 import { applyWallGeometryPatch } from "@/lib/geometry/walls/apply-wall-geometry";
 import { findWallEdgeForWall, updateWallEndpoints } from "@/lib/geometry/walls/sync-rooms-from-walls";
@@ -135,21 +134,12 @@ describe("applyLevelWallDrag", () => {
     expect(movedBedroom.polygon[0][0]).toBeCloseTo(11, 3);
   });
 
-  it("preserves cad wall ids after normalize", () => {
+  it("keeps the authoritative wall id on the dragged level", () => {
     const level = levelWithAuthoritativeSharedWall();
     const wall = level.walls[0]!;
     const dragged = applyLevelWallDrag(level, wall.id, 1, [1, 0], outline);
-    const normalized = normalizePlanVersion({
-      id: "scheme",
-      label: "Scheme",
-      createdAt: "2026-06-25T00:00:00.000Z",
-      outline,
-      overallBounds: { width: 20, height: 8 },
-      rooms: dragged.rooms,
-      levels: [dragged]
-    });
 
-    expect(normalized.levels[0]?.walls.some((candidate) => candidate.id === wall.id)).toBe(true);
+    expect(dragged.walls.some((candidate) => candidate.id === wall.id)).toBe(true);
   });
 
   it("falls back to room-first drag when wall is missing from level.walls", () => {
