@@ -22,6 +22,12 @@ export function getOperationTargetIds(operation: PlanOperation): string[] {
       return [operation.roomId];
     case "merge_room":
       return [operation.primaryRoomId, operation.secondaryRoomId];
+    case "update_room_polygon":
+      return [operation.roomId];
+    case "add_room":
+      return [operation.room.id];
+    case "add_protrusion":
+      return [operation.roomId];
     case "widen_corridor":
       return operation.corridorIds ?? [];
     case "align_wet_rooms":
@@ -59,7 +65,8 @@ export function summarizeRoomChanges(base: PlanVersion, preview: PlanVersion): R
         previous.zone !== room.zone ||
         JSON.stringify(previous.polygon) !== JSON.stringify(room.polygon) ||
         JSON.stringify(previous.doors) !== JSON.stringify(room.doors) ||
-        JSON.stringify(previous.windows) !== JSON.stringify(room.windows)
+        JSON.stringify(previous.windows) !== JSON.stringify(room.windows) ||
+        JSON.stringify(previous.protrusions ?? []) !== JSON.stringify(room.protrusions ?? [])
       );
     })
     .map((room) => room.id);

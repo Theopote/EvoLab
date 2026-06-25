@@ -76,6 +76,44 @@ describe("plan-change-engine", () => {
     expect(changes.removed.length).toBeGreaterThan(0);
   });
 
+  it("skips operations outside the allowed inpaint region", () => {
+    const corridor = baseVersion.rooms.find((room) => room.type === "corridor");
+    const office = baseVersion.rooms.find((room) => room.type === "office");
+
+    if (!corridor || !office) {
+      return;
+    }
+
+    const operations: PlanOperation[] = [
+      {
+        id: "op-shift-office",
+        type: "shift_rooms",
+        label: "Shift office",
+        targetRoomIds: [office.id],
+        roomIds: [office.id],
+        dx: 1,
+        dy: 0
+      },
+      {
+        id: "op-widen-corridor",
+        type: "widen_corridor",
+        label: "Widen corridor",
+        targetRoomIds: [corridor.id],
+        corridorIds: [corridor.id],
+        extraWidthMeters: 0.4,
+        side: "both"
+      }
+    ];
+
+    const report = applyPlanOperationsWithReport(baseVersion, operations, {
+      allowedRoomIds: [corridor.id],
+      skipPostProcess: true
+    });
+
+    expect(report.appliedOperationIds).toEqual(["op-widen-corridor"]);
+    expect(report.skippedOperations.some((item) => item.operationId === "op-shift-office")).toBe(true);
+  });
+
   it("adds a door opening to a room", () => {
     const operation: PlanOperation = {
       id: "op-add-door",

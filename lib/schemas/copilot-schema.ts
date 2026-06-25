@@ -3,6 +3,7 @@ import { z } from "zod";
 export const CopilotActionSchema = z.object({
   id: z.enum([
     "optimize-egress",
+    "apply-compliance-fix",
     "generate-flow-diagram",
     "layout-shafts",
     "generate-massing",

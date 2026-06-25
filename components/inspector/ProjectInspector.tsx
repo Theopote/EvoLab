@@ -29,6 +29,7 @@ export function ProjectInspector() {
         <Info label="Active scheme" value={activeVersion?.label ?? "None"} />
         <Info label="Site zoning FAR" value={String(domain.site.zoning.maxFar)} />
         <Info label="Program spaces" value={String(domain.program.spaces.length)} />
+        <Info label="Furniture items" value={String(domain.furnitureLayout?.items.length ?? 0)} />
         <Info label="Code package" value={domain.codeContext.label} />
         <Info label="Storey groups" value={String(domain.storeyStack?.groups.length ?? 0)} />
         <Info label="Vertical cores" value={String(domain.verticalCirculation?.elevatorGroups.length ?? 0)} />

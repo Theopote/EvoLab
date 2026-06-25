@@ -5,7 +5,7 @@ import {
   findStandardFloorGroup,
   isLevelLinkedToStandardGroup
 } from "@/lib/standard-floor-group";
-import type { Level, PlanVersion, Point, Room, StandardFloorGroup } from "@/lib/project-types";
+import type { Level, OpeningElement, PlanVersion, Point, Room, StandardFloorGroup, Wall } from "@/lib/project-types";
 import { polygonArea } from "@/lib/plan-validation";
 
 function stampLevelId(rooms: Room[], levelId: string) {
@@ -49,6 +49,32 @@ export function resolveAllVersionRooms(version: PlanVersion): Room[] {
   const groups = version.standardFloorGroups;
 
   return version.levels.flatMap((level) => resolveLevelRooms(level, groups));
+}
+
+export function findLevelForRoom(version: PlanVersion, room: Room): Level | undefined {
+  if (room.levelId) {
+    return version.levels.find((level) => level.id === room.levelId);
+  }
+
+  const groups = version.standardFloorGroups;
+
+  return version.levels.find((level) => resolveLevelRooms(level, groups).some((item) => item.id === room.id));
+}
+
+export function levelGeometryForRoom(
+  version: PlanVersion,
+  room: Room
+): { level: Level | undefined; outline: Point[]; walls: Wall[]; openings: OpeningElement[] } {
+  const level = findLevelForRoom(version, room);
+  const groups = version.standardFloorGroups;
+  const outline = level ? resolveLevelOutline(level, groups, version.outline) : version.outline;
+
+  return {
+    level,
+    outline,
+    walls: level?.walls ?? [],
+    openings: level?.openings ?? []
+  };
 }
 
 export function getLevelById(version: PlanVersion, levelId?: string) {

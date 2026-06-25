@@ -1,12 +1,14 @@
 "use client";
 
 import { MEP_LAYERS } from "@/components/mep/MepLayerList";
-import { routeMepLayout } from "@/lib/mep-router";
+import { routeMepLayout, routesForLevel } from "@/lib/mep-router";
+import { getResolvedLevel } from "@/lib/level-rooms";
 import type { MepLayerId, MepRoute, MepSystemType, PlanVersion, Point, Room } from "@/lib/project-types";
 
 interface MepCanvasProps {
   activeLayers: MepLayerId[];
   version?: PlanVersion;
+  activeLevelId?: string;
 }
 
 const systemColors: Record<MepSystemType, string> = {
@@ -31,7 +33,7 @@ function routePoints(route: MepRoute) {
   return route.path.map(([x, y]) => `${x},${y}`).join(" ");
 }
 
-export function MepCanvas({ activeLayers, version }: MepCanvasProps) {
+export function MepCanvas({ activeLayers, version, activeLevelId }: MepCanvasProps) {
   if (!version) {
     return (
       <div className="grid min-h-[560px] place-items-center rounded border border-dashed border-line bg-panel/60 text-sm text-muted">
@@ -41,12 +43,16 @@ export function MepCanvas({ activeLayers, version }: MepCanvasProps) {
   }
 
   const mep = version.mep ?? routeMepLayout(version);
+  const levelId = activeLevelId ?? version.levels[0]?.id;
+  const resolvedLevel = levelId ? getResolvedLevel(version, levelId) : undefined;
+  const displayRooms = resolvedLevel?.rooms ?? version.rooms;
+  const visibleRoutes = routesForLevel(mep, levelId);
   const padding = 8;
   const viewBox = `${-padding} ${-padding} ${version.overallBounds.width + padding * 2} ${
     version.overallBounds.height + padding * 2
   }`;
-  const equipmentRooms = version.rooms.filter((room) => room.type === "equipment_room");
-  const shaftRooms = version.rooms.filter((room) => room.type === "shaft");
+  const equipmentRooms = displayRooms.filter((room) => room.type === "equipment_room");
+  const shaftRooms = displayRooms.filter((room) => room.type === "shaft");
 
   return (
     <section className="rounded border border-line bg-panel/90 p-3">
@@ -73,7 +79,7 @@ export function MepCanvas({ activeLayers, version }: MepCanvasProps) {
 
           <polygon points={polygonPoints(version.outline)} fill="rgba(255,255,255,0.018)" stroke="#d8edf5" strokeWidth="0.35" />
 
-          {version.rooms.map((room) => (
+          {displayRooms.map((room) => (
             <polygon
               fill={room.zone === "service" ? "rgba(230,162,60,0.12)" : "rgba(148,163,184,0.07)"}
               key={room.id}
@@ -119,7 +125,7 @@ export function MepCanvas({ activeLayers, version }: MepCanvasProps) {
               ))
             : null}
 
-          {mep.routes
+          {visibleRoutes
             .filter((route) => activeLayers.includes(route.system))
             .map((route, index) => (
               <g key={route.id}>
@@ -137,7 +143,7 @@ export function MepCanvas({ activeLayers, version }: MepCanvasProps) {
               </g>
             ))}
 
-          {version.rooms.map((room) => {
+          {displayRooms.map((room) => {
             const [x, y] = centroid(room);
             return (
               <text

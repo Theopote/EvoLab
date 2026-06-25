@@ -10,23 +10,14 @@ export interface ProjectData {
 }
 
 export const workspaceTabs = [
-  "Import",
-  "Site",
-  "Program",
-  "Bubble",
   "Plan",
-  "Compare",
   "Massing",
   "Model",
-  "Facade",
-  "Structure",
   "Analysis",
   "Systems",
   "Quantity",
-  "Review",
-  "Presentation",
-  "Sheets",
   "Render",
+  "Sheets",
   "Export"
 ] as const;
 

@@ -2,8 +2,10 @@
 
 import { AlertTriangle, CheckCircle2, Sparkles } from "lucide-react";
 import { useMemo, useState } from "react";
-import { DiffPreviewOverlay } from "@/components/floor-plan/DiffPreviewOverlay";
+import { PlanChangeProposalPanel } from "@/components/copilot/PlanChangeProposalPanel";
+import { useCopilotProposalRevision } from "@/components/copilot/useCopilotProposalRevision";
 import { VerticalSectionView } from "@/components/workflow/VerticalSectionView";
+import type { ModifyPlanResponse } from "@/lib/copilot-modify-types";
 import { captureInpaintImagesFromBBox } from "@/lib/inpaint-capture";
 import type { PlanVersion, VerticalAlignmentIssue } from "@/lib/project-types";
 import { buildVerticalAlignmentReport } from "@/lib/vertical-alignment";
@@ -13,24 +15,23 @@ interface VerticalAlignmentPanelProps {
   version: PlanVersion;
   activeLevelId?: string;
   onMarkTransferFloor?: (levelId: string) => void;
-  onApplyRevision?: (version: PlanVersion, prompt: string) => void;
 }
 
 export function VerticalAlignmentPanel({
   version,
   activeLevelId,
-  onMarkTransferFloor,
-  onApplyRevision
+  onMarkTransferFloor
 }: VerticalAlignmentPanelProps) {
   const report = useMemo(() => buildVerticalAlignmentReport(version), [version]);
+  const {
+    lockedElementIds,
+    pendingProposal,
+    prepareProposal,
+    applyPendingProposal,
+    dismissPendingProposal
+  } = useCopilotProposalRevision({ activeVersion: version });
   const [fixingIssueId, setFixingIssueId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [pendingPreview, setPendingPreview] = useState<{
-    version: PlanVersion;
-    prompt: string;
-    warning?: string;
-    highlightRoomIds: string[];
-  } | null>(null);
 
   if (version.levels.length <= 1) {
     return (
@@ -41,7 +42,7 @@ export function VerticalAlignmentPanel({
   }
 
   async function fixIssue(issue: VerticalAlignmentIssue) {
-    if (!onApplyRevision || fixingIssueId) {
+    if (fixingIssueId) {
       return;
     }
 
@@ -70,31 +71,32 @@ export function VerticalAlignmentPanel({
           baseImage,
           maskImage,
           allowedRoomIds: fixPackage.allowedRoomIds,
+          lockedElementIds,
           levelId: fixPackage.levelId,
           structuralConstraints: fixPackage.structuralConstraints
         })
       });
 
-      const data = (await response.json()) as {
-        version?: PlanVersion;
-        warning?: string;
+      const data = (await response.json()) as ModifyPlanResponse & {
         structuralViolations?: string[];
         error?: string;
       };
 
-      if (!response.ok || !data.version?.rooms) {
+      if (!response.ok || !data.version?.rooms || !data.proposal?.operations?.length) {
         throw new Error(data.error ?? `inpaint-plan failed with ${response.status}`);
       }
 
       const warning = [data.warning, ...(data.structuralViolations ?? [])].filter(Boolean).join(" ");
 
-      setPendingPreview({
-        version: data.version,
+      prepareProposal({
         prompt: fixPackage.userRequest,
-        warning: warning || undefined,
-        highlightRoomIds: fixPackage.highlightRoomIds
+        baseVersion: version,
+        proposal: data.proposal,
+        findings: data.findings ?? [],
+        warning: warning || data.warning,
+        allowedRoomIds: fixPackage.allowedRoomIds
       });
-      setNotice("Review the alignment fix preview before accepting.");
+      setNotice("Review each alignment fix operation before applying.");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Alignment fix request failed.");
     } finally {
@@ -102,32 +104,26 @@ export function VerticalAlignmentPanel({
     }
   }
 
-  function acceptPreview() {
-    if (!pendingPreview || !onApplyRevision) {
-      return;
-    }
-
-    onApplyRevision(pendingPreview.version, pendingPreview.prompt);
-    setPendingPreview(null);
-    setNotice(pendingPreview.warning ? `Applied with note: ${pendingPreview.warning}` : "Alignment fix applied.");
-  }
-
-  function rejectPreview() {
-    setPendingPreview(null);
-    setNotice("Alignment fix preview rejected.");
-  }
-
   return (
     <section className="grid gap-3">
-      {pendingPreview ? (
-        <DiffPreviewOverlay
-          baseVersion={version}
-          highlightRoomIds={pendingPreview.highlightRoomIds}
-          notice={pendingPreview.warning}
-          previewVersion={pendingPreview.version}
-          title="Vertical alignment fix preview"
-          onAccept={acceptPreview}
-          onReject={rejectPreview}
+      {pendingProposal ? (
+        <PlanChangeProposalPanel
+          allowedRoomIds={pendingProposal.allowedRoomIds}
+          baseVersion={pendingProposal.baseVersion}
+          lockedElementIds={lockedElementIds}
+          proposal={pendingProposal.proposal}
+          onApply={(nextVersion, acceptedOperationIds) => {
+            applyPendingProposal(nextVersion, acceptedOperationIds);
+            setNotice(
+              pendingProposal.warning
+                ? `Alignment fix applied with note: ${pendingProposal.warning}`
+                : "Alignment fix applied."
+            );
+          }}
+          onDismiss={() => {
+            dismissPendingProposal();
+            setNotice("Alignment fix proposal rejected.");
+          }}
         />
       ) : null}
 
@@ -168,10 +164,10 @@ export function VerticalAlignmentPanel({
                     {issue.floorName}
                   </div>
                   <p className="mb-2">{issue.message}</p>
-                  {onApplyRevision && issue.position ? (
+                  {issue.position ? (
                     <button
                       className="inline-flex items-center gap-1 rounded border border-accent/40 px-2 py-1 text-[11px] text-accent disabled:opacity-50"
-                      disabled={Boolean(fixingIssueId) || Boolean(pendingPreview)}
+                      disabled={Boolean(fixingIssueId) || Boolean(pendingProposal)}
                       type="button"
                       onClick={() => void fixIssue(issue)}
                     >

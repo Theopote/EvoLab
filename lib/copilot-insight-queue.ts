@@ -1,8 +1,14 @@
 import type { ProjectDomain } from "@/lib/building-domain";
 import type { CopilotFinding, PlanVersion } from "@/lib/project-types";
-import { calculateQuantities, checkCompliance } from "@/lib/quantity-engine";
+import {
+  buildComplianceContext,
+  generateComplianceInsights,
+  prioritizeComplianceResults,
+  runComplianceCheck
+} from "@/lib/compliance-rules";
+import { calculateQuantities } from "@/lib/quantity-engine";
+import { resolveRulePack } from "@/lib/rules/rule-pack";
 import { ensureVersionScores, scoringInputFromDomain } from "@/lib/rules/resolve-version-scoring";
-import { buildVerticalAlignmentReport } from "@/lib/vertical-alignment";
 
 export interface CopilotInsightQueue {
   pending: CopilotFinding[];
@@ -16,26 +22,23 @@ function findingId(prefix: string) {
 export function buildCopilotInsightsFromEngines(
   version: PlanVersion,
   domain: ProjectDomain,
-  projectType?: string
+  projectType?: string,
+  activeLevelId?: string
 ): CopilotFinding[] {
   const scored = ensureVersionScores(version, scoringInputFromDomain(domain, projectType));
-  const quantities = calculateQuantities(scored);
-  const compliance = checkCompliance(scored, domain.codeContext);
-  const alignment = buildVerticalAlignmentReport(scored);
-  const findings: CopilotFinding[] = [];
-
-  const warnings = compliance.filter((item) => item.status === "warning");
-
-  warnings.slice(0, 4).forEach((item) => {
-    findings.push({
-      id: findingId("compliance"),
-      tone: "warning",
-      text: item.message,
-      sub: "From compliance-rules engine"
-    });
+  const quantities = calculateQuantities(scored, { scope: "building" });
+  const rulePack = resolveRulePack({
+    codeContext: domain.codeContext,
+    projectType: projectType ?? domain.program?.projectType
   });
+  const complianceContext = buildComplianceContext(scored, rulePack, {
+    buildingType: projectType ?? domain.program?.projectType ?? "healthcare",
+    scoringConfig: domain.scoringConfig
+  });
+  const complianceResults = prioritizeComplianceResults(runComplianceCheck(complianceContext), activeLevelId);
+  const findings: CopilotFinding[] = generateComplianceInsights(complianceResults).slice(0, 8);
 
-  if ((scored.scores?.riskCount ?? 0) > 0) {
+  if ((scored.scores?.riskCount ?? 0) > 0 && findings.length === 0) {
     findings.push({
       id: findingId("risk"),
       tone: "warning",
@@ -44,25 +47,42 @@ export function buildCopilotInsightsFromEngines(
     });
   }
 
-  if (!alignment.aligned) {
-    findings.push({
-      id: findingId("vertical"),
-      tone: "warning",
-      text: `${alignment.issues.length} vertical alignment issue(s) across floors.`,
-      sub: "From vertical-alignment engine"
-    });
-  }
-
   if (quantities.summary.grossArea > 0 && quantities.areaByZone.circulation / quantities.summary.grossArea > 0.28) {
     findings.push({
       id: findingId("circulation"),
       tone: "info",
       text: `Circulation ratio is ${Math.round((quantities.areaByZone.circulation / quantities.summary.grossArea) * 100)}% of gross area.`,
-      sub: "From quantity-engine"
+      sub: "From quantity-engine · building scope"
     });
   }
 
-  return findings;
+  if (activeLevelId && version.levels.length > 1) {
+    const levelQuantities = calculateQuantities(scored, { levelId: activeLevelId, scope: "level" });
+    const levelName = version.levels.find((level) => level.id === activeLevelId)?.name ?? activeLevelId;
+    const levelWarnings = complianceResults.filter(
+      (result) => result.status === "warning" && result.levelId === activeLevelId
+    ).length;
+
+    if (levelWarnings > 0) {
+      findings.unshift({
+        id: findingId("level-risk"),
+        tone: "warning",
+        text: `${levelWarnings} compliance warning(s) on ${levelName}.`,
+        sub: "Active floor · compliance engine"
+      });
+    }
+
+    if (levelQuantities.summary.grossArea > 0) {
+      findings.push({
+        id: findingId("level-area"),
+        tone: "info",
+        text: `${levelName} gross area is ${levelQuantities.summary.grossArea} sqm.`,
+        sub: "Active floor · quantity-engine"
+      });
+    }
+  }
+
+  return findings.slice(0, 8);
 }
 
 export function enqueueInsights(

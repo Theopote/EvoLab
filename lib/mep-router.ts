@@ -1,4 +1,7 @@
-import type { CopilotFinding, MepLayout, MepRoute, MepSystemType, PlanVersion, Point, Room } from "@/lib/project-types";
+import type { CopilotFinding, MepLayout, MepRoute, MepShaft, MepSystemType, PlanVersion, Point, Room, VerticalElement } from "@/lib/project-types";
+import { resolveLevelRooms } from "@/lib/level-rooms";
+import { scopeVersionForLevel } from "@/lib/plan-scope";
+import { deriveVerticalElements } from "@/lib/vertical-elements";
 
 const SYSTEMS: MepSystemType[] = ["hvac", "plumbing_supply", "plumbing_drain", "electrical", "elv", "fire"];
 const GRID_STEP = 1.5;
@@ -261,17 +264,98 @@ function choosePrimaryShaft(version: PlanVersion, seed?: MepLayout) {
     return seedShaft;
   }
 
-  const shaftRoom = version.rooms.find((room) => room.type === "shaft");
+  const shafts = deriveMepShafts(version, seed, SYSTEMS);
+  if (shafts[0]) {
+    return shafts[0].position;
+  }
+
+  const groundLevel = version.levels[0];
+  const groundRooms = groundLevel ? resolveLevelRooms(groundLevel, version.standardFloorGroups) : version.rooms;
+  const shaftRoom = groundRooms.find((room) => room.type === "shaft") ?? version.rooms.find((room) => room.type === "shaft");
   if (shaftRoom) {
     return centroid(shaftRoom);
   }
 
-  const equipmentRoom = version.rooms.find((room) => room.type === "equipment_room");
+  const equipmentRoom =
+    groundRooms.find((room) => room.type === "equipment_room") ?? version.rooms.find((room) => room.type === "equipment_room");
   if (equipmentRoom) {
     return centroid(equipmentRoom);
   }
 
   return [version.overallBounds.width * 0.72, version.overallBounds.height * 0.5] as Point;
+}
+
+function isPointElement(position: VerticalElement["position"]): position is Point {
+  return !Array.isArray(position[0]);
+}
+
+function elementPosition(element: VerticalElement): Point {
+  if (isPointElement(element.position)) {
+    return element.position;
+  }
+
+  return centroidFromPoints(element.position as Point[]);
+}
+
+function levelIdsForElement(version: PlanVersion, element: VerticalElement): string[] {
+  const sorted = [...version.levels].sort((left, right) => (left.floorNumber ?? 0) - (right.floorNumber ?? 0));
+  const fromIndex = sorted.findIndex((level) => level.id === element.appliesFromFloorId);
+  const toIndex = sorted.findIndex((level) => level.id === element.appliesToFloorId);
+
+  if (fromIndex < 0 || toIndex < 0) {
+    return sorted.map((level) => level.id);
+  }
+
+  const [start, end] = fromIndex <= toIndex ? [fromIndex, toIndex] : [toIndex, fromIndex];
+  return sorted.slice(start, end + 1).map((level) => level.id);
+}
+
+function deriveMepShafts(version: PlanVersion, seed: MepLayout | undefined, systems: MepSystemType[]): MepShaft[] {
+  if (seed?.shafts.length) {
+    return seed.shafts.map((shaft) => ({
+      ...shaft,
+      levelIds: shaft.levelIds ?? version.levels.map((level) => level.id)
+    }));
+  }
+
+  const stacks = (version.verticalElements ?? deriveVerticalElements(version)).filter(
+    (element) => element.kind === "mep_shaft" || element.kind === "core"
+  );
+
+  if (!stacks.length) {
+    const groundLevel = version.levels[0];
+    const groundRooms = groundLevel ? resolveLevelRooms(groundLevel, version.standardFloorGroups) : version.rooms;
+    const shaftRoom = groundRooms.find((room) => room.type === "shaft") ?? version.rooms.find((room) => room.type === "shaft");
+    const equipmentRoom =
+      groundRooms.find((room) => room.type === "equipment_room") ??
+      version.rooms.find((room) => room.type === "equipment_room");
+    const position = shaftRoom
+      ? centroid(shaftRoom)
+      : equipmentRoom
+        ? centroid(equipmentRoom)
+        : ([version.overallBounds.width * 0.72, version.overallBounds.height * 0.5] as Point);
+
+    return [
+      {
+        id: "mep-shaft-stack-01",
+        position,
+        systems,
+        levelIds: version.levels.map((level) => level.id)
+      }
+    ];
+  }
+
+  return stacks.map((element) => ({
+    id: `mep-shaft-${element.id}`,
+    position: elementPosition(element),
+    systems,
+    levelIds: levelIdsForElement(version, element)
+  }));
+}
+
+function shaftPositionForLevel(shafts: MepShaft[], levelId: string, fallback: Point): Point {
+  const serving = shafts.find((shaft) => !shaft.levelIds?.length || shaft.levelIds.includes(levelId));
+  return serving?.position ?? shafts[0]?.position ?? fallback;
 }
 
 function chooseRouteGoal(version: PlanVersion, system: MepSystemType, targetRooms: Room[]) {
@@ -300,40 +384,80 @@ function offsetPath(path: Point[], index: number) {
   });
 }
 
-export function routeMepLayout(version: PlanVersion, seed?: MepLayout): MepLayout {
-  const primaryShaft = choosePrimaryShaft(version, seed);
+function routeLevelSystems(
+  scopedVersion: PlanVersion,
+  levelId: string,
+  primaryShaft: Point,
+  systems: MepSystemType[],
+  seed?: MepLayout
+): MepRoute[] {
+  return systems.map((system, index): MepRoute => {
+    const targetRooms = routeRoomsForSystem(scopedVersion, system);
+    const goal = chooseRouteGoal(scopedVersion, system, targetRooms);
+    const walkableRooms = walkableRoomsForSystem(scopedVersion, system);
+    const path = offsetPath(routeAStar(scopedVersion, primaryShaft, goal, walkableRooms), index);
+    const seedRoute = seed?.routes.find((route) => route.system === system && (!route.levelId || route.levelId === levelId));
+
+    return {
+      id: seedRoute?.id ?? `${levelId}-route-${system}`,
+      levelId,
+      system,
+      path,
+      connectsRoomIds: targetRooms.map((room) => room.id)
+    };
+  });
+}
+
+function routeSingleLevel(version: PlanVersion, seed?: MepLayout): MepLayout {
+  const levelId = version.levels[0]?.id ?? "level-01";
   const seedSystems = seed?.shafts[0]?.systems?.length ? seed.shafts[0].systems : SYSTEMS;
   const systems = Array.from(new Set(seedSystems.filter((system): system is MepSystemType => SYSTEMS.includes(system))));
+  const shafts = deriveMepShafts(version, seed, systems);
+  const shaftPosition = shaftPositionForLevel(shafts, levelId, choosePrimaryShaft(version, seed));
 
   return {
-    shafts: [
-      {
-        id: seed?.shafts[0]?.id ?? "mep-shaft-01",
-        position: primaryShaft,
-        systems
-      }
-    ],
-    routes: systems.map((system, index): MepRoute => {
-      const targetRooms = routeRoomsForSystem(version, system);
-      const goal = chooseRouteGoal(version, system, targetRooms);
-      const walkableRooms = walkableRoomsForSystem(version, system);
-      const path = offsetPath(routeAStar(version, primaryShaft, goal, walkableRooms), index);
-
-      return {
-        id: seed?.routes.find((route) => route.system === system)?.id ?? `route-${system}`,
-        system,
-        path,
-        connectsRoomIds: targetRooms.map((room) => room.id)
-      };
-    }),
+    shafts,
+    routes: routeLevelSystems(version, levelId, shaftPosition, systems, seed),
     strategy: seed?.strategy
+  };
+}
+
+export function routeMepLayout(version: PlanVersion, seed?: MepLayout): MepLayout {
+  if (version.levels.length <= 1) {
+    const scoped = version.levels[0] ? scopeVersionForLevel(version, version.levels[0].id) : version;
+    return routeSingleLevel(scoped, seed);
+  }
+
+  const seedSystems = seed?.shafts[0]?.systems?.length ? seed.shafts[0].systems : SYSTEMS;
+  const systems = Array.from(new Set(seedSystems.filter((system): system is MepSystemType => SYSTEMS.includes(system))));
+  const shafts = deriveMepShafts(version, seed, systems);
+  const fallbackShaft = shafts[0]?.position ?? choosePrimaryShaft(version, seed);
+  const routes = version.levels.flatMap((level) => {
+    const scoped = scopeVersionForLevel(version, level.id);
+    const shaftPosition = shaftPositionForLevel(shafts, level.id, fallbackShaft);
+    return routeLevelSystems(scoped, level.id, shaftPosition, systems, seed);
+  });
+
+  return {
+    shafts,
+    routes,
+    strategy: seed?.strategy ?? {
+      systemConcept: "Stacked riser(s) with per-floor horizontal distribution",
+      shaftLogic: "Vertical stacks derived from cores/shafts and verticalElements",
+      routingLogic: "Corridor-first A* routing independently on each floor plate",
+      assumptions: [`${shafts.length} riser stack(s) serve ${version.levels.length} floor(s)`]
+    }
   };
 }
 
 export function generateRuleBasedMep(version: PlanVersion, seed?: MepLayout): RoutingResult {
   const mep = routeMepLayout(version, seed);
-  const wetRooms = version.rooms.filter((room) => room.needsPlumbing);
-  const corridors = version.rooms.filter((room) => room.type === "corridor");
+  const wetRooms = version.levels.flatMap((level) =>
+    resolveLevelRooms(level, version.standardFloorGroups).filter((room) => room.needsPlumbing)
+  );
+  const corridorCount = version.levels.reduce((total, level) => {
+    return total + resolveLevelRooms(level, version.standardFloorGroups).filter((room) => room.type === "corridor").length;
+  }, 0);
 
   return {
     mep,
@@ -341,8 +465,11 @@ export function generateRuleBasedMep(version: PlanVersion, seed?: MepLayout): Ro
       {
         id: "mep-routing",
         tone: "success",
-        text: "MEP routes were generated with deterministic corridor-first routing.",
-        sub: `${mep.routes.length} systems use ${corridors.length ? "corridor/service rooms" : "the plan outline"} as routing constraints.`
+        text:
+          version.levels.length > 1
+            ? "MEP routes were generated per floor with a shared vertical riser stack."
+            : "MEP routes were generated with deterministic corridor-first routing.",
+        sub: `${mep.routes.length} route(s) across ${version.levels.length} floor(s); ${corridorCount ? "corridor/service rooms" : "plan outline"} constrain routing.`
       },
       {
         id: "mep-plumbing",
@@ -352,4 +479,12 @@ export function generateRuleBasedMep(version: PlanVersion, seed?: MepLayout): Ro
       }
     ]
   };
+}
+
+export function routesForLevel(mep: MepLayout, levelId?: string) {
+  if (!levelId) {
+    return mep.routes;
+  }
+
+  return mep.routes.filter((route) => !route.levelId || route.levelId === levelId);
 }

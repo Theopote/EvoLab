@@ -3,6 +3,7 @@
 import { AlertTriangle, Bot, CheckCircle2, Info, Loader2, Send, Sparkles } from "lucide-react";
 import { useMemo, useState } from "react";
 import { PlanChangeProposalPanel } from "@/components/copilot/PlanChangeProposalPanel";
+import { useComplianceFixAction } from "@/components/copilot/useComplianceFixAction";
 import type { ModifyPlanResponse } from "@/lib/copilot-modify-types";
 import { useEvoProject } from "@/lib/project-store";
 import { useShallow } from "zustand/react/shallow";
@@ -55,7 +56,8 @@ export function CopilotPanel({
     registerCopilotProposal,
     applyCopilotProposal,
     dismissCopilotProposal,
-    addCopilotProposalComment
+    addCopilotProposalComment,
+    scoringConfig
   } = useEvoProject(
     useShallow((state) => ({
       lockedElementIds: state.project.domain.lockedElementIds,
@@ -63,9 +65,64 @@ export function CopilotPanel({
       registerCopilotProposal: state.registerCopilotProposal,
       applyCopilotProposal: state.applyCopilotProposal,
       dismissCopilotProposal: state.dismissCopilotProposal,
-      addCopilotProposalComment: state.addCopilotProposalComment
+      addCopilotProposalComment: state.addCopilotProposalComment,
+      scoringConfig: state.project.domain.scoringConfig
     }))
   );
+  const {
+    handleComplianceAction,
+    isComplianceFixing
+  } = useComplianceFixAction({
+    activeVersion,
+    projectType,
+    scoringConfig,
+    onBeforeFix: () => onTabChange("Plan"),
+    onProposalReady: (input) => {
+      if (!activeVersion) {
+        return;
+      }
+
+      const stored = registerCopilotProposal({
+        prompt: input.prompt,
+        baseVersion: activeVersion,
+        proposal: input.proposal,
+        findings: input.findings,
+        warning: input.warning
+      });
+
+      setPendingProposalId(stored.id);
+      setMessages((current) => [
+        ...current,
+        {
+          id: `assistant-compliance-${Date.now()}`,
+          role: "assistant",
+          content: input.warning
+            ? `Compliance fix prepared as a change proposal. ${input.warning}`
+            : "Compliance fix prepared as a change proposal. Review each operation before applying."
+        },
+        ...(input.findings.length
+          ? [
+              {
+                id: `findings-compliance-${Date.now()}`,
+                role: "findings" as const,
+                title: "Compliance fix",
+                items: input.findings
+              }
+            ]
+          : [])
+      ]);
+    },
+    onNotice: (content) => {
+      setMessages((current) => [
+        ...current,
+        {
+          id: `assistant-fix-${Date.now()}`,
+          role: "assistant",
+          content
+        }
+      ]);
+    }
+  });
   const pendingProposal = useMemo(() => {
     if (!pendingProposalId || !activeVersion) {
       return null;
@@ -245,6 +302,10 @@ export function CopilotPanel({
           content: `Version selection requested: ${action.payload}`
         }
       ]);
+      return;
+    }
+
+    if (handleComplianceAction(action)) {
       return;
     }
 

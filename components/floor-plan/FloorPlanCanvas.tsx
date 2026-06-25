@@ -18,6 +18,7 @@ import { ReshapeBoundaryToolbar } from "@/components/floor-plan/ReshapeBoundaryT
 import { AddProtrusionToolbar } from "@/components/floor-plan/AddProtrusionToolbar";
 import { BoundarySpanLayer } from "@/components/floor-plan/layers/BoundarySpanLayer";
 import { ProtrusionPlacementLayer } from "@/components/floor-plan/layers/ProtrusionPlacementLayer";
+import { ReferenceImageLayer } from "@/components/floor-plan/layers/ReferenceImageLayer";
 import { ParametricOpeningToolbar } from "@/components/floor-plan/ParametricOpeningToolbar";
 import { RoomTopologyToolbar } from "@/components/floor-plan/RoomTopologyToolbar";
 import { WallLayer } from "@/components/floor-plan/layers/WallLayer";
@@ -35,6 +36,7 @@ import { clientToSvgPoint } from "@/components/floor-plan/floor-plan-utils";
 import { useLocalFormEditStore } from "@/lib/local-form-edit-store";
 import { useSketchInputStore } from "@/lib/sketch-input-store";
 import { deriveWallGraph, hitTestWalls } from "@/lib/wall-graph";
+import { useImportSessionStore } from "@/lib/import-session-store";
 
 export interface FloorPlanCanvasProps {
   version?: PlanVersion;
@@ -42,7 +44,6 @@ export interface FloorPlanCanvasProps {
   levelId?: string;
   selectedRoomId?: string;
   interactive?: boolean;
-  onInpaintRevision?: (version: PlanVersion, prompt: string) => void;
   viewBoxOverride?: string;
   onViewBoxChange?: (viewBox: string) => void;
   enableComparisonPan?: boolean;
@@ -58,7 +59,6 @@ export function FloorPlanCanvas({
   levelId: levelIdProp,
   selectedRoomId: selectedRoomIdProp,
   interactive = true,
-  onInpaintRevision,
   viewBoxOverride,
   onViewBoxChange,
   enableComparisonPan = false
@@ -72,6 +72,10 @@ export function FloorPlanCanvas({
   const resetLocalFormEdit = useLocalFormEditStore((state) => state.reset);
   const activeTool = useInteractionStore((state) => state.activeTool);
   const recognitionStatus = useSketchInputStore((state) => state.recognitionStatus);
+  const importReference = useImportSessionStore((state) =>
+    version && state.reference?.versionId === version.id ? state.reference : undefined
+  );
+  const setReferenceOpacity = useImportSessionStore((state) => state.setReferenceOpacity);
   const previewRooms = useEditPreviewStore((state) => state.previewRooms);
   const complianceRoomIds = useEditPreviewStore((state) => state.complianceRoomIds);
   const dragHint = useEditPreviewStore((state) => state.dragHint);
@@ -330,23 +334,12 @@ export function FloorPlanCanvas({
 
   return (
     <div className={className}>
-      {inpaintEnabled && onInpaintRevision ? (
-        <InpaintToolbar version={version} onInpaintRevision={onInpaintRevision} />
+      {inpaintEnabled ? <InpaintToolbar version={version} /> : null}
+      {sketchInputEnabled ? <SketchInputToolbar version={version} /> : null}
+      {reshapeBoundaryEnabled ? (
+        <ReshapeBoundaryToolbar levelId={levelId} roomId={selectedRoomId} version={version} />
       ) : null}
-      {sketchInputEnabled && onInpaintRevision ? (
-        <SketchInputToolbar version={version} onSketchRevision={onInpaintRevision} />
-      ) : null}
-      {reshapeBoundaryEnabled && onInpaintRevision ? (
-        <ReshapeBoundaryToolbar
-          levelId={levelId}
-          roomId={selectedRoomId}
-          version={version}
-          onApplyRevision={onInpaintRevision}
-        />
-      ) : null}
-      {addProtrusionEnabled && onInpaintRevision ? (
-        <AddProtrusionToolbar levelId={levelId} version={version} onApplyRevision={onInpaintRevision} />
-      ) : null}
+      {addProtrusionEnabled ? <AddProtrusionToolbar levelId={levelId} version={version} /> : null}
       {roomTopologyEnabled && selectedRoom ? (
         <RoomTopologyToolbar
           disabled={Boolean(previewRooms)}
@@ -382,6 +375,13 @@ export function FloorPlanCanvas({
           }}
         >
           <GridLayer version={visibleVersion} />
+          {traceEnabled && importReference ? (
+            <ReferenceImageLayer
+              opacity={importReference.opacity}
+              previewUrl={importReference.previewUrl}
+              version={version}
+            />
+          ) : null}
           <OutlineLayer version={version} setback={setback} />
           <RoomFillLayer
             rooms={rooms}
@@ -450,6 +450,7 @@ export function FloorPlanCanvas({
           {geometryEditEnabled ? " / Drag vertices or edge handles" : ""}
           {hoveredWallDraggable && !previewRooms ? " / Drag wall line" : ""}
           {traceEnabled ? " / Trace mode" : ""}
+          {traceEnabled && importReference ? " / Reference underlay" : ""}
           {inpaintEnabled ? " / Inpaint mask" : ""}
           {sketchInputEnabled ? " / Sketch input" : ""}
           {sketchInputEnabled && recognitionStatus === "pending" ? " / pause to auto-label" : ""}
@@ -481,6 +482,22 @@ export function FloorPlanCanvas({
           </button>
           {!gridSnapEnabled ? <span className="text-[11px] text-warning">Grid snap off (Alt)</span> : null}
         </div>
+        {traceEnabled && importReference ? (
+          <div className="absolute right-3 top-3 rounded border border-line bg-[#081018]/95 px-3 py-2">
+            <label className="flex items-center gap-2 text-[11px] text-muted">
+              <span>Reference</span>
+              <input
+                className="accent-accent"
+                max={100}
+                min={10}
+                type="range"
+                value={Math.round(importReference.opacity * 100)}
+                onChange={(event) => setReferenceOpacity(Number(event.target.value) / 100)}
+              />
+              <span className="w-8 text-right text-slate-100">{Math.round(importReference.opacity * 100)}%</span>
+            </label>
+          </div>
+        ) : null}
         {interactive && hud ? (
           <div className="absolute bottom-3 right-3 rounded border border-accent/35 bg-[#081018]/95 px-3 py-2 text-xs">
             <div className="font-semibold tracking-wide text-accent">{hud.type}</div>

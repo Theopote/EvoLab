@@ -18,6 +18,9 @@ interface PlanChangeProposalPanelProps {
   baseVersion: PlanVersion;
   proposal: PlanChangeProposal;
   lockedElementIds?: string[];
+  allowedRoomIds?: string[];
+  defaultAcceptedOperationIds?: string[];
+  applyNotice?: string;
   onApply: (version: PlanVersion, acceptedOperationIds: string[]) => void;
   onDismiss: () => void;
   onAddComment?: (text: string) => void;
@@ -27,6 +30,9 @@ export function PlanChangeProposalPanel({
   baseVersion,
   proposal,
   lockedElementIds = [],
+  allowedRoomIds,
+  defaultAcceptedOperationIds,
+  applyNotice,
   onApply,
   onDismiss,
   onAddComment
@@ -38,28 +44,29 @@ export function PlanChangeProposalPanel({
     const unlocked = proposal.operations
       .filter((operation) => !isOperationBlockedByLocks(operation, lockedElementIds, baseVersion))
       .map((operation) => operation.id);
+    const initial = defaultAcceptedOperationIds ?? unlocked;
 
-    return new Set(unlocked);
+    return new Set(initial.filter((operationId) => unlocked.includes(operationId)));
   });
 
   useEffect(() => {
-    setAcceptedIds(
-      new Set(
-        proposal.operations
-          .filter((operation) => !isOperationBlockedByLocks(operation, lockedElementIds, baseVersion))
-          .map((operation) => operation.id)
-      )
-    );
-  }, [baseVersion, proposal, lockedElementIds]);
+    const unlocked = proposal.operations
+      .filter((operation) => !isOperationBlockedByLocks(operation, lockedElementIds, baseVersion))
+      .map((operation) => operation.id);
+    const initial = defaultAcceptedOperationIds ?? unlocked;
+
+    setAcceptedIds(new Set(initial.filter((operationId) => unlocked.includes(operationId))));
+  }, [baseVersion, defaultAcceptedOperationIds, proposal, lockedElementIds]);
 
   const preview = useMemo(
     () =>
       buildPreviewVersion(baseVersion, proposal, {
         acceptedOperationIds: [...acceptedIds],
         lockedElementIds,
+        allowedRoomIds,
         versionLabel: `${baseVersion.label} / Copilot (${acceptedIds.size}/${proposal.operations.length})`
       }),
-    [acceptedIds, baseVersion, lockedElementIds, proposal]
+    [acceptedIds, allowedRoomIds, baseVersion, lockedElementIds, proposal]
   );
 
   const report = useMemo(
@@ -67,9 +74,10 @@ export function PlanChangeProposalPanel({
       applyPlanOperationsWithReport(baseVersion, proposal.operations, {
         acceptedOperationIds: [...acceptedIds],
         lockedElementIds,
+        allowedRoomIds,
         skipPostProcess: true
       }),
-    [acceptedIds, baseVersion, lockedElementIds, proposal.operations]
+    [acceptedIds, allowedRoomIds, baseVersion, lockedElementIds, proposal.operations]
   );
 
   const focusedRoomIds = useMemo(() => {
@@ -141,6 +149,10 @@ export function PlanChangeProposalPanel({
                 ))}
               </ul>
             </div>
+          ) : null}
+
+          {applyNotice ? (
+            <div className="rounded border border-warning/30 bg-warning/5 p-2 text-[11px] text-warning">{applyNotice}</div>
           ) : null}
 
           {report.skippedOperations.length ? (

@@ -94,6 +94,51 @@ export const MergeRoomOperationSchema = BaseOperationSchema.extend({
   mergedRoomName: z.string().min(1).optional()
 });
 
+const PointTupleSchema = z.tuple([z.number(), z.number()]);
+
+export const UpdateRoomPolygonOperationSchema = BaseOperationSchema.extend({
+  type: z.literal("update_room_polygon"),
+  roomId: z.string().min(1),
+  polygon: z.array(PointTupleSchema).min(3).max(32)
+});
+
+const OpeningPatchSchema = z.object({
+  wall: z.enum(["north", "south", "east", "west"]),
+  position: z.number().min(0).max(1),
+  width: z.number().positive()
+});
+
+export const AddRoomOperationSchema = BaseOperationSchema.extend({
+  type: z.literal("add_room"),
+  room: z.object({
+    id: z.string().min(1),
+    name: z.string().min(1),
+    type: z.string().min(1),
+    zone: z.string().min(1),
+    polygon: z.array(PointTupleSchema).min(3),
+    areaSqm: z.number().positive(),
+    doors: z.array(OpeningPatchSchema).default([]),
+    windows: z.array(OpeningPatchSchema).default([])
+  })
+});
+
+export const AddProtrusionOperationSchema = BaseOperationSchema.extend({
+  type: z.literal("add_protrusion"),
+  roomId: z.string().min(1),
+  protrusion: z.object({
+    id: z.string().min(1),
+    type: z.enum(["bay_window", "niche", "balcony"]),
+    footprint: z.array(PointTupleSchema).min(3),
+    depthM: z.number().positive(),
+    widthM: z.number().positive().optional(),
+    sillHeightM: z.number().optional(),
+    headroomM: z.number().optional(),
+    positionOnEdge: z.number().min(0).max(1).optional(),
+    gfaExempt: z.boolean().optional(),
+    gfaExemptBasis: z.string().optional()
+  })
+});
+
 export const PlanOperationSchema = z.discriminatedUnion("type", [
   MoveCoreOperationSchema,
   ShiftRoomsOperationSchema,
@@ -104,7 +149,10 @@ export const PlanOperationSchema = z.discriminatedUnion("type", [
   SplitRoomOperationSchema,
   MergeRoomOperationSchema,
   AddOpeningOperationSchema,
-  ResizeOpeningOperationSchema
+  ResizeOpeningOperationSchema,
+  UpdateRoomPolygonOperationSchema,
+  AddRoomOperationSchema,
+  AddProtrusionOperationSchema
 ]);
 
 export const PlanChangeProposalSchema = z.object({

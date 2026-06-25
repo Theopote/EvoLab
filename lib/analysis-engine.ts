@@ -9,6 +9,8 @@ import {
 } from "@/lib/typology/analysis-layers";
 import type { FlowDefinition, FlowSegmentDef, TypologyPack } from "@/lib/typology/types";
 import { resolveTypologyPack } from "@/lib/typology/resolve";
+import { levelGeometryForRoom } from "@/lib/level-rooms";
+import { scopeVersionForLevel } from "@/lib/plan-scope";
 import type { AnalysisLayerId, PlanVersion, Point, Room } from "@/lib/project-types";
 
 export interface AnalysisRoomOverlay {
@@ -105,10 +107,7 @@ function nearestCorePoint(version: PlanVersion): Point {
 }
 
 function hasWindowOpening(version: PlanVersion, room: Room) {
-  const level = room.levelId
-    ? version.levels.find((item) => item.id === room.levelId) ?? version.levels[0]
-    : version.levels[0];
-  const openings = level?.openings ?? [];
+  const { openings } = levelGeometryForRoom(version, room);
 
   if (openings.length === 0) {
     return room.windows.length > 0;
@@ -329,14 +328,7 @@ export function computeAnalysis(
   const pack = resolvedOptions.typologyPack ?? resolveTypologyPack(resolvedOptions.projectType);
   const layers = canonicalizeAnalysisLayers(requestedLayers);
 
-  const level = levelId
-    ? version.levels.find((item) => item.id === levelId) ?? version.levels[0]
-    : version.levels[0];
-  const scopedVersion: PlanVersion = {
-    ...version,
-    rooms: level?.rooms ?? version.rooms,
-    levels: level ? [level] : version.levels
-  };
+  const scopedVersion = scopeVersionForLevel(version, levelId);
   const roomOverlays = scopedVersion.rooms.map(roomOverlay);
   const corePoint = nearestCorePoint(scopedVersion);
   const needsGraph =

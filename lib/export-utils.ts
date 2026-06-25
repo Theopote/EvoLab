@@ -1,6 +1,6 @@
 import type { ComplianceItem, QuantityResult } from "@/lib/quantity-engine";
 import { createIfcExportPayload } from "@/lib/ifc-export-contract";
-import { getResolvedLevel } from "@/lib/level-rooms";
+import { getResolvedLevel, resolveLevelOutline } from "@/lib/level-rooms";
 import type { PlanVersion, ProjectData, Room } from "@/lib/project-types";
 
 const zoneColors: Record<Room["zone"], string> = {
@@ -54,7 +54,8 @@ export function createPlanSvg(version: PlanVersion, levelId?: string) {
   const height = version.overallBounds.height + padding * 2;
   const viewBox = `${-padding} ${-padding} ${width} ${height}`;
   const resolvedLevel = levelId ? getResolvedLevel(version, levelId) : undefined;
-  const rooms = (resolvedLevel?.rooms ?? version.rooms)
+  const roomList = resolvedLevel?.rooms ?? version.rooms;
+  const rooms = roomList
     .map((room) => {
       const center = centroid(room);
       return `
@@ -66,6 +67,7 @@ export function createPlanSvg(version: PlanVersion, levelId?: string) {
     })
     .join("\n");
   const level = resolvedLevel ?? version.levels.find((item) => item.id === levelId) ?? version.levels[0];
+  const levelOutline = level ? resolveLevelOutline(level, version.standardFloorGroups, version.outline) : version.outline;
   const walls = level?.walls
     .map(
       (wall) =>
@@ -85,7 +87,7 @@ export function createPlanSvg(version: PlanVersion, levelId?: string) {
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" width="${width * 10}" height="${height * 10}">
   <rect x="${-padding}" y="${-padding}" width="${width}" height="${height}" fill="#081018" />
-  <polygon points="${polygonPoints(version.outline)}" fill="rgba(255,255,255,0.018)" stroke="#d8edf5" stroke-width="0.35" />
+  <polygon points="${polygonPoints(levelOutline)}" fill="rgba(255,255,255,0.018)" stroke="#d8edf5" stroke-width="0.35" />
 ${rooms}
 ${walls ?? ""}
 ${openings ?? ""}
@@ -100,8 +102,14 @@ export function createQuantityCsv(quantities: QuantityResult) {
 }
 
 export function createComplianceCsv(items: ComplianceItem[]) {
-  const header = ["Title", "Status", "Message", "Basis"];
-  const rows = items.map((item) => [item.title, item.status, item.message, item.basis]);
+  const header = ["Floor / Scope", "Title", "Status", "Message", "Basis"];
+  const rows = items.map((item) => [
+    item.levelName ?? (item.scope === "building_wide" ? "Building-wide" : "—"),
+    item.title,
+    item.status,
+    item.message,
+    item.basis
+  ]);
   return [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
 }
 

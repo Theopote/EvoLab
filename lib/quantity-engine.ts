@@ -1,12 +1,16 @@
-import type { CodeContext } from "@/lib/building-domain";
+import type { CodeContext, ScoringConfig } from "@/lib/building-domain";
 import { defaultHealthcareCodeContext } from "@/lib/building-domain";
-import type { FunctionZone, OpeningElement, PlanVersion, Point, Room, RoomType, Wall } from "@/lib/project-types";
-import { resolveLevelRooms } from "@/lib/level-rooms";
-import { buildVerticalAlignmentReport } from "@/lib/vertical-alignment";
-import { computeEgressPathMetrics, computeWetCorePathMetrics, egressMethodLabel } from "@/lib/rules/path-metrics";
-import { measureCorridorsClearWidth } from "@/lib/rules/metrics/corridor-width";
-import { checkDaylightCompliance } from "@/lib/rules/metrics/daylight-compliance";
-import { resolveRulePack, ruleBasis, ruleThreshold } from "@/lib/rules/rule-pack";
+import {
+  buildComplianceContext,
+  runComplianceCheck,
+  type ComplianceResult,
+  type ComplianceSeverity,
+  type ComplianceScope
+} from "@/lib/compliance-rules";
+import type { FunctionZone, OpeningElement, PlanVersion, Point, Room, RoomType, Wall, CopilotActionId } from "@/lib/project-types";
+import { resolveLevelOutline, resolveLevelRooms } from "@/lib/level-rooms";
+import { resolvePlanScope, type PlanScopeKind } from "@/lib/plan-scope";
+import { resolveRulePack } from "@/lib/rules/rule-pack";
 import type { RulePack } from "@/lib/rules/types";
 
 export interface QuantityRow {
@@ -35,10 +39,11 @@ export interface QuantityResult {
   };
 }
 
-export type QuantityScope = "level" | "building";
+export type QuantityScope = PlanScopeKind;
 
 export interface QuantityOptions {
   levelId?: string;
+  standardFloorGroupId?: string;
   scope?: QuantityScope;
 }
 
@@ -50,6 +55,30 @@ export interface ComplianceItem {
   basis: string;
   levelId?: string;
   levelName?: string;
+  ruleId?: string;
+  code?: string;
+  severity?: ComplianceSeverity;
+  scope?: ComplianceScope;
+  affectedFloorIds?: string[];
+  fixActionId?: CopilotActionId;
+}
+
+function toComplianceItem(result: ComplianceResult): ComplianceItem {
+  return {
+    id: result.id,
+    ruleId: result.ruleId,
+    code: result.code,
+    title: result.title,
+    status: result.status,
+    message: result.message,
+    basis: result.basis,
+    levelId: result.levelId,
+    levelName: result.levelName,
+    severity: result.severity,
+    scope: result.scope,
+    affectedFloorIds: result.affectedFloorIds,
+    fixActionId: result.fixActionId
+  };
 }
 
 function round(value: number, digits = 1) {
@@ -78,69 +107,24 @@ function polygonArea(points: Point[]) {
   return Math.abs(area) / 2;
 }
 
-function centroid(room: Room): Point {
-  const total = room.polygon.reduce((acc, [x, y]) => [acc[0] + x, acc[1] + y] as Point, [0, 0]);
-  return [total[0] / room.polygon.length, total[1] / room.polygon.length];
+function resolveQuantityScope(version: PlanVersion, options: QuantityOptions): QuantityScope {
+  return resolvePlanScope(version, options).scope;
 }
 
-function nearestDistanceToRooms(room: Room, targets: Room[], version: PlanVersion) {
-  if (targets.length === 0) {
-    return Infinity;
-  }
-
-  const wetMetrics = computeWetCorePathMetrics(version);
-  const roomMetric = wetMetrics.perRoom.find((item) => item.roomId === room.id);
-  if (roomMetric) {
-    return roomMetric.distance;
-  }
-
-  const roomCenter = centroid(room);
-  return Math.min(...targets.map((target) => distance(roomCenter, centroid(target))));
+function roomsForQuantities(version: PlanVersion, options: QuantityOptions, scope: QuantityScope) {
+  return resolvePlanScope(version, { ...options, scope }).rooms;
 }
 
-function activeLevel(version: PlanVersion, levelId?: string) {
-  if (!levelId) {
-    return version.levels[0];
-  }
-
-  return version.levels.find((level) => level.id === levelId) ?? version.levels[0];
+function wallsForQuantities(version: PlanVersion, options: QuantityOptions, scope: QuantityScope) {
+  return resolvePlanScope(version, { ...options, scope }).walls;
 }
 
-function resolveQuantityScope(version: PlanVersion, levelId?: string, scope?: QuantityScope): QuantityScope {
-  if (scope) {
-    return scope;
-  }
-
-  if (levelId) {
-    return "level";
-  }
-
-  return version.levels.length > 1 ? "building" : "level";
+function openingsForQuantities(version: PlanVersion, options: QuantityOptions, scope: QuantityScope) {
+  return resolvePlanScope(version, { ...options, scope }).openings;
 }
 
-function roomsForQuantities(version: PlanVersion, levelId: string | undefined, scope: QuantityScope) {
-  if (scope === "building") {
-    return version.rooms;
-  }
-
-  const level = activeLevel(version, levelId);
-  return level ? resolveLevelRooms(level, version.standardFloorGroups) : version.rooms;
-}
-
-function wallsForQuantities(version: PlanVersion, levelId: string | undefined, scope: QuantityScope) {
-  if (scope === "building") {
-    return version.levels.flatMap((level) => level.walls);
-  }
-
-  return activeLevel(version, levelId)?.walls ?? [];
-}
-
-function openingsForQuantities(version: PlanVersion, levelId: string | undefined, scope: QuantityScope) {
-  if (scope === "building") {
-    return version.levels.flatMap((level) => level.openings);
-  }
-
-  return activeLevel(version, levelId)?.openings ?? [];
+function outlineForQuantities(version: PlanVersion, options: QuantityOptions, scope: QuantityScope) {
+  return resolvePlanScope(version, { ...options, scope }).outline;
 }
 
 function roomOpenings(room: Room, openings: OpeningElement[], type: OpeningElement["type"]) {
@@ -296,27 +280,31 @@ export function calculateQuantities(
 ): QuantityResult {
   const options: QuantityOptions =
     typeof levelIdOrOptions === "string" ? { levelId: levelIdOrOptions } : (levelIdOrOptions ?? {});
-  const scope = resolveQuantityScope(version, options.levelId, options.scope);
-  const rooms = roomsForQuantities(version, options.levelId, scope);
-  const walls = wallsForQuantities(version, options.levelId, scope);
-  const openings = openingsForQuantities(version, options.levelId, scope);
-  const outlineArea = polygonArea(version.outline);
+  const scope = resolveQuantityScope(version, options);
+  const rooms = roomsForQuantities(version, options, scope);
+  const walls = wallsForQuantities(version, options, scope);
+  const openings = openingsForQuantities(version, options, scope);
+  const outline = outlineForQuantities(version, options, scope);
+  const outlineArea = polygonArea(outline);
   const topLevel = version.levels[version.levels.length - 1];
+  const groups = version.standardFloorGroups;
 
   if (scope === "building") {
     const perLevelSlab = version.levels.reduce((total, level) => {
-      const levelOutline = level.floor?.outline ?? version.outline;
-      const levelGross = level.rooms.reduce((sum, room) => sum + room.areaSqm, 0);
+      const levelOutline = resolveLevelOutline(level, groups, version.outline);
+      const levelRooms = resolveLevelRooms(level, groups);
+      const levelGross = levelRooms.reduce((sum, room) => sum + room.areaSqm, 0);
       return total + (polygonArea(levelOutline) || levelGross);
     }, 0);
-    const roofOutline = topLevel?.floor?.outline ?? version.outline;
-    const roofGross = topLevel?.rooms.reduce((sum, room) => sum + room.areaSqm, 0) ?? 0;
+    const topResolved = topLevel ? resolveLevelRooms(topLevel, groups) : [];
+    const roofOutline = topLevel ? resolveLevelOutline(topLevel, groups, version.outline) : version.outline;
+    const roofGross = topResolved.reduce((sum, room) => sum + room.areaSqm, 0);
 
     return buildQuantityResult(
       rooms,
       walls,
       openings,
-      version.outline,
+      outline,
       "Sum of per-level slab areas",
       "Top level outline area",
       perLevelSlab || outlineArea * Math.max(1, version.levels.length),
@@ -328,10 +316,19 @@ export function calculateQuantities(
     rooms,
     walls,
     openings,
-    version.outline,
-    "Outline polygon area",
-    "Assume roof equals outline area"
+    outline,
+    "Level outline polygon area",
+    scope === "floor_group" ? "Assume roof equals standard-floor-group outline" : "Assume roof equals level outline area"
   );
+}
+
+export function calculateQuantitiesByFloorGroup(version: PlanVersion): Record<string, QuantityResult> {
+  const groups = version.standardFloorGroups ?? [];
+
+  return groups.reduce<Record<string, QuantityResult>>((acc, group) => {
+    acc[group.id] = calculateQuantities(version, { standardFloorGroupId: group.id, scope: "floor_group" });
+    return acc;
+  }, {});
 }
 
 export function calculateQuantitiesByLevel(version: PlanVersion): Record<string, QuantityResult> {
@@ -341,194 +338,16 @@ export function calculateQuantitiesByLevel(version: PlanVersion): Record<string,
   }, {});
 }
 
-function checkComplianceForLevel(version: PlanVersion, levelId: string, rulePack: RulePack): ComplianceItem[] {
-  const level = activeLevel(version, levelId);
-  const rooms = level ? resolveLevelRooms(level, version.standardFloorGroups) : [];
-  const openings = level?.openings ?? [];
-  const corridorRooms = rooms.filter((room) => room.type === "corridor");
-  const stairRooms = rooms.filter((room) => room.type === "stair" || room.type === "elevator");
-  const shaftOrEquipmentRooms = rooms.filter((room) => room.type === "shaft" || room.type === "equipment_room");
-  const roomsNeedingDaylight = rooms.filter((room) => room.needsDaylight);
-  const roomsNeedingPlumbing = rooms.filter((room) => room.needsPlumbing);
-  const egressMetrics = computeEgressPathMetrics(version, levelId);
-  const corridorMinWidth = ruleThreshold(rulePack, "corridor-width", 1.2);
-  const egressMaxDistance = rulePack.scoring.egressMaxDistanceM;
-  const maxEgressDistance = egressMetrics.maxDistance;
-  const egressMethod = egressMetrics.method;
-  const egressLabel = egressMethodLabel(egressMethod);
-  const egressDistanceOk = maxEgressDistance <= egressMaxDistance;
-  const egressSemanticOk =
-    egressMethod !== "centroid-fallback" &&
-    egressMethod !== "semantic-incomplete" &&
-    egressMetrics.incompleteRouteCount === 0 &&
-    egressMetrics.fallbackRouteCount === 0;
-  const plumbingMaxDistance = rulePack.scoring.plumbingMaxDistanceM;
-  const daylightMaxDepth = rulePack.scoring.daylightMaxDepthM;
-  const minCoreCount = ruleThreshold(rulePack, "stair-count", 1);
-  const corridorWidths = measureCorridorsClearWidth(corridorRooms);
-  const narrowCorridors = corridorWidths.filter((item) => item.clearWidthM < corridorMinWidth);
-  const daylightResults = checkDaylightCompliance(version, roomsNeedingDaylight, daylightMaxDepth);
-  const roomsWithoutDaylight = daylightResults.filter((item) => !item.compliant);
-  const wetCoreMetrics = computeWetCorePathMetrics(version, levelId);
-  const wetStackIssues = wetCoreMetrics.perRoom.filter(
-    (item) => item.distance > plumbingMaxDistance || (item.missingLinks?.length ?? 0) > 0
-  );
-  const equipmentRooms = rooms.filter((room) => room.type === "equipment_room");
-  const misalignedEquipmentRooms = equipmentRooms.filter((room) =>
-    nearestDistanceToRooms(
-      room,
-      shaftOrEquipmentRooms.filter((target) => target.id !== room.id),
-      version
-    ) > 10
-  );
-  const levelName = level?.name ?? levelId;
-
-  return [
-    {
-      id: "corridor-width",
-      title: "Corridor clear width",
-      status: narrowCorridors.length === 0 ? "success" : "warning",
-      message:
-        narrowCorridors.length === 0
-          ? `No corridor room is narrower than ${corridorMinWidth}m by clear-width geometry.`
-          : `${narrowCorridors.length} corridor room may be narrower than ${corridorMinWidth}m (min clear width ${Math.min(
-              ...narrowCorridors.map((item) => item.clearWidthM)
-            ).toFixed(1)}m).`,
-      basis: ruleBasis(rulePack, "corridor-width", "Corridor clear width should not be less than 1.2m."),
-      levelId,
-      levelName
-    },
-    {
-      id: "egress-distance",
-      title: "Egress travel distance",
-      status: egressDistanceOk && egressSemanticOk ? "success" : "warning",
-      message: !egressDistanceOk
-        ? `Maximum egress path is about ${round(maxEgressDistance)}m via ${egressLabel}${
-            egressMetrics.worstRoomName ? ` (${egressMetrics.worstRoomName})` : ""
-          }, above ${egressMaxDistance}m.`
-        : !egressSemanticOk
-          ? `Maximum egress path is about ${round(maxEgressDistance)}m, but ${
-              egressMetrics.fallbackRouteCount > 0
-                ? `${egressMetrics.fallbackRouteCount} room(s) lack door-corridor-stair geometry for a semantic egress path.`
-                : `${egressMetrics.incompleteRouteCount} room(s) reach an exit without a complete door → corridor → stair chain.`
-            }`
-          : `Maximum egress path is about ${round(maxEgressDistance)}m via ${egressLabel}.`,
-      basis: ruleBasis(rulePack, "egress-distance", "Egress travel distance should not exceed 30m."),
-      levelId,
-      levelName
-    },
-    {
-      id: "daylight",
-      title: "Main room daylight",
-      status: roomsWithoutDaylight.length === 0 ? "success" : "warning",
-      message:
-        roomsWithoutDaylight.length === 0
-          ? `All ${daylightResults.length} daylight-required rooms meet exterior window and ${daylightMaxDepth}m depth limits.`
-          : `${roomsWithoutDaylight.length} daylight-required room fails exterior window, facade contact, or ${daylightMaxDepth}m depth.`,
-      basis: `Rooms with needsDaylight should touch an exterior wall, have windows, and stay within ${daylightMaxDepth}m depth.`,
-      levelId,
-      levelName
-    },
-    {
-      id: "plumbing-proximity",
-      title: "Plumbing proximity",
-      status: wetStackIssues.length === 0 ? "success" : "warning",
-      message:
-        wetStackIssues.length === 0
-          ? "Wet rooms reach a shaft stack via horizontal path with riser alignment where multi-floor stacks exist."
-          : `${wetStackIssues.length} wet room may exceed ${plumbingMaxDistance}m stack path or lacks vertical riser alignment.`,
-      basis: `Wet rooms should reach a shaft stack within ${plumbingMaxDistance}m horizontal path and align to a vertical riser.`,
-      levelId,
-      levelName
-    },
-    {
-      id: "stair-count",
-      title: "Stair and vertical core count",
-      status: stairRooms.length >= minCoreCount ? "success" : "warning",
-      message:
-        stairRooms.length >= minCoreCount
-          ? `${stairRooms.length} vertical core room is present.`
-          : "No stair or elevator core room is present.",
-      basis: ruleBasis(rulePack, "stair-count", "At least one stair/elevator core should exist."),
-      levelId,
-      levelName
-    },
-    {
-      id: "equipment-shaft-alignment",
-      title: "Equipment and shaft alignment",
-      status: misalignedEquipmentRooms.length === 0 ? "success" : "warning",
-      message:
-        misalignedEquipmentRooms.length === 0
-          ? "Equipment rooms are aligned with a shaft or service room by distance check."
-          : `${misalignedEquipmentRooms.length} equipment room may not align with shafts.`,
-      basis: "Example rule: equipment rooms should align with shafts or service risers.",
-      levelId,
-      levelName
-    }
-  ];
-}
-
-function checkVerticalAlignmentCompliance(version: PlanVersion): ComplianceItem[] {
-  if (version.levels.length <= 1) {
-    return [];
-  }
-
-  const report = buildVerticalAlignmentReport(version);
-  const items: ComplianceItem[] = [
-    {
-      id: "vertical-alignment-summary",
-      title: "Vertical structural alignment",
-      status: report.aligned ? "success" : "warning",
-      message: report.aligned
-        ? "Grid columns and vertical cores are contained on all served floors."
-        : `${report.issues.length} vertical element issue(s) across ${
-            new Set(report.issues.map((issue) => issue.floorId)).size
-          } floor(s).`,
-      basis: "Columns and cores must have a valid container room on every served floor."
-    }
-  ];
-
-  report.transferHints.forEach((hint) => {
-    items.push({
-      id: hint.id,
-      title: "Transfer floor suggested",
-      status: "warning",
-      message: hint.message,
-      basis: "Column grid shifts between unlike floor programs should use an explicit transfer floor."
-    });
-  });
-
-  return items;
-}
-
 export function checkCompliance(
   version: PlanVersion,
   codeContext: CodeContext = defaultHealthcareCodeContext,
-  rulePack: RulePack = resolveRulePack({ codeContext })
+  rulePack: RulePack = resolveRulePack({ codeContext }),
+  options: { buildingType?: string; scoringConfig?: ScoringConfig } = {}
 ): ComplianceItem[] {
-  if (version.levels.length <= 1) {
-    const levelId = version.levels[0]?.id ?? "level-01";
-    return [...checkComplianceForLevel(version, levelId, rulePack), ...checkVerticalAlignmentCompliance(version)];
-  }
-
-  const perLevel = version.levels.flatMap((level) => checkComplianceForLevel(version, level.id, rulePack));
-  const rollup = new Map<string, ComplianceItem>();
-
-  perLevel.forEach((item) => {
-    const existing = rollup.get(item.id);
-
-    if (!existing || (existing.status === "success" && item.status === "warning")) {
-      rollup.set(item.id, {
-        ...item,
-        message:
-          item.status === "warning"
-            ? `${item.message} Worst case on ${item.levelName}.`
-            : item.message,
-        levelId: undefined,
-        levelName: undefined
-      });
-    }
+  const ctx = buildComplianceContext(version, rulePack, {
+    buildingType: options.buildingType ?? "healthcare",
+    scoringConfig: options.scoringConfig
   });
 
-  return [...rollup.values(), ...checkVerticalAlignmentCompliance(version)];
+  return runComplianceCheck(ctx).map(toComplianceItem);
 }

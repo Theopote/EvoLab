@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter.js";
 import type { OpeningElement, PlanVersion, Room, Wall } from "@/lib/project-types";
+import { getResolvedLevel, resolveLevelOutline } from "@/lib/level-rooms";
 import { getRoomMaterialSpec } from "@/components/viewer-3d/materials";
 import { getPolygonBounds } from "@/components/viewer-3d/wallGeometry";
 
@@ -50,12 +51,58 @@ function addOpenings(group: THREE.Group, openings: OpeningElement[]) {
   });
 }
 
+function addLevelGeometry(
+  parent: THREE.Group,
+  version: PlanVersion,
+  level: PlanVersion["levels"][number],
+  offsetX: number,
+  offsetZ: number
+) {
+  const resolved = getResolvedLevel(version, level.id);
+
+  if (!resolved) {
+    return;
+  }
+
+  const levelRoot = new THREE.Group();
+  levelRoot.rotation.x = -Math.PI / 2;
+  levelRoot.position.set(offsetX, level.elevation, offsetZ);
+
+  const outline = resolveLevelOutline(level, version.standardFloorGroups, version.outline);
+  const slab = new THREE.Mesh(
+    new THREE.ShapeGeometry(createRoomShape({ polygon: outline } as Room)),
+    new THREE.MeshStandardMaterial({ color: "#1f2937", opacity: 0.25, transparent: true })
+  );
+  slab.position.z = -0.08;
+  levelRoot.add(slab);
+
+  resolved.rooms.forEach((room) => {
+    const spec = getRoomMaterialSpec(room.type, room.zone);
+    const mesh = new THREE.Mesh(
+      new THREE.ExtrudeGeometry(createRoomShape(room), { depth: 0.14, bevelEnabled: false }),
+      new THREE.MeshStandardMaterial({ color: spec.color, opacity: spec.opacity, transparent: true, side: THREE.DoubleSide })
+    );
+    mesh.name = room.id;
+    levelRoot.add(mesh);
+  });
+
+  addWalls(levelRoot, resolved.walls);
+  addOpenings(levelRoot, resolved.openings);
+  parent.add(levelRoot);
+}
+
 export function buildGltfGroup(version: PlanVersion) {
   const group = new THREE.Group();
   group.name = version.label;
   const outlineBounds = getPolygonBounds(version.outline);
   const offsetX = -(outlineBounds.minX + outlineBounds.maxX) / 2;
   const offsetZ = -(outlineBounds.minY + outlineBounds.maxY) / 2;
+
+  if (version.levels.length > 0) {
+    version.levels.forEach((level) => addLevelGeometry(group, version, level, offsetX, offsetZ));
+    return group;
+  }
+
   const root = new THREE.Group();
   root.rotation.x = -Math.PI / 2;
   root.position.set(offsetX, 0, offsetZ);
@@ -77,9 +124,6 @@ export function buildGltfGroup(version: PlanVersion) {
     root.add(mesh);
   });
 
-  const level = version.levels[0];
-  addWalls(root, level?.walls ?? []);
-  addOpenings(root, level?.openings ?? []);
   group.add(root);
   return group;
 }

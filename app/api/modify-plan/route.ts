@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requestAnthropicTool } from "@/lib/anthropic-tool";
 import { normalizeImageInputs } from "@/lib/image-input";
+import { formatCopilotFallbackWarning } from "@/lib/copilot-supported-operations";
 import { createMockModifiedVersion } from "@/lib/mock-api";
 import { buildPreviewVersion } from "@/lib/plan-change-engine";
 import { proposePlanChangesPrompt } from "@/lib/prompts/proposePlanChangesPrompt";
@@ -70,6 +71,6 @@ export async function POST(request: Request) {
   return NextResponse.json({
     ...fallback,
     fallback: true,
-    warning: "Copilot returned no operations; deterministic mock proposal was used."
+    warning: fallback.warning ?? formatCopilotFallbackWarning()
   } satisfies ModifyPlanResponse);
 }

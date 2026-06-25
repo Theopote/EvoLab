@@ -2,19 +2,20 @@
 
 import { Eraser, SquarePlus } from "lucide-react";
 import { useState } from "react";
+import { PlanChangeProposalPanel } from "@/components/copilot/PlanChangeProposalPanel";
+import { useCopilotProposalRevision } from "@/components/copilot/useCopilotProposalRevision";
+import type { CopilotFinding } from "@/lib/project-types";
 import type { PlanVersion } from "@/lib/project-types";
-import { DiffPreviewOverlay } from "@/components/floor-plan/DiffPreviewOverlay";
-import { protrusionDimensions } from "@/lib/add-protrusion";
 import { useLocalFormEditStore } from "@/lib/local-form-edit-store";
+import { buildProposalFromVersionPreview } from "@/lib/proposal-from-preview";
 import { useEvoProject } from "@/lib/project-store";
 
 interface AddProtrusionToolbarProps {
   version?: PlanVersion;
   levelId?: string;
-  onApplyRevision: (version: PlanVersion, prompt: string) => void;
 }
 
-export function AddProtrusionToolbar({ version, levelId, onApplyRevision }: AddProtrusionToolbarProps) {
+export function AddProtrusionToolbar({ version, levelId }: AddProtrusionToolbarProps) {
   const scoringConfig = useEvoProject((state) => state.project.domain.scoringConfig);
   const protrusionPlacement = useLocalFormEditStore((state) => state.protrusionPlacement);
   const protrusionPrompt = useLocalFormEditStore((state) => state.protrusionPrompt);
@@ -23,15 +24,16 @@ export function AddProtrusionToolbar({ version, levelId, onApplyRevision }: AddP
   const setProtrusionPlacement = useLocalFormEditStore((state) => state.setProtrusionPlacement);
   const setProtrusionWidthM = useLocalFormEditStore((state) => state.setProtrusionWidthM);
   const clearProtrusionPlacement = useLocalFormEditStore((state) => state.clearProtrusionPlacement);
+  const {
+    lockedElementIds,
+    pendingProposal,
+    prepareProposal,
+    applyPendingProposal,
+    dismissPendingProposal
+  } = useCopilotProposalRevision({ activeVersion: version });
   const [isSending, setIsSending] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const [pendingPreview, setPendingPreview] = useState<{
-    version: PlanVersion;
-    prompt: string;
-    warning?: string;
-    gfaBasis?: string;
-    dimensionOverlay?: { widthM: number; depthM: number; label: string };
-  } | null>(null);
+  const [applyNotice, setApplyNotice] = useState<string | undefined>();
 
   const level = version?.levels.find((item) => item.id === levelId) ?? version?.levels[0];
   const walls = level?.walls ?? [];
@@ -67,36 +69,35 @@ export function AddProtrusionToolbar({ version, levelId, onApplyRevision }: AddP
 
       const data = (await response.json()) as {
         version?: PlanVersion;
-        protrusion?: { depthM: number; widthM?: number };
+        findings?: CopilotFinding[];
         warning?: string;
         gfaBasis?: string;
         error?: string;
       };
 
-      if (!response.ok || !data.version || !data.protrusion) {
+      if (!response.ok || !data.version) {
         throw new Error(data.error ?? `add-protrusion failed with ${response.status}`);
       }
 
-      const dimensions = protrusionDimensions({
-        id: "preview",
-        type: "bay_window",
-        footprint: [],
-        depthM: data.protrusion.depthM,
-        widthM: data.protrusion.widthM ?? protrusionWidthM
+      const proposal = buildProposalFromVersionPreview(version, data.version, protrusionPrompt.trim(), {
+        focusRoomIds: [hostRoomId]
       });
 
-      setPendingPreview({
-        version: data.version,
+      if (!proposal?.operations.length) {
+        throw new Error("Protrusion preview did not produce reviewable operations.");
+      }
+
+      prepareProposal({
         prompt: protrusionPrompt.trim(),
+        baseVersion: version,
+        proposal,
+        findings: data.findings ?? [],
         warning: data.warning,
-        gfaBasis: data.gfaBasis,
-        dimensionOverlay: {
-          widthM: dimensions.widthM,
-          depthM: dimensions.depthM,
-          label: `${dimensions.widthM.toFixed(2)}m × ${dimensions.depthM.toFixed(2)}m`
-        }
+        allowedRoomIds: [hostRoomId]
       });
-      setNotice("Review the protrusion union before accepting.");
+
+      setApplyNotice([data.warning, data.gfaBasis].filter(Boolean).join(" "));
+      setNotice("Review the protrusion operation before applying.");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Protrusion preview failed.");
     } finally {
@@ -104,35 +105,29 @@ export function AddProtrusionToolbar({ version, levelId, onApplyRevision }: AddP
     }
   }
 
-  function acceptPreview() {
-    if (!pendingPreview) {
-      return;
-    }
-
-    onApplyRevision(pendingPreview.version, pendingPreview.prompt);
-    clearProtrusionPlacement();
-    setPendingPreview(null);
-    setNotice(pendingPreview.warning ? `Applied with note: ${pendingPreview.warning}` : "Protrusion applied.");
-  }
-
-  function rejectPreview() {
-    setPendingPreview(null);
-    setNotice("Protrusion preview rejected.");
-  }
-
   return (
     <div className="mb-3 rounded border border-cyan-500/35 bg-cyan-500/10 p-3">
-      {pendingPreview && version ? (
-        <DiffPreviewOverlay
-          baseVersion={version}
-          dimensionOverlay={pendingPreview.dimensionOverlay}
-          highlightRoomIds={hostRoomId ? [hostRoomId] : []}
-          notice={[pendingPreview.warning, pendingPreview.gfaBasis].filter(Boolean).join(" ")}
-          previewVersion={pendingPreview.version}
-          title="Protrusion preview"
-          onAccept={acceptPreview}
-          onReject={rejectPreview}
-        />
+      {pendingProposal && version ? (
+        <div className="mb-3">
+          <PlanChangeProposalPanel
+            allowedRoomIds={[hostRoomId].filter(Boolean) as string[]}
+            applyNotice={applyNotice}
+            baseVersion={pendingProposal.baseVersion}
+            lockedElementIds={lockedElementIds}
+            proposal={pendingProposal.proposal}
+            onApply={(nextVersion, acceptedOperationIds) => {
+              applyPendingProposal(nextVersion, acceptedOperationIds);
+              clearProtrusionPlacement();
+              setApplyNotice(undefined);
+              setNotice("Protrusion applied via accepted operations.");
+            }}
+            onDismiss={() => {
+              dismissPendingProposal();
+              setApplyNotice(undefined);
+              setNotice("Protrusion proposal dismissed.");
+            }}
+          />
+        </div>
       ) : null}
       <div className="mb-2 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-cyan-200">
@@ -182,7 +177,7 @@ export function AddProtrusionToolbar({ version, levelId, onApplyRevision }: AddP
       <div className="flex flex-wrap items-center gap-2">
         <input
           className="h-9 min-w-[240px] flex-1 rounded border border-line bg-[#0b1118] px-2 text-sm text-slate-100 outline-none focus:border-accent/70"
-          disabled={isSending || Boolean(pendingPreview)}
+          disabled={isSending || Boolean(pendingProposal)}
           placeholder='e.g. add a shallow bay window with 0.45m depth'
           value={protrusionPrompt}
           onChange={(event) => setProtrusionPrompt(event.target.value)}
@@ -190,7 +185,7 @@ export function AddProtrusionToolbar({ version, levelId, onApplyRevision }: AddP
         <button
           className="h-9 rounded bg-accent px-3 text-xs font-medium text-[#061014] disabled:cursor-not-allowed disabled:opacity-50"
           disabled={
-            isSending || Boolean(pendingPreview) || !selectedWall || !protrusionPrompt.trim() || !version
+            isSending || Boolean(pendingProposal) || !selectedWall || !protrusionPrompt.trim() || !version
           }
           type="button"
           onClick={() => void submitProtrusion()}

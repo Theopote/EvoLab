@@ -1,8 +1,13 @@
 import type { CodeContext, ProgramModel } from "@/lib/building-domain";
 import type { PlanVersion, VersionScores } from "@/lib/project-types";
-import { calculateVersionScores } from "@/lib/rules/score-engine";
+import {
+  calculateVersionScores,
+  calculateVersionScoresByFloorGroup,
+  calculateVersionScoresByLevel
+} from "@/lib/rules/score-engine";
 import type { ScoreBreakdown } from "@/lib/rules/types";
 import type { PlanValidationIssue } from "@/lib/plan-validation";
+import type { PlanScopeKind } from "@/lib/plan-scope";
 
 export interface CalculateScoresOptions {
   issues?: PlanValidationIssue[];
@@ -11,6 +16,8 @@ export interface CalculateScoresOptions {
   projectType?: string;
   orientationDeg?: number;
   levelId?: string;
+  standardFloorGroupId?: string;
+  scope?: PlanScopeKind;
 }
 
 export function calculateScores(
@@ -34,3 +41,5 @@ export function calculateScoresWithBreakdown(
     issues
   });
 }
+
+export { calculateVersionScoresByFloorGroup, calculateVersionScoresByLevel };

@@ -14,6 +14,7 @@ import {
   resolveRulePack
 } from "@/lib/rules/rule-pack";
 import { resolveTypologyPack, resolveTypologyPackId } from "@/lib/typology/resolve";
+import { resolveEgressWidthConfig } from "@/lib/compliance-rules";
 import type { ProgramGoals, ProgramGoalWeights, RulePack, ScoringThresholds } from "@/lib/rules/types";
 
 export type RulePackPresetId = NonNullable<ScoringConfig["rulePackPreset"]>;
@@ -66,6 +67,18 @@ export const COMPLIANCE_RULE_FIELDS: Array<{ key: "corridor-width" | "egress-dis
     { key: "egress-distance", label: "Egress travel distance", unit: "m" },
     { key: "stair-count", label: "Vertical core count" }
   ];
+
+export const EGRESS_WIDTH_FIELDS: Array<{
+  key: "widthPer100PersonsM" | "areaPerOccupantSqm";
+  label: string;
+  unit?: string;
+  step?: number;
+  min?: number;
+  max?: number;
+}> = [
+  { key: "widthPer100PersonsM", label: "Stair width per 100 persons", unit: "m", step: 0.05, min: 0.5, max: 1.5 },
+  { key: "areaPerOccupantSqm", label: "Occupiable area per person", unit: "sqm", step: 1, min: 2, max: 30 }
+];
 
 const rulePackByPreset: Record<RulePackPresetId, RulePack> = {
   healthcare: defaultHealthcareRulePack,
@@ -122,12 +135,20 @@ export function createDefaultScoringConfig(projectType?: string): ScoringConfig 
 }
 
 export function normalizeScoringConfig(config: ScoringConfig | undefined, projectType?: string): ScoringConfig {
+  const defaults = createDefaultScoringConfig(projectType);
+  const egressDefaults = resolveEgressWidthConfig(projectType ?? "healthcare");
+
   return {
-    ...createDefaultScoringConfig(projectType),
+    ...defaults,
     ...config,
     scoringThresholds: config?.scoringThresholds ? { ...config.scoringThresholds } : undefined,
     goalWeights: config?.goalWeights ? { ...config.goalWeights } : undefined,
-    ruleThresholds: config?.ruleThresholds ? { ...config.ruleThresholds } : undefined
+    ruleThresholds: config?.ruleThresholds ? { ...config.ruleThresholds } : undefined,
+    egressWidth: {
+      widthPer100PersonsM: config?.egressWidth?.widthPer100PersonsM ?? egressDefaults.widthPer100PersonsM,
+      areaPerOccupantSqm: config?.egressWidth?.areaPerOccupantSqm ?? egressDefaults.areaPerOccupantSqm,
+      notice: config?.egressWidth?.notice ?? egressDefaults.notice
+    }
   };
 }
 
