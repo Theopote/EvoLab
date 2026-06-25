@@ -1,6 +1,7 @@
 import { normalizePlanVersion } from "@/lib/architecture-model";
 import { getResolvedLevel } from "@/lib/level-rooms";
-import type { CopilotFinding, PlanVersion, Room } from "@/lib/project-types";
+import type { ModifyPlanResponse } from "@/lib/copilot-modify-types";
+import type { PlanVersion, Room } from "@/lib/project-types";
 
 export function roomsForHybridPicker(version: PlanVersion, levelId?: string): Room[] {
   const level = levelId ? version.levels.find((item) => item.id === levelId) ?? version.levels[0] : version.levels[0];
@@ -33,14 +34,10 @@ export function stampHybridVersion(
   });
 }
 
-export interface HybridizeClientResponse {
-  version: PlanVersion;
-  findings?: CopilotFinding[];
+export type HybridizeClientResponse = ModifyPlanResponse & {
   lockedRoomIds?: string[];
   geometryValid?: boolean;
-  fallback?: boolean;
-  warning?: string;
-}
+};
 
 export async function requestSchemeHybridize(input: {
   versionA: PlanVersion;
@@ -74,5 +71,11 @@ export async function requestSchemeHybridize(input: {
     throw new Error(payload.error ?? `hybridize-schemes failed with ${response.status}`);
   }
 
-  return (await response.json()) as HybridizeClientResponse;
+  const data = (await response.json()) as HybridizeClientResponse;
+
+  if (!data.version?.rooms?.length || !data.proposal?.operations?.length) {
+    throw new Error("hybridize-schemes did not return a change proposal.");
+  }
+
+  return data;
 }

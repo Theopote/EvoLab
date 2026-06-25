@@ -260,7 +260,6 @@ export function EvoLabWorkspace() {
           onSelectVersion={setActiveVersion}
           onGenerateModel={openModelForVersion}
           onRefineVersion={refineVersion}
-          onHybridAccepted={handleHybridAccepted}
           onClose={() => setCompareModeOpen(false)}
           copilotProposals={project.domain.copilotProposals}
           selectedProposalId={selectedProposalId}
@@ -471,7 +470,6 @@ export function EvoLabWorkspace() {
             onSelectVersion={setActiveVersion}
             onGenerateModel={openModelForVersion}
             onRefineVersion={refineVersion}
-            onHybridAccepted={handleHybridAccepted}
           />
         </section>
       );
@@ -587,20 +585,6 @@ export function EvoLabWorkspace() {
       resultVersionId: version.id,
       resultVersionLabel: version.label
     });
-  }
-
-  function handleHybridAccepted(version: Parameters<typeof updateActiveVersion>[0], summary: string) {
-    updateActiveVersion(version, { summary, source: "ai" });
-
-    if (activeVersion) {
-      useCopilotTimelineStore.getState().addEntry({
-        prompt: summary,
-        parentVersionId: activeVersion.id,
-        parentVersionLabel: activeVersion.label,
-        resultVersionId: version.id,
-        resultVersionLabel: version.label
-      });
-    }
   }
 
   function SchemeWorkspace() {

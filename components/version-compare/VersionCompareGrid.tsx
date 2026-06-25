@@ -36,7 +36,6 @@ interface VersionCompareGridProps {
   onSelectVersion: (version: PlanVersion) => void;
   onGenerateModel: (version: PlanVersion) => void;
   onRefineVersion: (version: PlanVersion) => void;
-  onHybridAccepted?: (version: PlanVersion, summary: string) => void;
 }
 
 function useVersionCompareWorker(
@@ -141,8 +140,7 @@ export function VersionCompareGrid({
   onCompareLevelChange,
   onSelectVersion,
   onGenerateModel,
-  onRefineVersion,
-  onHybridAccepted
+  onRefineVersion
 }: VersionCompareGridProps) {
   const [compareIds, setCompareIds] = useState<string[]>([]);
   const [compareScope, setCompareScope] = useState<VersionCompareScope>("selected-level");
@@ -358,12 +356,11 @@ export function VersionCompareGrid({
 
         {comparedVersions.length ? (
           <section className="mt-4 space-y-3">
-            {compareScope === "selected-level" && comparedVersions.length === 2 && onHybridAccepted ? (
+            {compareScope === "selected-level" && comparedVersions.length === 2 ? (
               <SchemeHybridPanel
                 levelId={resolvedLevelId}
                 versionA={comparedVersions[0]!}
                 versionB={comparedVersions[1]!}
-                onHybridAccepted={onHybridAccepted}
               />
             ) : null}
 

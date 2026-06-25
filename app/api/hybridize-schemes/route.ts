@@ -1,14 +1,18 @@
 import { NextResponse } from "next/server";
 import { requestAnthropicTool } from "@/lib/anthropic-tool";
 import { geometryValidationPassed, detectGapsAndOverlaps } from "@/lib/geometry-validate";
-import { createMockModifiedVersion } from "@/lib/mock-api";
+import { buildHybridModifyPlanResponse } from "@/lib/hybridize-proposal";
+import { mergeHybridRooms } from "@/lib/hybridize-merge";
+import { createMockHybridProposal } from "@/lib/mock-api";
 import { postProcessPlanVersion } from "@/lib/plan-postprocess";
 import { normalizePlanVersion } from "@/lib/architecture-model";
 import { hybridizeSchemesPrompt } from "@/lib/prompts/hybridizeSchemesPrompt";
-import { mergeHybridRooms } from "@/lib/hybridize-merge";
 import { resolveAllVersionRooms } from "@/lib/level-rooms";
 import { ModifyPlanToolInputSchema } from "@/lib/schemas/plan-version-schema";
 import type { CopilotFinding, PlanVersion } from "@/lib/project-types";
+import type { ModifyPlanResponse } from "@/lib/copilot-modify-types";
+
+export type { ModifyPlanResponse as HybridizeSchemesResponse } from "@/lib/copilot-modify-types";
 
 interface HybridRegion {
   sourceVersionId: string;
@@ -51,6 +55,40 @@ function mergeHybridResult(
   });
 }
 
+function buildHybridResponse(input: {
+  baseVersion: PlanVersion;
+  versionA: PlanVersion;
+  versionB: PlanVersion;
+  merged: PlanVersion;
+  keptFromA: string[];
+  keptFromB: string[];
+  priority: "A" | "B";
+  findings: CopilotFinding[];
+  lockedRoomIds: string[];
+  warning?: string;
+  fallback?: boolean;
+}) {
+  const intent = `Hybridize schemes: keep ${input.keptFromA.length} region(s) from A and ${input.keptFromB.length} region(s) from B`;
+
+  return buildHybridModifyPlanResponse({
+    baseVersion: input.baseVersion,
+    mergedVersion: input.merged,
+    intent,
+    meta: {
+      keptFromA: input.keptFromA,
+      keptFromB: input.keptFromB,
+      versionAId: input.versionA.id,
+      versionBId: input.versionB.id,
+      priority: input.priority
+    },
+    findings: input.findings,
+    warning: input.warning,
+    fallback: input.fallback,
+    geometryValid: geometryValidationPassed(input.merged.outline, input.merged.rooms),
+    lockedRoomIds: input.lockedRoomIds
+  });
+}
+
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as HybridizeSchemesRequest;
 
@@ -63,9 +101,11 @@ export async function POST(request: Request) {
 
   const lockedA = roomsFromVersion(body.versionA, body.keptFromA.roomIds);
   const lockedB = roomsFromVersion(body.versionB, body.keptFromB.roomIds);
-  const lockedRoomIds = new Set([...lockedA, ...lockedB].map((room) => room.id));
+  const lockedRoomIds = [...new Set([...lockedA, ...lockedB].map((room) => room.id))];
   const priority = body.priority ?? "A";
   const baseVersion = priority === "B" ? body.versionB : body.versionA;
+  const keptFromA = body.keptFromA.roomIds;
+  const keptFromB = body.keptFromB.roomIds;
 
   const userRequest = `Hybridize schemes by keeping selected regions fixed and filling the remaining outline.
 
@@ -82,7 +122,7 @@ Fill remaining space with a coherent layout. Keep fixed room polygons unchanged.
       input: {
         currentVersion: baseVersion,
         userRequest,
-        lockedRoomIds: [...lockedRoomIds]
+        lockedRoomIds
       },
       toolName: "hybridize_schemes",
       toolDescription: "Return a merged PlanVersion with fixed regions preserved and remaining outline filled.",
@@ -95,20 +135,27 @@ Fill remaining space with a coherent layout. Keep fixed room polygons unchanged.
       body.versionA,
       body.versionB,
       postProcessPlanVersion(aiResult.version),
-      body.keptFromA.roomIds,
-      body.keptFromB.roomIds,
+      keptFromA,
+      keptFromB,
       priority
     );
     const geometryIssues = detectGapsAndOverlaps(merged.outline, merged.rooms);
 
     if (!geometryValidationPassed(merged.outline, merged.rooms)) {
-      const fallback = createMockModifiedVersion(baseVersion, "Hybrid fill between fixed regions");
+      const fallback = createMockHybridProposal({
+        baseVersion,
+        versionA: body.versionA,
+        versionB: body.versionB,
+        keptFromA,
+        keptFromB,
+        priority
+      });
       merged = mergeHybridResult(
         body.versionA,
         body.versionB,
         fallback.version,
-        body.keptFromA.roomIds,
-        body.keptFromB.roomIds,
+        keptFromA,
+        keptFromB,
         priority
       );
     }
@@ -123,29 +170,51 @@ Fill remaining space with a coherent layout. Keep fixed room polygons unchanged.
       }))
     ];
 
-    return NextResponse.json({
-      version: merged,
-      findings,
-      lockedRoomIds: [...lockedRoomIds],
-      geometryValid: geometryValidationPassed(merged.outline, merged.rooms)
-    });
+    return NextResponse.json(
+      buildHybridResponse({
+        baseVersion,
+        versionA: body.versionA,
+        versionB: body.versionB,
+        merged,
+        keptFromA,
+        keptFromB,
+        priority,
+        findings,
+        lockedRoomIds
+      })
+    );
   } catch (error) {
-    const fallback = createMockModifiedVersion(baseVersion, "Hybrid fill between fixed regions");
+    const fallback = createMockHybridProposal({
+      baseVersion,
+      versionA: body.versionA,
+      versionB: body.versionB,
+      keptFromA,
+      keptFromB,
+      priority
+    });
     const merged = mergeHybridResult(
       body.versionA,
       body.versionB,
       fallback.version,
-      body.keptFromA.roomIds,
-      body.keptFromB.roomIds,
+      keptFromA,
+      keptFromB,
       priority
     );
 
-    return NextResponse.json({
-      version: merged,
-      fallback: true,
-      warning: error instanceof Error ? error.message : "Hybridize failed; returned deterministic fallback.",
-      lockedRoomIds: [...lockedRoomIds],
-      geometryValid: geometryValidationPassed(merged.outline, merged.rooms)
-    });
+    return NextResponse.json(
+      buildHybridResponse({
+        baseVersion,
+        versionA: body.versionA,
+        versionB: body.versionB,
+        merged,
+        keptFromA,
+        keptFromB,
+        priority,
+        findings: fallback.findings,
+        lockedRoomIds,
+        warning: error instanceof Error ? error.message : "Hybridize failed; returned deterministic fallback.",
+        fallback: true
+      })
+    );
   }
 }

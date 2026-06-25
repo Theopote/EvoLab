@@ -23,7 +23,6 @@ interface CompareWorkspaceProps {
   onSelectVersion: (version: PlanVersion) => void;
   onGenerateModel: (version: PlanVersion) => void;
   onRefineVersion: (version: PlanVersion) => void;
-  onHybridAccepted?: (version: PlanVersion, summary: string) => void;
   onClose: () => void;
 }
 
@@ -43,7 +42,6 @@ export function CompareWorkspace({
   onSelectVersion,
   onGenerateModel,
   onRefineVersion,
-  onHybridAccepted,
   onClose
 }: CompareWorkspaceProps) {
   const selectedProposal = copilotProposals.find((item) => item.id === selectedProposalId);
@@ -104,7 +102,6 @@ export function CompareWorkspace({
         onSelectVersion={onSelectVersion}
         onGenerateModel={onGenerateModel}
         onRefineVersion={onRefineVersion}
-        onHybridAccepted={onHybridAccepted}
       />
     </section>
   );

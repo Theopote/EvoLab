@@ -406,6 +406,25 @@ function applyAddProtrusion(
   return updateRoomInVersion(version, operation.roomId, () => nextRoom);
 }
 
+function applyReplaceRooms(
+  version: PlanVersion,
+  operation: Extract<PlanOperation, { type: "replace_rooms" }>
+): PlanVersion {
+  const rooms = operation.rooms.map((room) => {
+    const existing = version.rooms.find((item) => item.id === room.id);
+
+    return {
+      ...existing,
+      ...room,
+      doors: room.doors ?? existing?.doors ?? [],
+      windows: room.windows ?? existing?.windows ?? [],
+      ceilingHeight: room.ceilingHeight ?? existing?.ceilingHeight ?? 3
+    } satisfies Room;
+  });
+
+  return replaceRoomsInVersion(version, rooms);
+}
+
 function applyOperation(version: PlanVersion, operation: PlanOperation): PlanVersion {
   switch (operation.type) {
     case "move_core":
@@ -434,6 +453,8 @@ function applyOperation(version: PlanVersion, operation: PlanOperation): PlanVer
       return applyAddRoom(version, operation);
     case "add_protrusion":
       return applyAddProtrusion(version, operation);
+    case "replace_rooms":
+      return applyReplaceRooms(version, operation);
     default:
       return version;
   }
@@ -640,5 +661,7 @@ export function operationSummary(operation: PlanOperation): string {
       return `Add room ${operation.room.name}`;
     case "add_protrusion":
       return `Add ${operation.protrusion.type} to ${operation.roomId}`;
+    case "replace_rooms":
+      return `Replace layout with ${operation.rooms.length} room(s)`;
   }
 }

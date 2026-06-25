@@ -1,6 +1,9 @@
 import { initialProjectData } from "@/lib/evolab-data";
 import { formatCopilotFallbackWarning } from "@/lib/copilot-supported-operations";
 import { getOperationTargetIds } from "@/lib/plan-change-diff";
+import { buildHybridModifyPlanResponse } from "@/lib/hybridize-proposal";
+import { mergeHybridRooms } from "@/lib/hybridize-merge";
+import { normalizePlanVersion } from "@/lib/architecture-model";
 import { generateRuleBasedMep } from "@/lib/mep-router";
 import { buildPreviewVersion } from "@/lib/plan-change-engine";
 import { postProcessPlanVersion } from "@/lib/plan-postprocess";
@@ -251,6 +254,50 @@ export function createMockModifiedVersion(currentVersion: PlanVersion, userReque
     mode: "proposal" as const,
     warning: formatCopilotFallbackWarning()
   };
+}
+
+export function createMockHybridProposal(input: {
+  baseVersion: PlanVersion;
+  versionA: PlanVersion;
+  versionB: PlanVersion;
+  keptFromA: string[];
+  keptFromB: string[];
+  priority: "A" | "B";
+}) {
+  const fallback = createMockModifiedVersion(input.baseVersion, "Hybrid fill between fixed regions");
+  const mergedRooms = mergeHybridRooms(
+    input.versionA,
+    input.versionB,
+    fallback.version,
+    input.keptFromA,
+    input.keptFromB,
+    input.priority
+  );
+  const merged = normalizePlanVersion({
+    ...fallback.version,
+    rooms: mergedRooms,
+    outline: input.baseVersion.outline,
+    overallBounds: input.baseVersion.overallBounds,
+    levels: input.baseVersion.levels,
+    building: input.baseVersion.building,
+    standardFloorGroups: input.baseVersion.standardFloorGroups
+  });
+
+  return buildHybridModifyPlanResponse({
+    baseVersion: input.baseVersion,
+    mergedVersion: merged,
+    intent: "Hybrid fill between fixed regions",
+    meta: {
+      keptFromA: input.keptFromA,
+      keptFromB: input.keptFromB,
+      versionAId: input.versionA.id,
+      versionBId: input.versionB.id,
+      priority: input.priority
+    },
+    findings: fallback.findings,
+    warning: fallback.warning,
+    fallback: true
+  });
 }
 
 export function createMockMep(version: PlanVersion): { mep: MepLayout; findings: CopilotFinding[] } {

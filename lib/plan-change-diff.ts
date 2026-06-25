@@ -28,6 +28,8 @@ export function getOperationTargetIds(operation: PlanOperation): string[] {
       return [operation.room.id];
     case "add_protrusion":
       return [operation.roomId];
+    case "replace_rooms":
+      return operation.rooms.map((room) => room.id);
     case "widen_corridor":
       return operation.corridorIds ?? [];
     case "align_wet_rooms":

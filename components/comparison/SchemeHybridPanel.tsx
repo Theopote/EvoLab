@@ -3,7 +3,8 @@
 import { GitMerge, Loader2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { HybridSelectionCanvas } from "@/components/comparison/HybridSelectionCanvas";
-import { DiffPreviewOverlay } from "@/components/floor-plan/DiffPreviewOverlay";
+import { PlanChangeProposalPanel } from "@/components/copilot/PlanChangeProposalPanel";
+import { useCopilotProposalRevision } from "@/components/copilot/useCopilotProposalRevision";
 import { requestSchemeHybridize, roomsForHybridPicker, stampHybridVersion } from "@/lib/hybridize-client";
 import type { CopilotFinding, PlanVersion } from "@/lib/project-types";
 
@@ -11,21 +12,23 @@ interface SchemeHybridPanelProps {
   versionA: PlanVersion;
   versionB: PlanVersion;
   levelId?: string;
-  onHybridAccepted: (version: PlanVersion, summary: string) => void;
 }
 
-export function SchemeHybridPanel({ versionA, versionB, levelId, onHybridAccepted }: SchemeHybridPanelProps) {
+export function SchemeHybridPanel({ versionA, versionB, levelId }: SchemeHybridPanelProps) {
   const [selectedA, setSelectedA] = useState<Set<string>>(new Set());
   const [selectedB, setSelectedB] = useState<Set<string>>(new Set());
   const [priority, setPriority] = useState<"A" | "B">("A");
+  const baseVersion = priority === "B" ? versionB : versionA;
+  const {
+    lockedElementIds,
+    pendingProposal,
+    prepareProposal,
+    applyPendingProposal,
+    dismissPendingProposal
+  } = useCopilotProposalRevision({ activeVersion: baseVersion });
   const [isSending, setIsSending] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [findings, setFindings] = useState<CopilotFinding[]>([]);
-  const [pendingPreview, setPendingPreview] = useState<{
-    version: PlanVersion;
-    warning?: string;
-    geometryValid?: boolean;
-  } | null>(null);
 
   const roomsA = useMemo(() => roomsForHybridPicker(versionA, levelId), [levelId, versionA]);
   const roomsB = useMemo(() => roomsForHybridPicker(versionB, levelId), [levelId, versionB]);
@@ -57,13 +60,13 @@ export function SchemeHybridPanel({ versionA, versionB, levelId, onHybridAccepte
   function clearSelections() {
     setSelectedA(new Set());
     setSelectedB(new Set());
-    setPendingPreview(null);
     setFindings([]);
     setNotice(null);
+    dismissPendingProposal();
   }
 
   async function previewHybrid() {
-    if (!canHybridize || isSending) {
+    if (!canHybridize || isSending || pendingProposal) {
       return;
     }
 
@@ -81,41 +84,30 @@ export function SchemeHybridPanel({ versionA, versionB, levelId, onHybridAccepte
         outline: versionA.outline
       });
 
-      if (!data.version?.rooms?.length) {
-        throw new Error("hybridize-schemes did not return a complete PlanVersion.");
-      }
+      const roomNamesA = roomsA.filter((room) => selectedA.has(room.id)).map((room) => room.name);
+      const roomNamesB = roomsB.filter((room) => selectedB.has(room.id)).map((room) => room.name);
+      const prompt = `Hybridized ${roomNamesA.join(", ")} from ${versionA.label} with ${roomNamesB.join(", ")} from ${versionB.label}`;
 
-      setPendingPreview({
-        version: data.version,
-        warning: data.warning,
-        geometryValid: data.geometryValid
+      prepareProposal({
+        prompt,
+        baseVersion,
+        proposal: data.proposal,
+        findings: data.findings ?? [],
+        warning: data.warning
       });
       setFindings(data.findings ?? []);
       setNotice(
-        data.geometryValid
-          ? "Review the hybrid preview. Fixed regions stay locked; AI fills the remaining outline."
-          : "Geometry validator reported issues — review before accepting."
+        data.geometryValid === false
+          ? "Geometry validator reported issues — review operations before applying."
+          : data.warning
+            ? `Review the hybrid change proposal. ${data.warning}`
+            : "Review the hybrid change proposal before applying."
       );
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Hybridize request failed.");
     } finally {
       setIsSending(false);
     }
-  }
-
-  function acceptPreview() {
-    if (!pendingPreview) {
-      return;
-    }
-
-    const stamped = stampHybridVersion(pendingPreview.version, versionA, versionB);
-    const roomNamesA = roomsA.filter((room) => selectedA.has(room.id)).map((room) => room.name);
-    const roomNamesB = roomsB.filter((room) => selectedB.has(room.id)).map((room) => room.name);
-    const summary = `Hybridized ${roomNamesA.join(", ")} from ${versionA.label} with ${roomNamesB.join(", ")} from ${versionB.label}`;
-
-    onHybridAccepted(stamped, summary);
-    clearSelections();
-    setNotice("Hybrid scheme added to the version timeline.");
   }
 
   return (
@@ -141,25 +133,29 @@ export function SchemeHybridPanel({ versionA, versionB, levelId, onHybridAccepte
         </button>
       </div>
 
-      {pendingPreview ? (
-        <DiffPreviewOverlay
-          baseVersion={priority === "B" ? versionB : versionA}
-          highlightRoomIds={[...selectedA, ...selectedB]}
-          notice={[
-            pendingPreview.warning,
-            pendingPreview.geometryValid === false ? "Geometry validation reported gaps or overlaps." : undefined,
-            findings.length ? findings.map((item) => item.text).join(" ") : undefined
-          ]
-            .filter(Boolean)
-            .join(" ")}
-          previewVersion={pendingPreview.version}
-          title="Hybrid preview"
-          onAccept={acceptPreview}
-          onReject={() => {
-            setPendingPreview(null);
-            setNotice("Hybrid preview rejected.");
-          }}
-        />
+      {pendingProposal ? (
+        <div className="mb-3">
+          <PlanChangeProposalPanel
+            applyNotice={
+              findings.length
+                ? findings.map((item) => item.text).join(" ")
+                : pendingProposal.warning
+            }
+            baseVersion={pendingProposal.baseVersion}
+            lockedElementIds={lockedElementIds}
+            proposal={pendingProposal.proposal}
+            onApply={(nextVersion, acceptedOperationIds) => {
+              const stamped = stampHybridVersion(nextVersion, versionA, versionB);
+              applyPendingProposal(stamped, acceptedOperationIds);
+              clearSelections();
+              setNotice("Hybrid scheme applied via accepted operations.");
+            }}
+            onDismiss={() => {
+              dismissPendingProposal();
+              setNotice("Hybrid proposal dismissed.");
+            }}
+          />
+        </div>
       ) : null}
 
       <div className="mb-3 grid gap-3 md:grid-cols-2">
@@ -193,9 +189,7 @@ export function SchemeHybridPanel({ versionA, versionB, levelId, onHybridAccepte
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <div className="text-xs text-muted">
-          Overlap priority when the same room ID is locked on both sides:
-        </div>
+        <div className="text-xs text-muted">Overlap priority when the same room ID is locked on both sides:</div>
         <label className="flex items-center gap-1 text-xs text-slate-100">
           <input
             checked={priority === "A"}
@@ -219,7 +213,7 @@ export function SchemeHybridPanel({ versionA, versionB, levelId, onHybridAccepte
         ) : null}
         <button
           className="ml-auto flex h-9 items-center gap-2 rounded bg-accent px-3 text-xs font-medium text-[#061014] disabled:cursor-not-allowed disabled:opacity-50"
-          disabled={!canHybridize || isSending || Boolean(pendingPreview)}
+          disabled={!canHybridize || isSending || Boolean(pendingProposal)}
           type="button"
           onClick={() => void previewHybrid()}
         >
