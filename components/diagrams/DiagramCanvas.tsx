@@ -12,6 +12,8 @@ interface DiagramCanvasProps {
   version?: PlanVersion;
   levelId?: string;
   projectType?: string;
+  compact?: boolean;
+  className?: string;
 }
 
 const zoneColors: Record<Room["zone"], string> = {
@@ -139,7 +141,7 @@ function useWorkerAnalysis(
   return { analysis, isComputing };
 }
 
-export function DiagramCanvas({ activeLayers, version, levelId, projectType }: DiagramCanvasProps) {
+export function DiagramCanvas({ activeLayers, version, levelId, projectType, compact = false, className }: DiagramCanvasProps) {
   const { analysis, isComputing } = useWorkerAnalysis(version, activeLayers, levelId, projectType);
   const analysisLayers = getAnalysisLayersForProject(projectType);
   const primaryFlow = analysis?.primaryFlow ?? analysis?.patientFlow;
@@ -159,27 +161,29 @@ export function DiagramCanvas({ activeLayers, version, levelId, projectType }: D
   }`;
 
   return (
-    <section className="rounded border border-line bg-panel/90 p-3">
-      <div className="mb-3 flex items-center justify-between">
-        <div>
-          <h1 className="text-base font-semibold text-white">Analysis Canvas</h1>
-          <p className="mt-1 text-xs text-muted">
-            Pathfinding, raycasting, and daylight probes run in a Web Worker off the main thread.
-          </p>
+    <section className={`${compact ? "rounded border border-line bg-[#081018] p-2" : "rounded border border-line bg-panel/90 p-3"} ${className ?? ""}`}>
+      {!compact ? (
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <h1 className="text-base font-semibold text-white">Analysis Canvas</h1>
+            <p className="mt-1 text-xs text-muted">
+              Pathfinding, raycasting, and daylight probes run in a Web Worker off the main thread.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {isComputing ? (
+              <span className="rounded border border-line px-2 py-1 text-xs text-muted">Computing overlays…</span>
+            ) : null}
+            <span className="rounded border border-accent/40 px-2 py-1 text-xs text-accent">
+              {version.label}
+            </span>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          {isComputing ? (
-            <span className="rounded border border-line px-2 py-1 text-xs text-muted">Computing overlays…</span>
-          ) : null}
-          <span className="rounded border border-accent/40 px-2 py-1 text-xs text-accent">
-            {version.label}
-          </span>
-        </div>
-      </div>
+      ) : null}
 
       <div className="relative overflow-hidden rounded border border-line bg-[#081018] shadow-insetGrid">
         <div className="pointer-events-none absolute inset-0 cad-grid opacity-70" />
-        <svg className="relative h-full min-h-[560px] w-full" viewBox={viewBox} role="img">
+        <svg className={`relative w-full ${compact ? "min-h-[220px] h-full" : "h-full min-h-[560px]"}`} viewBox={viewBox} role="img">
           <defs>
             <marker id="arrow-patient" markerHeight="5" markerWidth="5" orient="auto" refX="4" refY="2.5">
               <path d="M0,0 L5,2.5 L0,5 Z" fill="#38bdf8" />
@@ -329,26 +333,28 @@ export function DiagramCanvas({ activeLayers, version, levelId, projectType }: D
         </svg>
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-2">
-        {activeLayers.map((layerId) => {
-          const layer = analysisLayers.find((item) => item.id === layerId);
-          const legend = layerLegend[layerId];
-          const egressNote = egressLegendNote(analysis, layerId);
-          return (
-            <div className="flex items-center gap-2 rounded border border-line bg-[#0b1118] px-2 py-1 text-xs text-muted" key={layerId}>
-              <span className="h-2.5 w-2.5 rounded-sm" style={{ background: legend?.color ?? "#9fb3c8" }} />
-              <span>{layer?.label ?? layerId}</span>
-              {egressNote ? (
-                <span className="text-[11px] text-amber-300/90">{egressNote}</span>
-              ) : legend ? (
-                <span className="text-[11px] text-muted/80">/ {legend.label}</span>
-              ) : null}
-            </div>
-          );
-        })}
-      </div>
+      {!compact ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {activeLayers.map((layerId) => {
+            const layer = analysisLayers.find((item) => item.id === layerId);
+            const legend = layerLegend[layerId];
+            const egressNote = egressLegendNote(analysis, layerId);
+            return (
+              <div className="flex items-center gap-2 rounded border border-line bg-[#0b1118] px-2 py-1 text-xs text-muted" key={layerId}>
+                <span className="h-2.5 w-2.5 rounded-sm" style={{ background: legend?.color ?? "#9fb3c8" }} />
+                <span>{layer?.label ?? layerId}</span>
+                {egressNote ? (
+                  <span className="text-[11px] text-amber-300/90">{egressNote}</span>
+                ) : legend ? (
+                  <span className="text-[11px] text-muted/80">/ {legend.label}</span>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
 
-      {analysis?.egressSummary && (activeLayers.includes("egress_path") || activeLayers.includes("egress_distance")) ? (
+      {!compact && analysis?.egressSummary && (activeLayers.includes("egress_path") || activeLayers.includes("egress_distance")) ? (
         <div className="mt-2 rounded border border-line/80 bg-[#0b1118] px-2 py-2 text-[11px] leading-5 text-muted">
           <div className="text-slate-200">
             Egress routing: {analysis.egressSummary.label}

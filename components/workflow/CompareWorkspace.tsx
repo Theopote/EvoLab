@@ -1,8 +1,8 @@
 "use client";
 
 import { GitCompareArrows, Pin } from "lucide-react";
+import { CompareLensPanel } from "@/components/comparison/CompareLensPanel";
 import { VersionCompareGrid } from "@/components/version-compare/VersionCompareGrid";
-import { VersionSplitCompare } from "@/components/workflow/VersionSplitCompare";
 import { ProposalReviewPanel } from "@/components/workflow/ProposalReviewPanel";
 import type { ProjectDomain, ProgramModel, StoredCopilotProposal } from "@/lib/building-domain";
 import type { PlanVersion } from "@/lib/project-types";
@@ -78,16 +78,20 @@ export function CompareWorkspace({
         <div className="flex items-start gap-3 rounded border border-warning/30 bg-warning/5 p-3 text-xs text-warning">
           <Pin className="mt-0.5 h-4 w-4 shrink-0" />
           <p>
-            Pin at least two versions to enable side-by-side plan read. You can still use the grid below to compare all
-            generated schemes.
+            Pin at least two versions to enable lens comparison, geometry diff, and recommendations. You can still use
+            the grid below to compare all generated schemes.
           </p>
         </div>
       ) : (
-        <VersionSplitCompare
+        <CompareLensPanel
           versions={versions}
           compareVersionIds={compareVersionIds}
           compareLevelId={compareLevelId}
+          domain={domain}
+          program={program}
+          projectType={projectType}
           onCompareLevelChange={onCompareLevelChange}
+          onSelectVersion={onSelectVersion}
         />
       )}
 

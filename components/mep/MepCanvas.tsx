@@ -9,6 +9,8 @@ interface MepCanvasProps {
   activeLayers: MepLayerId[];
   version?: PlanVersion;
   activeLevelId?: string;
+  compact?: boolean;
+  className?: string;
 }
 
 const systemColors: Record<MepSystemType, string> = {
@@ -33,7 +35,7 @@ function routePoints(route: MepRoute) {
   return route.path.map(([x, y]) => `${x},${y}`).join(" ");
 }
 
-export function MepCanvas({ activeLayers, version, activeLevelId }: MepCanvasProps) {
+export function MepCanvas({ activeLayers, version, activeLevelId, compact = false, className }: MepCanvasProps) {
   if (!version) {
     return (
       <div className="grid min-h-[560px] place-items-center rounded border border-dashed border-line bg-panel/60 text-sm text-muted">
@@ -55,20 +57,22 @@ export function MepCanvas({ activeLayers, version, activeLevelId }: MepCanvasPro
   const shaftRooms = displayRooms.filter((room) => room.type === "shaft");
 
   return (
-    <section className="rounded border border-line bg-panel/90 p-3">
-      <div className="mb-3 flex items-center justify-between">
-        <div>
-          <h1 className="text-base font-semibold text-white">Concept MEP Diagram</h1>
-          <p className="mt-1 text-xs text-muted">
-            {version.mep ? "Generated MEP layout stored on activeVersion.mep." : "Rule-based preview until Generate MEP is run."}
-          </p>
+    <section className={`${compact ? "rounded border border-line bg-[#081018] p-2" : "rounded border border-line bg-panel/90 p-3"} ${className ?? ""}`}>
+      {!compact ? (
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <h1 className="text-base font-semibold text-white">Concept MEP Diagram</h1>
+            <p className="mt-1 text-xs text-muted">
+              {version.mep ? "Generated MEP layout stored on activeVersion.mep." : "Rule-based preview until Generate MEP is run."}
+            </p>
+          </div>
+          <span className="rounded border border-accent/40 px-2 py-1 text-xs text-accent">{version.label}</span>
         </div>
-        <span className="rounded border border-accent/40 px-2 py-1 text-xs text-accent">{version.label}</span>
-      </div>
+      ) : null}
 
       <div className="relative overflow-hidden rounded border border-line bg-[#081018] shadow-insetGrid">
         <div className="pointer-events-none absolute inset-0 cad-grid opacity-70" />
-        <svg className="relative h-full min-h-[560px] w-full" viewBox={viewBox} role="img">
+        <svg className={`relative w-full ${compact ? "min-h-[220px] h-full" : "h-full min-h-[560px]"}`} viewBox={viewBox} role="img">
           <defs>
             {Object.entries(systemColors).map(([system, color]) => (
               <marker id={`mep-arrow-${system}`} key={system} markerHeight="5" markerWidth="5" orient="auto" refX="4" refY="2.5">
@@ -162,17 +166,19 @@ export function MepCanvas({ activeLayers, version, activeLevelId }: MepCanvasPro
         </svg>
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-2">
-        {activeLayers.map((layerId) => {
-          const layer = MEP_LAYERS.find((item) => item.id === layerId);
-          return (
-            <div className="flex items-center gap-2 rounded border border-line bg-[#0b1118] px-2 py-1 text-xs text-muted" key={layerId}>
-              <span className="h-2.5 w-2.5 rounded-sm" style={{ background: layer?.color ?? "#9fb3c8" }} />
-              <span>{layer?.label ?? layerId}</span>
-            </div>
-          );
-        })}
-      </div>
+      {!compact ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {activeLayers.map((layerId) => {
+            const layer = MEP_LAYERS.find((item) => item.id === layerId);
+            return (
+              <div className="flex items-center gap-2 rounded border border-line bg-[#0b1118] px-2 py-1 text-xs text-muted" key={layerId}>
+                <span className="h-2.5 w-2.5 rounded-sm" style={{ background: layer?.color ?? "#9fb3c8" }} />
+                <span>{layer?.label ?? layerId}</span>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
     </section>
   );
 }
