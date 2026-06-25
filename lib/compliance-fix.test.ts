@@ -8,6 +8,7 @@ import {
 import { initialProjectData } from "@/lib/evolab-data";
 import { expandPlanVersionToFloors } from "@/lib/multi-floor";
 import { resolveRulePack } from "@/lib/rules/rule-pack";
+import type { PlanVersion, Point } from "@/lib/project-types";
 import { deriveVerticalElements } from "@/lib/vertical-elements";
 
 const baseVersion = initialProjectData.versions[0]!;
@@ -36,7 +37,7 @@ describe("compliance-fix", () => {
   it("builds a single-floor alignment fix package for vertical issues", () => {
     const expanded = expandPlanVersionToFloors(baseVersion, 4);
     const elements = deriveVerticalElements(expanded);
-    const tampered = {
+    const tampered: PlanVersion = {
       ...expanded,
       levels: expanded.levels.map((level) =>
         level.id === "level-01"
@@ -46,7 +47,7 @@ describe("compliance-fix", () => {
                 room.type === "corridor"
                   ? {
                       ...room,
-                      polygon: room.polygon.map(([x, y]) => [x + 8, y + 8] as const)
+                      polygon: room.polygon.map(([x, y]) => [x + 8, y + 8] as Point)
                     }
                   : room
               )

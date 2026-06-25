@@ -58,6 +58,7 @@ describe("proposal-from-preview", () => {
               [40, 46]
             ],
             areaSqm: 36,
+            ceilingHeight: 3,
             doors: [],
             windows: []
           },
@@ -73,6 +74,7 @@ describe("proposal-from-preview", () => {
               [48, 46]
             ],
             areaSqm: 36,
+            ceilingHeight: 3,
             doors: [],
             windows: []
           }

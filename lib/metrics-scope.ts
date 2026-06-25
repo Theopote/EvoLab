@@ -75,6 +75,10 @@ export function metricsScopeCaption(
   }
 
   if (context.scope === "level") {
+    if (!version) {
+      return "Active level";
+    }
+
     const level = getLevelById(version, context.levelId ?? activeLevelId);
     return level ? `${level.name}${level.isTransferFloor ? " · transfer floor" : ""}` : "Active level";
   }

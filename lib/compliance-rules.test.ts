@@ -11,6 +11,7 @@ import { initialProjectData } from "@/lib/evolab-data";
 import { expandPlanVersionToFloors } from "@/lib/multi-floor";
 import { checkCompliance } from "@/lib/quantity-engine";
 import { resolveRulePack } from "@/lib/rules/rule-pack";
+import type { PlanVersion, Point } from "@/lib/project-types";
 import { deriveVerticalElements } from "@/lib/vertical-elements";
 
 const baseVersion = initialProjectData.versions[0]!;
@@ -43,7 +44,7 @@ describe("compliance-rules", () => {
 
     expect(firstColumn).toBeDefined();
 
-    const tampered = {
+    const tampered: PlanVersion = {
       ...expanded,
       levels: expanded.levels.map((level) =>
         level.id === "level-01"
@@ -53,7 +54,7 @@ describe("compliance-rules", () => {
                 room.type === "corridor"
                   ? {
                       ...room,
-                      polygon: room.polygon.map(([x, y]) => [x + 8, y + 8] as const)
+                      polygon: room.polygon.map(([x, y]) => [x + 8, y + 8] as Point)
                     }
                   : room
               )
