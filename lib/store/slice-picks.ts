@@ -43,6 +43,7 @@ export function pickProjectActions(state: EvoProjectStore): ProjectSliceActions 
   return {
     setActiveTab: state.setActiveTab,
     updateBrief: state.updateBrief,
+    setProjectTypology: state.setProjectTypology,
     updateScoringConfig: state.updateScoringConfig,
     resetScoringConfig: state.resetScoringConfig,
     updateFacadeEnvelope: state.updateFacadeEnvelope,

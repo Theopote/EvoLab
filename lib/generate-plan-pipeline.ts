@@ -34,7 +34,7 @@ import {
 import { topologiesToPlanVersions, type TopologyLayoutOptions } from "@/lib/topology-geometry";
 import { topologyGraphFromTopology } from "@/lib/topology-graph";
 import { resolveTypologyPack } from "@/lib/typology/resolve";
-import { getTopologyPromptContext } from "@/lib/typology/topology";
+import { buildTypologyPromptSupplement } from "@/lib/prompts/typologySupplement";
 import type { PlanVersion } from "@/lib/project-types";
 
 export interface GeneratePlanPipelineMeta {
@@ -153,7 +153,7 @@ function topologyInput(
       roomTemplates: pack.topology.roomTemplates,
       adjacencyRules: pack.adjacencyRules,
       wetRoomTypes: pack.topology.wetRoomTypes,
-      guidance: getTopologyPromptContext(pack)
+      guidance: buildTypologyPromptSupplement(body.projectType)
     },
     correction: options?.correction
   };

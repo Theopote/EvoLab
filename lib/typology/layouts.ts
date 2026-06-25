@@ -1,9 +1,7 @@
-import { initialProjectData } from "@/lib/evolab-data";
+import { DEMO_PROJECT_OUTLINE } from "@/lib/typologies/defaults";
 import { postProcessPlanVersion } from "@/lib/plan-postprocess";
 import type { PlanVersion, Point, Room } from "@/lib/project-types";
 import type { TopologyLayoutKind, TypologyPack } from "@/lib/typology/types";
-
-const baseVersion = initialProjectData.versions[0];
 
 export interface LayoutBounds {
   minX: number;
@@ -653,12 +651,12 @@ const PACK_LAYOUT_OVERRIDES: Partial<Record<TypologyPack["id"], Partial<Record<T
 
 export function createLayoutRooms(pack: TypologyPack, layoutKind: TopologyLayoutKind, bounds: LayoutBounds) {
   const override = PACK_LAYOUT_OVERRIDES[pack.id]?.[layoutKind];
-  const builder = override ?? LAYOUT_BUILDERS[layoutKind] ?? healthcareCentralCore;
+  const builder = override ?? LAYOUT_BUILDERS[layoutKind] ?? officeOpenPlan;
   return builder(bounds);
 }
 
 export function createMockPlanVersionsFromPack(pack: TypologyPack, outline?: Point[]): PlanVersion[] {
-  const sourceOutline = outline && outline.length >= 3 ? outline : baseVersion.outline;
+  const sourceOutline = outline && outline.length >= 3 ? outline : DEMO_PROJECT_OUTLINE;
   const bounds = getBounds(sourceOutline);
   const localOutline = localizeOutline(sourceOutline, bounds);
 

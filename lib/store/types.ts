@@ -89,6 +89,7 @@ export interface EvoProjectStore {
   setShowEnvironmentOverlay: (visible: boolean) => void;
   refreshEnvironmentSurrogate: () => void;
   updateBrief: (brief: DesignBrief) => void;
+  setProjectTypology: (typologyId: import("@/lib/typology/types").TypologyPackId) => void;
   updateScoringConfig: (patch: Partial<ScoringConfig>) => void;
   resetScoringConfig: () => void;
   updateFacadeEnvelope: (patch: Partial<FacadeEnvelope>) => void;

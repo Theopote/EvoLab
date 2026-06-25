@@ -1,3 +1,4 @@
+import { DEFAULT_TYPOLOGY_ID } from "@/lib/typologies/defaults";
 import { TYPOLOGY_PACKS, TYPOLOGY_PACK_BY_ID } from "@/lib/typology/packs";
 import type { TypologyPack, TypologyPackId } from "@/lib/typology/types";
 
@@ -9,7 +10,7 @@ export function resolveTypologyPackId(projectType?: string): TypologyPackId {
   const normalized = normalizeProjectType(projectType);
 
   if (!normalized) {
-    return "healthcare";
+    return DEFAULT_TYPOLOGY_ID;
   }
 
   const direct = TYPOLOGY_PACK_BY_ID[normalized as TypologyPackId];
@@ -18,7 +19,7 @@ export function resolveTypologyPackId(projectType?: string): TypologyPackId {
   }
 
   const matched = TYPOLOGY_PACKS.find((pack) => pack.aliases.includes(normalized));
-  return matched?.id ?? "healthcare";
+  return matched?.id ?? DEFAULT_TYPOLOGY_ID;
 }
 
 export function resolveTypologyPack(projectType?: string): TypologyPack {

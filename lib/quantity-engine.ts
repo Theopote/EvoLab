@@ -1,5 +1,5 @@
 import type { CodeContext, ScoringConfig } from "@/lib/building-domain";
-import { defaultHealthcareCodeContext } from "@/lib/building-domain";
+import { resolveCodeContextFromTypology } from "@/lib/typologies/code-context";
 import {
   buildComplianceContext,
   runComplianceCheck,
@@ -340,7 +340,7 @@ export function calculateQuantitiesByLevel(version: PlanVersion): Record<string,
 
 export function checkCompliance(
   version: PlanVersion,
-  codeContext: CodeContext = defaultHealthcareCodeContext,
+  codeContext: CodeContext = resolveCodeContextFromTypology(),
   rulePack: RulePack = resolveRulePack({ codeContext }),
   options: { buildingType?: string; scoringConfig?: ScoringConfig } = {}
 ): ComplianceItem[] {

@@ -4,16 +4,17 @@ import {
   computeSemanticEgressForRoom,
   findSemanticEgressRoute
 } from "@/lib/analysis/egress-semantics";
-import { initialProjectData } from "@/lib/evolab-data";
+import { createDemoProjectData } from "@/lib/typologies/demo-project";
 import type { PlanVersion, Point } from "@/lib/project-types";
 import { computeEgressPathMetrics } from "@/lib/rules/path-metrics";
 
 const baseVersion = initialProjectData.versions[0]!;
+const healthcareVersion = createDemoProjectData("healthcare").versions[0]!;
 
 describe("semantic egress chain", () => {
   it("routes private rooms through door, corridor, and stair", () => {
-    const graph = buildPathGraph(baseVersion);
-    const route = findSemanticEgressRoute(graph, baseVersion, "consult-01", "core-01");
+    const graph = buildPathGraph(healthcareVersion);
+    const route = findSemanticEgressRoute(graph, healthcareVersion, "consult-01", "core-01");
 
     expect(route).toBeDefined();
     expect(route?.semanticValid).toBe(true);

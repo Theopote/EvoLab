@@ -8,6 +8,9 @@ import {
   phaseForTab,
   resolvePhaseTab
 } from "@/lib/workflow-navigation";
+import { programFromBrief } from "@/lib/project-domain";
+import { applyTypologyPackToDomain, briefFromTypologyPack } from "@/lib/typologies/domain";
+import type { TypologyPackId } from "@/lib/typology/types";
 import { relayoutPlanCommand, resolveRelayoutOutline } from "@/lib/store/commands/relayout-plan";
 import {
   bumpGeometryRevision,
@@ -46,6 +49,25 @@ export const createProjectSlice: StateCreator<EvoProjectStore, [], [], ProjectSl
       produce<EvoProjectStore>((state) => {
         state.brief = brief;
         refreshDomainDraft(state);
+      })
+    ),
+  setProjectTypology: (typologyId: TypologyPackId) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        const brief = briefFromTypologyPack(typologyId, {
+          floors: state.brief.floors,
+          targetArea: state.brief.targetArea
+        });
+
+        state.project.projectType = typologyId;
+        state.brief = brief;
+        state.project.domain = {
+          ...applyTypologyPackToDomain(state.project.domain, typologyId),
+          program: programFromBrief(brief, state.activeVersion?.metadata?.topologyGraph)
+        };
+        refreshDomainDraft(state);
+        rescoreProjectVersions(state);
+        refreshDerivedDraft(state);
       })
     ),
   updateScoringConfig: (patch) =>

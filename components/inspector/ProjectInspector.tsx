@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { MetricsScopeToggle } from "@/components/inspector/MetricsScopeToggle";
+import { TypologyPackPanel } from "@/components/program/TypologyPackPanel";
 import { calculateScopedScores } from "@/lib/metrics-scope";
 import { useAnalysisState, useProjectActions, useProjectState } from "@/lib/project-store";
 
@@ -47,6 +48,10 @@ export function ProjectInspector() {
         compact
         onScopeChange={setMetricsScope}
       />
+
+      <div className="mt-4">
+        <TypologyPackPanel />
+      </div>
 
       <dl className="mt-4 space-y-3 text-sm">
         <Info label="Project type" value={project.projectType} />

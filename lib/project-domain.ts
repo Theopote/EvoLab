@@ -1,6 +1,5 @@
 import {
   defaultDoorWindowFamilies,
-  defaultHealthcareCodeContext,
   type ChangeSet,
   type ChangeSource,
   type ChangeStatus,
@@ -22,6 +21,10 @@ import {
 import { normalizePlanVersion } from "@/lib/architecture-model";
 import { calculateQuantities } from "@/lib/quantity-engine";
 import { createDefaultScoringConfig, normalizeScoringConfig, resolveProgramGoalsFromDomain, resolveRulePackFromDomain } from "@/lib/rules/scoring-config";
+import { applyTypologyPackToDomain, briefFromTypologyPack } from "@/lib/typologies/domain";
+import { DEFAULT_TYPOLOGY_ID } from "@/lib/typologies/defaults";
+import { resolveCodeContextFromTypology } from "@/lib/typologies/code-context";
+import { resolveSchedulePreset } from "@/lib/typologies/schedules";
 import { resolveTypologyPack } from "@/lib/typology/resolve";
 import { computeTotalScore } from "@/lib/rules/version-total-score";
 import type { DesignBrief, PlanVersion, Point, ProjectData, Room, TopologyGraph } from "@/lib/project-types";
@@ -232,11 +235,13 @@ export function buildVerticalCirculation(version: PlanVersion): VerticalCirculat
   };
 }
 
-function buildRoomSchedule(version: PlanVersion): ScheduleTable {
+function buildRoomSchedule(version: PlanVersion, projectType?: string): ScheduleTable {
+  const preset = resolveSchedulePreset(projectType);
+
   return {
     id: `schedule-rooms-${version.id}`,
     kind: "room",
-    title: "Room Schedule",
+    title: preset.roomScheduleTitle,
     columns: ["Level", "Name", "Type", "Zone", "Area sqm"],
     versionId: version.id,
     generatedAt: new Date().toISOString(),
@@ -255,11 +260,13 @@ function buildRoomSchedule(version: PlanVersion): ScheduleTable {
   };
 }
 
-function buildDoorWindowSchedule(version: PlanVersion): ScheduleTable {
+function buildDoorWindowSchedule(version: PlanVersion, projectType?: string): ScheduleTable {
+  const preset = resolveSchedulePreset(projectType);
+
   return {
     id: `schedule-openings-${version.id}`,
     kind: "door_window",
-    title: "Door & Window Schedule",
+    title: preset.openingScheduleTitle,
     columns: ["Level", "Type", "Width m", "Height m", "Wall"],
     versionId: version.id,
     generatedAt: new Date().toISOString(),
@@ -278,13 +285,14 @@ function buildDoorWindowSchedule(version: PlanVersion): ScheduleTable {
   };
 }
 
-function buildAreaSchedule(version: PlanVersion): ScheduleTable {
+function buildAreaSchedule(version: PlanVersion, projectType?: string): ScheduleTable {
+  const preset = resolveSchedulePreset(projectType);
   const quantities = calculateQuantities(version, { scope: "building" });
 
   return {
     id: `schedule-area-${version.id}`,
     kind: "area",
-    title: "Area Schedule",
+    title: preset.areaScheduleTitle,
     columns: ["Metric", "Value", "Unit"],
     versionId: version.id,
     generatedAt: new Date().toISOString(),
@@ -299,11 +307,15 @@ function buildAreaSchedule(version: PlanVersion): ScheduleTable {
   };
 }
 
-export function buildScheduleBundle(version: PlanVersion): ScheduleBundle {
+export function buildScheduleBundle(version: PlanVersion, projectType?: string): ScheduleBundle {
   return {
     versionId: version.id,
     generatedAt: new Date().toISOString(),
-    tables: [buildRoomSchedule(version), buildDoorWindowSchedule(version), buildAreaSchedule(version)]
+    tables: [
+      buildRoomSchedule(version, projectType),
+      buildDoorWindowSchedule(version, projectType),
+      buildAreaSchedule(version, projectType)
+    ]
   };
 }
 
@@ -407,23 +419,25 @@ export function createElementChangeSet(input: {
 
 export function createDefaultProjectDomain(input: ProjectDomainSyncInput): ProjectDomain {
   const topologyGraph = input.activeVersion?.metadata?.topologyGraph;
-
-  return {
-    site: createSiteModel({
-      outline: input.outline,
-      zoning: input.zoning,
-      siteContext: input.siteContext,
-      orientationDeg: input.orientationDeg
-    }),
-    program: programFromBrief(input.brief, topologyGraph),
-    codeContext: defaultHealthcareCodeContext,
-    scoringConfig: createDefaultScoringConfig(input.projectType),
-    doorWindowFamilies: defaultDoorWindowFamilies,
-    schedules: input.activeVersion ? [buildScheduleBundle(input.activeVersion)] : [],
-    changeSets: [],
-    copilotProposals: [],
-    lockedElementIds: []
-  };
+  return applyTypologyPackToDomain(
+    {
+      site: createSiteModel({
+        outline: input.outline,
+        zoning: input.zoning,
+        siteContext: input.siteContext,
+        orientationDeg: input.orientationDeg
+      }),
+      program: programFromBrief(input.brief, topologyGraph),
+      codeContext: resolveCodeContextFromTypology(input.projectType),
+      scoringConfig: createDefaultScoringConfig(input.projectType),
+      doorWindowFamilies: defaultDoorWindowFamilies,
+      schedules: input.activeVersion ? [buildScheduleBundle(input.activeVersion, input.projectType)] : [],
+      changeSets: [],
+      copilotProposals: [],
+      lockedElementIds: []
+    },
+    input.projectType
+  );
 }
 
 export function syncProjectDomain(domain: ProjectDomain | undefined, input: ProjectDomainSyncInput): ProjectDomain {
@@ -452,7 +466,10 @@ export function syncProjectDomain(domain: ProjectDomain | undefined, input: Proj
         : base.facadeEnvelope,
     verticalCirculation: activeVersion ? buildVerticalCirculation(activeVersion) : base.verticalCirculation,
     schedules: activeVersion
-      ? [buildScheduleBundle(activeVersion), ...base.schedules.filter((item) => item.versionId !== activeVersion.id)]
+      ? [
+          buildScheduleBundle(activeVersion, input.projectType),
+          ...base.schedules.filter((item) => item.versionId !== activeVersion.id)
+        ]
       : base.schedules
   };
 }
@@ -476,7 +493,7 @@ export function normalizeProjectDomain(domain?: ProjectDomain, input?: ProjectDo
   if (!input) {
     return {
       ...domain,
-      codeContext: domain.codeContext ?? defaultHealthcareCodeContext,
+      codeContext: domain.codeContext ?? resolveCodeContextFromTypology(domain.program.projectType),
       scoringConfig: normalizeScoringConfig(domain.scoringConfig, domain.program.projectType),
       doorWindowFamilies: domain.doorWindowFamilies?.length ? domain.doorWindowFamilies : defaultDoorWindowFamilies,
       schedules: domain.schedules ?? [],
@@ -496,15 +513,17 @@ export function normalizeProjectData(
   syncInput?: Omit<ProjectDomainSyncInput, "activeVersion">
 ): ProjectData {
   const activeVersion = project.versions.find((version) => version.id === project.activeVersionId) ?? project.versions[0];
+  const pack = resolveTypologyPack(project.projectType);
   const input: ProjectDomainSyncInput = {
     projectType: project.projectType,
     brief: {
-      projectType: project.projectType,
-      description: "",
-      floors: activeVersion?.metadata?.floorCount ?? activeVersion?.levels.length ?? 1,
-      targetArea: activeVersion?.rooms.reduce((total, room) => total + room.areaSqm, 0) ?? 0,
-      corePreference: "",
-      orientationPreference: ""
+      ...briefFromTypologyPack(pack.id, {
+        floors: activeVersion?.metadata?.floorCount ?? activeVersion?.levels.length ?? 1,
+        targetArea: activeVersion?.rooms.reduce((total, room) => total + room.areaSqm, 0) ?? 0
+      }),
+      ...syncInput?.brief,
+      projectType: syncInput?.brief?.projectType ?? pack.defaultBrief.projectType ?? pack.id,
+      description: syncInput?.brief?.description ?? pack.defaultBrief.description ?? ""
     },
     outline: activeVersion?.outline ?? [],
     zoning: defaultZoningConstraints,
@@ -519,7 +538,7 @@ export function normalizeProjectData(
 }
 
 export function getCodeContext(domain?: ProjectDomain): CodeContext {
-  return domain?.codeContext ?? defaultHealthcareCodeContext;
+  return domain?.codeContext ?? resolveCodeContextFromTypology(domain?.program.projectType ?? DEFAULT_TYPOLOGY_ID);
 }
 
 export function getRulePack(domain?: ProjectDomain, projectType?: string) {

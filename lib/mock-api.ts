@@ -20,7 +20,7 @@ import { resolveTypologyPack } from "@/lib/typology/resolve";
 
 const baseVersion = initialProjectData.versions[0];
 
-export function createMockPlanVersions(outline?: Point[], projectType = "healthcare"): PlanVersion[] {
+export function createMockPlanVersions(outline?: Point[], projectType = "office"): PlanVersion[] {
   const pack = resolveTypologyPack(projectType);
   return createMockPlanVersionsFromPack(pack, outline);
 }

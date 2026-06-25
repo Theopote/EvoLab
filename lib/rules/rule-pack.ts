@@ -174,7 +174,7 @@ export function resolveRulePack(options?: { codeContext?: CodeContext; projectTy
   const preset = rulePacksByProjectType[projectType];
 
   if (!options?.codeContext) {
-    return preset ?? defaultHealthcareRulePack;
+    return preset ?? officeRulePack;
   }
 
   const baseScoring = preset?.scoring ?? defaultScoringThresholds;

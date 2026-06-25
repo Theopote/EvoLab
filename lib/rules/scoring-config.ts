@@ -14,6 +14,7 @@ import {
   resolveRulePack
 } from "@/lib/rules/rule-pack";
 import { resolveTypologyPack, resolveTypologyPackId } from "@/lib/typology/resolve";
+import { DEFAULT_TYPOLOGY_ID } from "@/lib/typologies/defaults";
 import { resolveEgressWidthConfig } from "@/lib/compliance-rules";
 import type { ProgramGoals, ProgramGoalWeights, RulePack, ScoringThresholds } from "@/lib/rules/types";
 
@@ -136,7 +137,7 @@ export function createDefaultScoringConfig(projectType?: string): ScoringConfig 
 
 export function normalizeScoringConfig(config: ScoringConfig | undefined, projectType?: string): ScoringConfig {
   const defaults = createDefaultScoringConfig(projectType);
-  const egressDefaults = resolveEgressWidthConfig(projectType ?? "healthcare");
+  const egressDefaults = resolveEgressWidthConfig(projectType ?? DEFAULT_TYPOLOGY_ID);
 
   return {
     ...defaults,

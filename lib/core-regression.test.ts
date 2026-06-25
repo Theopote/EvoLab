@@ -34,7 +34,7 @@ function validationRegressionSnapshot(version: typeof baseVersion) {
 function scoreRegressionSnapshot(version: typeof baseVersion) {
   const { scores, breakdown } = calculateVersionScores(version, {
     scope: "building",
-    projectType: "healthcare"
+    projectType: initialProjectData.projectType
   });
 
   return {
@@ -51,19 +51,19 @@ function scoreRegressionSnapshot(version: typeof baseVersion) {
 }
 
 describe("core regression snapshots", () => {
-  it("matches building quantity summary for the seed healthcare scheme", () => {
+  it("matches building quantity summary for the seed demo scheme", () => {
     expect(quantityRegressionSnapshot(baseVersion, "building")).toMatchSnapshot();
   });
 
-  it("matches level quantity summary for the seed healthcare scheme", () => {
+  it("matches level quantity summary for the seed demo scheme", () => {
     expect(quantityRegressionSnapshot(baseVersion, "level")).toMatchSnapshot();
   });
 
-  it("matches validation issue rollup for the seed healthcare scheme", () => {
+  it("matches validation issue rollup for the seed demo scheme", () => {
     expect(validationRegressionSnapshot(baseVersion)).toMatchSnapshot();
   });
 
-  it("matches building score rollup for the seed healthcare scheme", () => {
+  it("matches building score rollup for the seed demo scheme", () => {
     expect(scoreRegressionSnapshot(baseVersion)).toMatchSnapshot();
   });
 

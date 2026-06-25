@@ -6,6 +6,7 @@ export type ProjectSliceActions = Pick<
   EvoProjectStore,
   | "setActiveTab"
   | "updateBrief"
+  | "setProjectTypology"
   | "updateScoringConfig"
   | "resetScoringConfig"
   | "updateFacadeEnvelope"

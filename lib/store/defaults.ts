@@ -1,19 +1,8 @@
-import { initialProjectData } from "@/lib/evolab-data";
-import type { DesignBrief, Point } from "@/lib/project-types";
+import { DEFAULT_TYPOLOGY_ID } from "@/lib/typologies/defaults";
+import { briefFromTypologyPack } from "@/lib/typologies/domain";
+import { DEMO_PROJECT_OUTLINE } from "@/lib/typologies/defaults";
+import type { Point } from "@/lib/project-types";
 
-export const defaultOutline: Point[] = [
-  [0, 0],
-  [72, 0],
-  [72, 42],
-  [0, 42]
-];
+export const defaultOutline: Point[] = DEMO_PROJECT_OUTLINE;
 
-export const defaultBrief: DesignBrief = {
-  projectType: initialProjectData.projectType,
-  description:
-    "Outpatient clinic with clear public waiting, clinical rooms, staff work area, compact core, shafts aligned with equipment room, and strong south daylight.",
-  floors: 3,
-  targetArea: 2400,
-  corePreference: "north service edge",
-  orientationPreference: "south daylight"
-};
+export const defaultBrief = briefFromTypologyPack(DEFAULT_TYPOLOGY_ID);

@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { buildShaftStacks, computeWetStackPathMetrics } from "@/lib/analysis/shaft-stack";
+import { createDemoProjectData } from "@/lib/typologies/demo-project";
 import { initialProjectData } from "@/lib/evolab-data";
 import { computeWetCorePathMetrics } from "@/lib/rules/path-metrics";
 
 const baseVersion = initialProjectData.versions[0]!;
+const healthcareVersion = createDemoProjectData("healthcare").versions[0]!;
 
 describe("shaft stack paths", () => {
   it("groups shaft rooms into stacks", () => {
@@ -14,7 +16,7 @@ describe("shaft stack paths", () => {
   });
 
   it("routes wet rooms to a shaft stack with horizontal path metadata", () => {
-    const metrics = computeWetStackPathMetrics(baseVersion);
+    const metrics = computeWetStackPathMetrics(healthcareVersion);
     const wetRoom = metrics.perRoom.find((item) => item.roomId === "consult-01");
 
     expect(wetRoom).toBeDefined();
@@ -24,7 +26,7 @@ describe("shaft stack paths", () => {
   });
 
   it("exposes stack metadata through wet-core path metrics", () => {
-    const metrics = computeWetCorePathMetrics(baseVersion);
+    const metrics = computeWetCorePathMetrics(healthcareVersion);
     const wetRoom = metrics.perRoom.find((item) => item.roomId === "consult-01");
 
     expect(wetRoom?.stackId).toBeDefined();

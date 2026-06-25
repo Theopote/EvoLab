@@ -1,5 +1,35 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`core regression snapshots > matches building quantity summary for the seed demo scheme 1`] = `
+{
+  "rowIds": [
+    "curtain-window-area",
+    "doors",
+    "external-wall-length",
+    "gross-area",
+    "internal-wall-length",
+    "net-area",
+    "roof-area",
+    "slab-area",
+    "wall-area",
+    "windows",
+  ],
+  "scope": "building",
+  "summary": {
+    "curtainWallOrWindowArea": 45,
+    "doorCount": 5,
+    "externalWallLength": 180.3,
+    "grossArea": 2746,
+    "internalWallLength": 339.8,
+    "netUsableArea": 2232,
+    "roofArea": 3024,
+    "slabArea": 3024,
+    "wallArea": 1975.4,
+    "windowCount": 3,
+  },
+}
+`;
+
 exports[`core regression snapshots > matches building quantity summary for the seed healthcare scheme 1`] = `
 {
   "rowIds": [
@@ -30,6 +60,27 @@ exports[`core regression snapshots > matches building quantity summary for the s
 }
 `;
 
+exports[`core regression snapshots > matches building score rollup for the seed demo scheme 1`] = `
+{
+  "areaEfficiency": 85,
+  "circulationScore": 69,
+  "daylightScore": 45,
+  "egressScore": 0,
+  "mepAlignmentScore": 87,
+  "metricIds": [
+    "area_efficiency",
+    "circulation",
+    "daylight",
+    "egress",
+    "structure_fit",
+    "wet_core",
+  ],
+  "riskCount": 3,
+  "structureFitScore": 74,
+  "totalScore": 57,
+}
+`;
+
 exports[`core regression snapshots > matches building score rollup for the seed healthcare scheme 1`] = `
 {
   "areaEfficiency": 73,
@@ -48,6 +99,36 @@ exports[`core regression snapshots > matches building score rollup for the seed 
   "riskCount": 3,
   "structureFitScore": 83,
   "totalScore": 50,
+}
+`;
+
+exports[`core regression snapshots > matches level quantity summary for the seed demo scheme 1`] = `
+{
+  "rowIds": [
+    "curtain-window-area",
+    "doors",
+    "external-wall-length",
+    "gross-area",
+    "internal-wall-length",
+    "net-area",
+    "roof-area",
+    "slab-area",
+    "wall-area",
+    "windows",
+  ],
+  "scope": "level",
+  "summary": {
+    "curtainWallOrWindowArea": 45,
+    "doorCount": 5,
+    "externalWallLength": 180.3,
+    "grossArea": 2746,
+    "internalWallLength": 339.8,
+    "netUsableArea": 2232,
+    "roofArea": 3024,
+    "slabArea": 3024,
+    "wallArea": 1975.4,
+    "windowCount": 3,
+  },
 }
 `;
 
@@ -108,6 +189,17 @@ exports[`core regression snapshots > matches multi-floor building quantity summa
     "wallArea": 7699.2,
     "windowCount": 12,
   },
+}
+`;
+
+exports[`core regression snapshots > matches validation issue rollup for the seed demo scheme 1`] = `
+{
+  "errorCount": 0,
+  "issueIds": [
+    "daylight-room-invalid",
+  ],
+  "valid": true,
+  "warningCount": 3,
 }
 `;
 

@@ -14,6 +14,11 @@ import { officeTypologyPack, schoolTypologyPack } from "@/lib/typology/packs";
 import { topologiesToPlanVersions } from "@/lib/topology-geometry";
 
 describe("typology packs", () => {
+  it("defaults unknown and empty project types to office", () => {
+    expect(resolveTypologyPackId()).toBe("office");
+    expect(resolveTypologyPackId("unknown-xyz")).toBe("office");
+  });
+
   it("resolves healthcare aliases", () => {
     expect(resolveTypologyPackId("clinic")).toBe("healthcare");
     expect(resolveTypologyPack("hospital").id).toBe("healthcare");

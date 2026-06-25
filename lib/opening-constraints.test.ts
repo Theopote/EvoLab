@@ -79,7 +79,7 @@ describe("opening constraints", () => {
         entry.id === "office-01"
           ? {
               ...entry,
-              windows: [{ wall: "north", position: 0.99, width: 6 }]
+              windows: [{ wall: "north", position: 0.99, width: 20 }]
             }
           : entry
       )
