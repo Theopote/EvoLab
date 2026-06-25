@@ -19,6 +19,7 @@ describe("generate plan prompts", () => {
     expect(topology.toLowerCase()).toContain("phase 1");
     expect(topology.toLowerCase()).not.toContain("polygon");
     expect(geometry.toLowerCase()).toContain("phase 2");
+    expect(geometry.toLowerCase()).toContain("generate_plan_geometry");
     expect(geometry.toLowerCase()).toContain("polygon");
   });
 

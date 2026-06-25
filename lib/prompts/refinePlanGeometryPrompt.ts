@@ -2,7 +2,7 @@ import { buildGenerateGeometrySystemPrompt } from "@/lib/prompts/generateGeometr
 
 const REFINEMENT_INTRO = `
 You are EvoLab's spatial refinement agent (Phase 3 micro-adjustment).
-You receive algorithmically generated room polygons and validation feedback.
+You receive LLM-generated room polygons and validation feedback.
 Your job is qualitative micro-adjustment only — not reprogramming the building.
 
 Use the refine_plan_geometry tool exactly once.

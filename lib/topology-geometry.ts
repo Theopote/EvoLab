@@ -250,7 +250,7 @@ export interface TopologyLayoutOptions {
   wetRoomTypes?: RoomType[];
 }
 
-function resolveTopologyLayout(outlineOrOptions?: Point[] | TopologyLayoutOptions) {
+export function resolveTopologyLayout(outlineOrOptions?: Point[] | TopologyLayoutOptions) {
   const options: TopologyLayoutOptions = Array.isArray(outlineOrOptions)
     ? { layoutOutline: outlineOrOptions, siteOutline: outlineOrOptions }
     : outlineOrOptions ?? {};
@@ -276,6 +276,7 @@ function resolveTopologyLayout(outlineOrOptions?: Point[] | TopologyLayoutOption
 
   return {
     localizedSite,
+    localizedLayout,
     bounds
   };
 }

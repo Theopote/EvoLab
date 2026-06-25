@@ -18,8 +18,8 @@ Phase 1 responsibility — build a reusable TopologyGraph:
 
 The server will:
 1. Persist topology as TopologyGraph for bubble diagrams, scheme comparison, and presentation.
-2. Convert topology to metric geometry in Phase 2 (deterministic layout + optional refinement).
-3. Post-process, validate, and rescore in Phase 3.
+2. Convert topology to metric geometry in Phase 2 via generate_plan_geometry.
+3. Post-process, validate, refine if needed, and rescore in Phase 3.
 
 Return three distinct options. When assignedStrategy is provided, return exactly versionCount topologies (default 3) and follow its emphasis.
 When priorSchemeNote is present, the new option must differ in organization logic — not just local reshaping.

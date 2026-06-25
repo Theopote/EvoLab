@@ -163,8 +163,13 @@ export const RefinePlanGeometryToolInputSchema = z.object({
   refinementSummary: z.string().optional()
 });
 
+export const GeneratePlanGeometryToolInputSchema = z.object({
+  version: PlanVersionDraftSchema
+});
+
 export type GeneratePlanToolInput = z.infer<typeof GeneratePlanToolInputSchema>;
 export type GeneratePlanTopologyToolInput = z.infer<typeof GeneratePlanTopologyToolInputSchema>;
+export type GeneratePlanGeometryToolInput = z.infer<typeof GeneratePlanGeometryToolInputSchema>;
 export type PlanTopologyVersion = z.infer<typeof PlanTopologyVersionSchema>;
 export type TopologyRoom = z.infer<typeof TopologyRoomSchema>;
 export type AnalyzePlanToolInput = z.infer<typeof AnalyzePlanToolInputSchema>;
