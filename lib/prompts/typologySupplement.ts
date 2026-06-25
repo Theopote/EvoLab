@@ -1,6 +1,16 @@
-import { getTopologyPromptContext } from "@/lib/typology/topology";
+import { getGeometryPromptContext, getTopologyPromptContext } from "@/lib/typology/topology";
 import { resolveTypologyPack } from "@/lib/typology/resolve";
 import { listFurniturePresets } from "@/lib/typologies/furniture";
+
+export function buildTopologyPromptSupplement(projectType?: string): string {
+  const pack = resolveTypologyPack(projectType);
+  return getTopologyPromptContext(pack);
+}
+
+export function buildGeometryPromptSupplement(projectType?: string): string {
+  const pack = resolveTypologyPack(projectType);
+  return getGeometryPromptContext(pack);
+}
 
 export function buildTypologyPromptSupplement(projectType?: string): string {
   const pack = resolveTypologyPack(projectType);
@@ -10,7 +20,7 @@ export function buildTypologyPromptSupplement(projectType?: string): string {
     .join("\n");
 
   return [
-    getTopologyPromptContext(pack),
+    buildTopologyPromptSupplement(projectType),
     "",
     "Copilot language:",
     `- Use ${pack.label.toLowerCase()} terminology in labels, rationales, and report copy.`,

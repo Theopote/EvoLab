@@ -150,3 +150,19 @@ export function getTopologyPromptContext(pack: TypologyPack) {
     adjacency
   ].join("\n");
 }
+
+export function getGeometryPromptContext(pack: TypologyPack) {
+  const wetTypes = pack.topology.wetRoomTypes.join(", ");
+  const layoutKinds = [...new Set(pack.topology.strategies.map((strategy) => strategy.layoutKind))].join(", ");
+
+  return [
+    `Geometry layout for ${pack.label} (${pack.id}):`,
+    `- Allowed layout kinds: ${layoutKinds}.`,
+    `- Wet room types: ${wetTypes}. Cluster these near shafts; keep needsPlumbing rooms within 12m of a shaft.`,
+    `- Honor preferredEdge from topology when placing rooms on the outline perimeter.`,
+    `- Match targetAreaSqm from topology; room.areaSqm should stay within 20% of polygon area.`,
+    `- Corridor connectivity must follow topology edges with relationship "direct".`,
+    `- Prefer orthogonal room polygons that preserve adjacency without overlap.`,
+    pack.topology.promptGuidance
+  ].join("\n");
+}

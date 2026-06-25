@@ -12,9 +12,11 @@ interface GeneratePlanResponse {
       geometry: boolean;
       refinement: boolean;
     };
+    topologyCount: number;
     refinedCount: number;
     warnings: string[];
     envelopeApplied?: boolean;
+    programApplied?: boolean;
   };
   fallback?: boolean;
   warning?: string;

@@ -7,8 +7,12 @@ import {
 } from "@/lib/generate-plan-constraints";
 import { postProcessPlanVersion, type PostProcessOptions } from "@/lib/plan-postprocess";
 import { validatePlanVersion, type PlanValidationIssue } from "@/lib/plan-validation";
-import { generatePlanTopologyPrompt } from "@/lib/prompts/generatePlanTopologyPrompt";
-import { refinePlanGeometryPrompt } from "@/lib/prompts/refinePlanGeometryPrompt";
+import { buildRefineGeometrySystemPrompt } from "@/lib/prompts/refinePlanGeometryPrompt";
+import { buildGenerateTopologySystemPrompt } from "@/lib/prompts/generateTopologyPrompt";
+import {
+  buildGeometryPromptSupplement,
+  buildTopologyPromptSupplement
+} from "@/lib/prompts/typologySupplement";
 import type { GeneratePlanRequest } from "@/lib/schemas/generate-plan-request-schema";
 import {
   GeneratePlanToolInputSchema,
@@ -34,7 +38,6 @@ import {
 import { topologiesToPlanVersions, type TopologyLayoutOptions } from "@/lib/topology-geometry";
 import { topologyGraphFromTopology } from "@/lib/topology-graph";
 import { resolveTypologyPack } from "@/lib/typology/resolve";
-import { buildTypologyPromptSupplement } from "@/lib/prompts/typologySupplement";
 import type { PlanVersion } from "@/lib/project-types";
 
 export interface GeneratePlanPipelineMeta {
@@ -43,6 +46,7 @@ export interface GeneratePlanPipelineMeta {
     geometry: boolean;
     refinement: boolean;
   };
+  topologyCount: number;
   refinedCount: number;
   warnings: string[];
   envelopeApplied: boolean;
@@ -153,7 +157,7 @@ function topologyInput(
       roomTemplates: pack.topology.roomTemplates,
       adjacencyRules: pack.adjacencyRules,
       wetRoomTypes: pack.topology.wetRoomTypes,
-      guidance: buildTypologyPromptSupplement(body.projectType)
+      guidance: buildTopologyPromptSupplement(body.projectType)
     },
     correction: options?.correction
   };
@@ -171,7 +175,7 @@ async function requestTopologyPlan(
   }
 ) {
   return requestAnthropicTool({
-    system: generatePlanTopologyPrompt,
+    system: buildGenerateTopologySystemPrompt(buildTopologyPromptSupplement(body.projectType)),
     input: topologyInput(body, constraints, program, options),
     toolName: "generate_plan_topology",
     toolDescription:
@@ -220,12 +224,13 @@ async function requestGeometryRefinement(
   version: PlanVersion,
   topology: PlanTopologyVersion,
   constraints: GeneratePlanConstraints,
+  projectType: string | undefined,
   validationIssues: PlanValidationIssue[],
   envelopeIssues: string[],
   correction?: unknown
 ) {
   return requestAnthropicTool({
-    system: refinePlanGeometryPrompt,
+    system: buildRefineGeometrySystemPrompt(buildGeometryPromptSupplement(projectType)),
     input: {
       version: toDraft(version),
       topology: {
@@ -287,6 +292,7 @@ async function refineVersionPair(
   pair: TopologyGeometryPair,
   constraints: GeneratePlanConstraints,
   program: ReturnType<typeof resolveProgramForGeneration>,
+  projectType: string | undefined,
   warnings: string[],
   scoringOptions: PostProcessOptions
 ): Promise<PlanVersion | null> {
@@ -303,6 +309,7 @@ async function refineVersionPair(
         current,
         pair.topology,
         constraints,
+        projectType,
         issues,
         envelopeIssues,
         attempt > 0
@@ -354,6 +361,86 @@ async function refineVersionPair(
   return hasOnlyWarnings && envelopeIssues.length === 0 ? current : null;
 }
 
+async function runTopologyPhase(
+  body: GeneratePlanRequest,
+  constraints: GeneratePlanConstraints,
+  program: ReturnType<typeof resolveProgramForGeneration>
+) {
+  return requestStrategicTopologies(body, constraints, program);
+}
+
+function runGeometryPhase(
+  topologies: PlanTopologyVersion[],
+  layoutOptions: TopologyLayoutOptions
+) {
+  return topologiesToPlanVersions(topologies, layoutOptions);
+}
+
+async function retryTopologyPhase(
+  body: GeneratePlanRequest,
+  constraints: GeneratePlanConstraints,
+  program: ReturnType<typeof resolveProgramForGeneration>,
+  topologyData: { versions: PlanTopologyVersion[] },
+  geometryErrors: ReturnType<typeof versionErrorSummary>,
+  envelopeErrors: ReturnType<typeof envelopeErrorSummary>,
+  programTopologyErrors: ReturnType<typeof programTopologyErrorSummary>,
+  programGeometryErrors: ReturnType<typeof programVersionErrorSummary>
+) {
+  return requestTopologyPlan(body, constraints, program, {
+    correction: {
+      reason: "Previous topology produced geometry outside spatial, zoning, or program constraints.",
+      errors: [...geometryErrors, ...envelopeErrors, ...programTopologyErrors, ...programGeometryErrors],
+      instruction: constraints.envelope
+        ? "Reduce target areas and room count to fit inside buildableEnvelope footprint and floor-area cap."
+        : "Return corrected topology only. Honor program.required spaces, area bounds, and must-adjacency rules.",
+      programRequirements: program.spaces
+        .filter((space) => space.priority === "required")
+        .map((space) => ({
+          name: space.name,
+          roomType: space.roomType,
+          minAreaSqm: space.minAreaSqm,
+          maxAreaSqm: space.maxAreaSqm,
+          targetAreaSqm: space.targetAreaSqm
+        }))
+    },
+    versionCount: topologyData.versions.length
+  });
+}
+
+async function runRefinementPhase(
+  pairs: TopologyGeometryPair[],
+  constraints: GeneratePlanConstraints,
+  program: ReturnType<typeof resolveProgramForGeneration>,
+  projectType: string | undefined,
+  warnings: string[],
+  scoringOptions: PostProcessOptions
+) {
+  const refinedVersions: PlanVersion[] = [];
+  let refinedCount = 0;
+
+  for (const pair of pairs) {
+    const refined = await refineVersionPair(pair, constraints, program, projectType, warnings, scoringOptions);
+    if (refined) {
+      refinedVersions.push(refined);
+      refinedCount += 1;
+    } else {
+      warnings.push(`${pair.version.label}: kept algorithmic geometry after refinement attempts failed.`);
+      const fallbackIssues = validatePlanVersion(pair.version).issues;
+      const fallbackProgramIssues = validateVersionAgainstProgram(pair.version, program).issues;
+      const fallbackEnvelopeIssues = envelopeErrorSummary([pair.version], constraints.envelope, constraints.floors);
+      if (
+        fallbackIssues.every((issue) => issue.severity !== "error") &&
+        fallbackProgramIssues.every((issue) => issue.severity !== "error") &&
+        fallbackEnvelopeIssues.length === 0
+      ) {
+        refinedVersions.push(pair.version);
+      }
+    }
+  }
+
+  return { refinedVersions, refinedCount };
+}
+
 export async function runGeneratePlanPipeline(body: GeneratePlanRequest): Promise<GeneratePlanPipelineResult> {
   const warnings: string[] = [];
   const constraints = resolveGeneratePlanConstraints(body);
@@ -362,6 +449,7 @@ export async function runGeneratePlanPipeline(body: GeneratePlanRequest): Promis
   const layoutOptions = topologyLayoutOptions(constraints, body.projectType);
   const meta: GeneratePlanPipelineMeta = {
     phases: { topology: false, geometry: false, refinement: false },
+    topologyCount: 0,
     refinedCount: 0,
     warnings,
     envelopeApplied: Boolean(constraints.envelope),
@@ -378,10 +466,11 @@ export async function runGeneratePlanPipeline(body: GeneratePlanRequest): Promis
     warnings.push(`Functional program active: ${program.spaces.length} spaces, ${program.spaces.filter((space) => space.priority === "required").length} required.`);
   }
 
-  let topologyData = await requestStrategicTopologies(body, constraints, program);
+  let topologyData = await runTopologyPhase(body, constraints, program);
   meta.phases.topology = true;
+  meta.topologyCount = topologyData.versions.length;
 
-  let versions = topologiesToPlanVersions(topologyData.versions, layoutOptions);
+  let versions = runGeometryPhase(topologyData.versions, layoutOptions);
   meta.phases.geometry = true;
 
   let geometryErrors = versionErrorSummary(versions);
@@ -395,26 +484,18 @@ export async function runGeneratePlanPipeline(body: GeneratePlanRequest): Promis
     programTopologyErrors.length > 0 ||
     programGeometryErrors.length > 0
   ) {
-    topologyData = await requestTopologyPlan(body, constraints, program, {
-      correction: {
-        reason: "Previous topology produced geometry outside spatial, zoning, or program constraints.",
-        errors: [...geometryErrors, ...envelopeErrors, ...programTopologyErrors, ...programGeometryErrors],
-        instruction: constraints.envelope
-          ? "Reduce target areas and room count to fit inside buildableEnvelope footprint and floor-area cap."
-          : "Return corrected topology only. Honor program.required spaces, area bounds, and must-adjacency rules.",
-        programRequirements: program.spaces
-          .filter((space) => space.priority === "required")
-          .map((space) => ({
-            name: space.name,
-            roomType: space.roomType,
-            minAreaSqm: space.minAreaSqm,
-            maxAreaSqm: space.maxAreaSqm,
-            targetAreaSqm: space.targetAreaSqm
-          }))
-      },
-      versionCount: topologyData.versions.length
-    });
-    versions = topologiesToPlanVersions(topologyData.versions, layoutOptions);
+    topologyData = await retryTopologyPhase(
+      body,
+      constraints,
+      program,
+      topologyData,
+      geometryErrors,
+      envelopeErrors,
+      programTopologyErrors,
+      programGeometryErrors
+    );
+    meta.topologyCount = topologyData.versions.length;
+    versions = runGeometryPhase(topologyData.versions, layoutOptions);
     geometryErrors = versionErrorSummary(versions);
     envelopeErrors = envelopeErrorSummary(versions, constraints.envelope, constraints.floors);
     programTopologyErrors = programTopologyErrorSummary(topologyData.versions, program);
@@ -438,29 +519,16 @@ export async function runGeneratePlanPipeline(body: GeneratePlanRequest): Promis
   }
 
   const pairs = pairTopologiesWithVersions(topologyData.versions, versions);
-  const refinedVersions: PlanVersion[] = [];
-
-  for (const pair of pairs) {
-    const refined = await refineVersionPair(pair, constraints, program, warnings, scoringOptions);
-    if (refined) {
-      refinedVersions.push(refined);
-      meta.refinedCount += 1;
-    } else {
-      warnings.push(`${pair.version.label}: kept algorithmic geometry after refinement attempts failed.`);
-      const fallbackIssues = validatePlanVersion(pair.version).issues;
-      const fallbackProgramIssues = validateVersionAgainstProgram(pair.version, program).issues;
-      const fallbackEnvelopeIssues = envelopeErrorSummary([pair.version], constraints.envelope, constraints.floors);
-      if (
-        fallbackIssues.every((issue) => issue.severity !== "error") &&
-        fallbackProgramIssues.every((issue) => issue.severity !== "error") &&
-        fallbackEnvelopeIssues.length === 0
-      ) {
-        refinedVersions.push(pair.version);
-      }
-    }
-  }
-
-  meta.phases.refinement = meta.refinedCount > 0;
+  const { refinedVersions, refinedCount } = await runRefinementPhase(
+    pairs,
+    constraints,
+    program,
+    body.projectType,
+    warnings,
+    scoringOptions
+  );
+  meta.refinedCount = refinedCount;
+  meta.phases.refinement = refinedCount > 0;
 
   const candidates =
     refinedVersions.length > 0
