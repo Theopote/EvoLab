@@ -1,5 +1,25 @@
 import { z } from "zod";
 
+const presentationSlideKinds = [
+  "cover",
+  "site",
+  "evolution",
+  "topology",
+  "massing",
+  "plan",
+  "zones",
+  "flow",
+  "facade",
+  "systems",
+  "compare",
+  "analysis",
+  "quantities",
+  "cost",
+  "narrative"
+] as const;
+
+export const PresentationSlideKindSchema = z.enum(presentationSlideKinds);
+
 export const PresentationSlideCopySchema = z.object({
   slideId: z.string().min(4),
   title: z.string().min(4).max(120).optional(),
@@ -15,7 +35,7 @@ export const GenerateStoryboardToolInputSchema = z.object({
 
 export const PresentationSlideSchema = z.object({
   id: z.string().min(1),
-  kind: z.string().min(1),
+  kind: PresentationSlideKindSchema,
   title: z.string().min(1),
   subtitle: z.string().optional(),
   bullets: z.array(z.string()),

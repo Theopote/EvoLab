@@ -11,6 +11,7 @@ import type { ProgramModel, ProjectDomain } from "@/lib/building-domain";
 import { getProgramGoals } from "@/lib/project-domain";
 import { calculateQuantities } from "@/lib/quantity-engine";
 import type { PlanVersion } from "@/lib/project-types";
+import { useProjectActions, useProjectState } from "@/lib/project-store";
 import { ensureVersionScores, scoringInputFromDomain } from "@/lib/rules/resolve-version-scoring";
 import {
   compareVersionsAtLevel,
@@ -142,12 +143,13 @@ export function VersionCompareGrid({
   onGenerateModel,
   onRefineVersion
 }: VersionCompareGridProps) {
-  const [compareIds, setCompareIds] = useState<string[]>([]);
+  const compareVersionIds = useProjectState((state) => state.compareVersionIds);
+  const { toggleCompareVersion } = useProjectActions();
   const [compareScope, setCompareScope] = useState<VersionCompareScope>("selected-level");
   const levelOptions = useMemo(() => listComparableLevels(versions), [versions]);
   const levelGroups = useMemo(() => listComparableLevelGroups(versions), [versions]);
   const resolvedLevelId = compareLevelId ?? levelOptions[0]?.id;
-  const comparedVersions = versions.filter((version) => compareIds.includes(version.id));
+  const comparedVersions = versions.filter((version) => compareVersionIds.includes(version.id));
   const compareLevelIds = useMemo(() => {
     if (compareScope !== "selected-level" || !resolvedLevelId) {
       return [];
@@ -188,14 +190,6 @@ export function VersionCompareGrid({
     () => [...versions].sort((a, b) => scoreVersion(b) - scoreVersion(a))[0]?.id,
     [versions]
   );
-
-  function toggleCompare(versionId: string) {
-    setCompareIds((current) =>
-      current.includes(versionId)
-        ? current.filter((id) => id !== versionId)
-        : [...current, versionId].slice(-3)
-    );
-  }
 
   if (versions.length === 0) {
     return (
@@ -255,7 +249,7 @@ export function VersionCompareGrid({
             const totalScore = scoreVersion(version);
             const isActive = version.id === activeVersionId;
             const isRecommended = version.id === recommendedId;
-            const isCompared = compareIds.includes(version.id);
+            const isCompared = compareVersionIds.includes(version.id);
             const floorCount = version.metadata?.floorCount ?? version.levels.length;
             const previewLevelId =
               compareScope === "selected-level"
@@ -327,7 +321,7 @@ export function VersionCompareGrid({
                         : "border-line text-slate-100 hover:border-accent/60 hover:text-accent"
                     }`}
                     type="button"
-                    onClick={() => toggleCompare(version.id)}
+                    onClick={() => toggleCompareVersion(version.id)}
                   >
                     <GitCompare className="h-3.5 w-3.5" />
                     Compare

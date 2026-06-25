@@ -106,6 +106,7 @@ export interface EvoProjectStore {
   updateTopologyGraph: (graph: TopologyGraph) => void;
   setWorkflowPhase: (phase: WorkflowPhaseId) => void;
   toggleCompareVersion: (versionId: string) => void;
+  setCompareVersionIds: (versionIds: string[]) => void;
   setCompareModeOpen: (open: boolean) => void;
   selectCopilotProposal: (proposalId?: string) => void;
   setActiveAnalysisLayers: (layers: AnalysisLayerId[]) => void;

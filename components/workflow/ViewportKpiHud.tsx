@@ -7,6 +7,7 @@ import { getProgramGoals } from "@/lib/project-domain";
 import { calculateQuantities } from "@/lib/quantity-engine";
 import { useProjectActions, useProjectState, useSiteState } from "@/lib/project-store";
 import { computeTotalScore } from "@/lib/rules/version-total-score";
+import { tabForSchemeSubview } from "@/lib/workflow-phases";
 
 function polygonArea(points: Array<[number, number]>) {
   const area = points.reduce((total, [x, y], index) => {
@@ -18,9 +19,10 @@ function polygonArea(points: Array<[number, number]>) {
 }
 
 export function ViewportKpiHud() {
-  const { project, activeVersion, compareModeOpen, compareVersionIds } = useProjectState((state) => ({
+  const { project, activeVersion, activeTab, compareModeOpen, compareVersionIds } = useProjectState((state) => ({
     project: state.project,
     activeVersion: state.activeVersion,
+    activeTab: state.activeTab,
     compareModeOpen: state.compareModeOpen,
     compareVersionIds: state.compareVersionIds
   }));
@@ -29,7 +31,8 @@ export function ViewportKpiHud() {
     zoning: state.zoning,
     buildableEnvelope: state.buildableEnvelope
   }));
-  const { setCompareModeOpen } = useProjectActions();
+  const { setCompareModeOpen, setActiveTab, setWorkflowPhase } = useProjectActions();
+  const isCompareActive = activeTab === "Compare" || compareModeOpen;
 
   const metrics = useMemo(() => {
     if (!activeVersion) {
@@ -83,12 +86,24 @@ export function ViewportKpiHud() {
     <div className="pointer-events-none absolute right-4 top-4 z-20 flex flex-wrap justify-end gap-2">
       <button
         className={`pointer-events-auto flex h-auto items-center gap-2 rounded-lg border px-3 py-2 text-xs shadow-lg backdrop-blur ${
-          compareModeOpen
+          isCompareActive
             ? "border-accent/60 bg-accent/15 text-accent"
             : "border-line/80 bg-[#0b1118]/92 text-slate-200 hover:border-accent/50"
         }`}
         type="button"
-        onClick={() => setCompareModeOpen(!compareModeOpen)}
+        onClick={() => {
+          if (isCompareActive) {
+            setCompareModeOpen(false);
+            if (activeTab === "Compare") {
+              setActiveTab(tabForSchemeSubview("plan"));
+            }
+            return;
+          }
+
+          setWorkflowPhase("scheme");
+          setActiveTab(tabForSchemeSubview("compare"));
+          setCompareModeOpen(true);
+        }}
       >
         <GitCompareArrows className="h-3.5 w-3.5" />
         Compare

@@ -17,6 +17,7 @@ export type ProjectSliceActions = Pick<
   | "updateTopologyGraph"
   | "setWorkflowPhase"
   | "toggleCompareVersion"
+  | "setCompareVersionIds"
   | "setCompareModeOpen"
   | "setActiveLevel"
   | "setMetricsScope"

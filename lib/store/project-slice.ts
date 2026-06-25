@@ -219,7 +219,14 @@ export const createProjectSlice: StateCreator<EvoProjectStore, [], [], ProjectSl
           return;
         }
 
-        state.compareVersionIds = [...state.compareVersionIds, versionId].slice(-2);
+        state.compareVersionIds = [...state.compareVersionIds, versionId].slice(-3);
+      })
+    ),
+  setCompareVersionIds: (versionIds) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        const validIds = new Set(state.project.versions.map((version) => version.id));
+        state.compareVersionIds = [...new Set(versionIds.filter((id) => validIds.has(id)))].slice(-3);
       })
     ),
   setCompareModeOpen: (open) =>

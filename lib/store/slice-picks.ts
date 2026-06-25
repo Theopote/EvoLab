@@ -57,6 +57,7 @@ export function pickProjectActions(state: EvoProjectStore): ProjectSliceActions 
     updateTopologyGraph: state.updateTopologyGraph,
     setWorkflowPhase: state.setWorkflowPhase,
     toggleCompareVersion: state.toggleCompareVersion,
+    setCompareVersionIds: state.setCompareVersionIds,
     setCompareModeOpen: state.setCompareModeOpen,
     setActiveLevel: state.setActiveLevel,
     setMetricsScope: state.setMetricsScope,

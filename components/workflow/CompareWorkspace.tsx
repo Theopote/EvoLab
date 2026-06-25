@@ -54,10 +54,11 @@ export function CompareWorkspace({
         <div>
           <h1 className="flex items-center gap-2 text-base font-semibold text-white">
             <GitCompareArrows className="h-4 w-4 text-accent" />
-            Compare mode
+            Compare workspace
           </h1>
           <p className="mt-1 text-xs text-muted">
-            Pin up to two versions in the left sidebar, then review metrics, plans, and hybrid options here.
+            Pin up to three versions from the tree or cards below. Review metrics, side-by-side plans, hybrid options,
+            and recommendations.
           </p>
         </div>
         <button
@@ -77,8 +78,8 @@ export function CompareWorkspace({
         <div className="flex items-start gap-3 rounded border border-warning/30 bg-warning/5 p-3 text-xs text-warning">
           <Pin className="mt-0.5 h-4 w-4 shrink-0" />
           <p>
-            Pin at least two versions from the version tree to enable side-by-side plan read. You can still use the grid
-            below to compare all generated schemes.
+            Pin at least two versions to enable side-by-side plan read. You can still use the grid below to compare all
+            generated schemes.
           </p>
         </div>
       ) : (

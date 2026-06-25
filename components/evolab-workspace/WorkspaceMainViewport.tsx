@@ -183,7 +183,7 @@ export const WorkspaceMainViewport = memo(function WorkspaceMainViewport() {
     [activeVersion, appendGeneratedVersions, setActiveTab, setWorkflowPhase]
   );
 
-  if (compareModeOpen) {
+  if (activeTab === "Compare" || compareModeOpen) {
     return (
       <CompareWorkspace
         versions={project.versions}
@@ -198,7 +198,12 @@ export const WorkspaceMainViewport = memo(function WorkspaceMainViewport() {
         onSelectVersion={setActiveVersion}
         onGenerateModel={openModelForVersion}
         onRefineVersion={refineVersion}
-        onClose={() => setCompareModeOpen(false)}
+        onClose={() => {
+          setCompareModeOpen(false);
+          if (activeTab === "Compare") {
+            setActiveTab(tabForSchemeSubview("plan"));
+          }
+        }}
         copilotProposals={copilotProposals}
         selectedProposalId={selectedProposalId}
         lockedElementIds={lockedElementIds}
@@ -220,7 +225,11 @@ export const WorkspaceMainViewport = memo(function WorkspaceMainViewport() {
         onToggleElementLock={toggleElementLock}
         selectedProposalId={selectedProposalId}
         onSelectProposal={selectCopilotProposal}
-        onOpenCompare={() => setCompareModeOpen(true)}
+        onOpenCompare={() => {
+          setCompareModeOpen(true);
+          setWorkflowPhase("scheme");
+          setActiveTab(tabForSchemeSubview("compare"));
+        }}
       />
     );
   }

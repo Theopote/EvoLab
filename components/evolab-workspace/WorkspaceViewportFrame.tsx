@@ -10,11 +10,12 @@ export const WorkspaceViewportFrame = memo(function WorkspaceViewportFrame({
 }: {
   children: React.ReactNode;
 }) {
-  const { project, compareVersionIds, compareLevelId, compareModeOpen } = useProjectState((state) => ({
+  const { project, compareVersionIds, compareLevelId, compareModeOpen, activeTab } = useProjectState((state) => ({
     project: state.project,
     compareVersionIds: state.compareVersionIds,
     compareLevelId: state.compareLevelId,
-    compareModeOpen: state.compareModeOpen
+    compareModeOpen: state.compareModeOpen,
+    activeTab: state.activeTab
   }));
   const { setCompareLevel } = useProjectActions();
 
@@ -22,7 +23,7 @@ export const WorkspaceViewportFrame = memo(function WorkspaceViewportFrame({
     <section className="relative min-h-0 overflow-hidden">
       <ViewportKpiHud />
       <div className="cad-grid h-full overflow-auto p-4">
-        {!compareModeOpen ? (
+        {!compareModeOpen && activeTab !== "Compare" ? (
           <VersionSplitCompare
             versions={project.versions}
             compareVersionIds={compareVersionIds}

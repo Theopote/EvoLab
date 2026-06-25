@@ -172,7 +172,7 @@ export function VersionTreeSidebar({
           Comparing {compareVersionIds.length} pinned versions in the viewport split.
         </div>
       ) : (
-        <div className="text-[11px] text-muted">Pin up to 2 versions with the compare icon.</div>
+        <div className="text-[11px] text-muted">Pin up to 3 versions with the compare icon.</div>
       )}
     </div>
   );
