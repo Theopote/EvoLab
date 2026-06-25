@@ -23,7 +23,7 @@ import { RoomTopologyToolbar } from "@/components/floor-plan/RoomTopologyToolbar
 import { WallLayer } from "@/components/floor-plan/layers/WallLayer";
 import { getViewBox } from "@/components/floor-plan/floor-plan-utils";
 import { parseViewBox, formatViewBox } from "@/lib/comparison-viewport";
-import { getResolvedLevel } from "@/lib/level-rooms";
+import { getResolvedLevel, resolveLevelOutline } from "@/lib/level-rooms";
 import {
   useFloorPlanEditorState,
   useGeometryActions,
@@ -34,6 +34,8 @@ import { createSetbackBoundary } from "@/lib/polygon-offset";
 import { useEditPreviewStore } from "@/lib/edit-preview-store";
 import { corridorComplianceRoomIds } from "@/lib/drag-compliance";
 import { normalizePlanVersion } from "@/lib/architecture-model";
+import { applyLevelWallDrag } from "@/lib/geometry/walls/apply-wall-drag";
+import type { WallDragCommitInput } from "@/lib/store/types";
 import type { GridSnapStep } from "@/lib/plan-snap";
 import { clientToSvgPoint } from "@/components/floor-plan/floor-plan-utils";
 import { useLocalFormEditStore } from "@/lib/local-form-edit-store";
@@ -80,9 +82,11 @@ export const FloorPlanCanvas = memo(function FloorPlanCanvas({
   );
   const setReferenceOpacity = useImportSessionStore((state) => state.setReferenceOpacity);
   const previewRooms = useEditPreviewStore((state) => state.previewRooms);
+  const previewWallsFromStore = useEditPreviewStore((state) => state.previewWalls);
   const complianceRoomIds = useEditPreviewStore((state) => state.complianceRoomIds);
   const dragHint = useEditPreviewStore((state) => state.dragHint);
   const setPreviewRooms = useEditPreviewStore((state) => state.setPreviewRooms);
+  const setPreviewWallGeometry = useEditPreviewStore((state) => state.setPreviewWallGeometry);
   const clearPreview = useEditPreviewStore((state) => state.clearPreview);
   const {
     selectedRoomId: roomSelectionFromStore,
@@ -94,6 +98,7 @@ export const FloorPlanCanvas = memo(function FloorPlanCanvas({
   const { selectRoom, selectWall, selectOpening, clearSelection } = useSelectionActions();
   const {
     applyLevelRoomsGeometry,
+    applyWallDragCommit,
     splitActiveRoom,
     mergeActiveRoomWith,
     addParametricOpening,
@@ -168,9 +173,44 @@ export const FloorPlanCanvas = memo(function FloorPlanCanvas({
   const level = version?.levels.find((item) => item.id === levelId) ?? version?.levels[0];
   const resolvedLevel = version && level ? getResolvedLevel(version, level.id) : undefined;
   const sourceRooms = resolvedLevel?.rooms ?? version?.rooms ?? [];
+
+  const handleWallDragPreview = useCallback(
+    (input: WallDragCommitInput) => {
+      if (!level || !version) {
+        return;
+      }
+
+      const levelOutline = resolveLevelOutline(level, version.standardFloorGroups, version.outline);
+      const previewLevel = applyLevelWallDrag(level, input.wallId, input.offset, input.normal, levelOutline);
+
+      setPreviewWallGeometry(
+        previewLevel.rooms,
+        previewLevel.walls,
+        corridorComplianceRoomIds(previewLevel.rooms),
+        "Drag wall · release to commit"
+      );
+    },
+    [level, setPreviewWallGeometry, version]
+  );
+
+  const handleWallDragCommit = useCallback(
+    (input: WallDragCommitInput) => {
+      clearPreview();
+
+      if (input.offset !== 0) {
+        applyWallDragCommit(input);
+      }
+    },
+    [applyWallDragCommit, clearPreview]
+  );
+
   const rooms = previewRooms ?? sourceRooms;
   const wallGraph = useMemo(() => deriveWallGraph(sourceRooms), [sourceRooms]);
   const previewWalls = useMemo(() => {
+    if (previewWallsFromStore) {
+      return previewWallsFromStore;
+    }
+
     if (!version || !previewRooms) {
       return level?.walls ?? [];
     }
@@ -178,7 +218,7 @@ export const FloorPlanCanvas = memo(function FloorPlanCanvas({
     const normalized = normalizePlanVersion({ ...version, rooms: previewRooms });
     const previewLevel = normalized.levels.find((item) => item.id === levelId) ?? normalized.levels[0];
     return previewLevel?.walls ?? [];
-  }, [level?.walls, levelId, previewRooms, version]);
+  }, [level?.walls, levelId, previewRooms, previewWallsFromStore, version]);
 
   const handleCanvasPointerMove = useCallback(
     (event: React.PointerEvent<SVGSVGElement>) => {
@@ -413,6 +453,8 @@ export const FloorPlanCanvas = memo(function FloorPlanCanvas({
             onRoomsGeometryCancel={handleRoomsGeometryCancel}
             onRoomsGeometryCommit={handleRoomsGeometryCommit}
             onRoomsGeometryPreview={handleRoomsGeometryPreview}
+            onWallDragCommit={interactive ? handleWallDragCommit : undefined}
+            onWallDragPreview={interactive ? handleWallDragPreview : undefined}
             onOpeningCenterChange={(openingId, center) => updateOpening(openingId, { center })}
           />
           <InpaintMaskLayer svgRef={svgRef} version={version} enabled={inpaintEnabled} />

@@ -402,7 +402,7 @@ function WallDragHandle({
         if (onWallDragPreview) {
           onWallDragPreview(wallDragCommitInput(session, 0));
         } else {
-          onPreviewRooms(allRooms, "Drag wall · release to commit");
+          onPreviewRooms?.(allRooms, "Drag wall · release to commit");
         }
         event.currentTarget.setPointerCapture(event.pointerId);
         event.stopPropagation();
