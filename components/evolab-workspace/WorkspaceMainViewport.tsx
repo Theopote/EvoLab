@@ -8,9 +8,7 @@ import { MassingPanel } from "@/components/massing-panel";
 import { MepCanvas } from "@/components/mep/MepCanvas";
 import { MepLayerList } from "@/components/mep/MepLayerList";
 import { QuantityTable } from "@/components/quantity/QuantityTable";
-import { RenderPanel } from "@/components/render-panel";
-import { PresentationWorkspace } from "@/components/presentation/PresentationWorkspace";
-import { VersionCompareGrid } from "@/components/version-compare/VersionCompareGrid";
+import { DeliverPresentationView } from "@/components/presentation/DeliverPresentationView";
 import { SchemeSplitViewport } from "@/components/workflow/SchemeSplitViewport";
 import { ExplodeSlider } from "@/components/viewer-3d/ExplodeSlider";
 import { IntakeWorkspace } from "@/components/workflow/IntakeWorkspace";
@@ -391,28 +389,23 @@ export const WorkspaceMainViewport = memo(function WorkspaceMainViewport() {
     );
   }
 
-  if (activeTab === "Render") {
-    return <RenderPanel activeVersion={activeVersion} />;
-  }
-
-  if (activeTab === "Sheets") {
+  if (activeTab === "Presentation" || activeTab === "Sheets" || activeTab === "Render") {
     return (
-      <section className="grid min-h-full grid-rows-[auto_minmax(0,1fr)] gap-4">
-        <PresentationWorkspace />
-        <VersionCompareGrid
-          versions={project.versions}
-          activeVersionId={project.activeVersionId}
-          compareLevelId={compareLevelId}
-          domain={project.domain}
-          program={project.domain.program}
-          projectType={project.projectType}
-          orientationDeg={project.domain.site.orientationDeg}
-          onCompareLevelChange={setCompareLevel}
-          onSelectVersion={setActiveVersion}
-          onGenerateModel={openModelForVersion}
-          onRefineVersion={refineVersion}
-        />
-      </section>
+      <DeliverPresentationView
+        activeTab={activeTab}
+        activeVersion={activeVersion}
+        versions={project.versions}
+        activeVersionId={project.activeVersionId}
+        compareLevelId={compareLevelId}
+        domain={project.domain}
+        program={project.domain.program}
+        projectType={project.projectType}
+        orientationDeg={project.domain.site.orientationDeg}
+        onCompareLevelChange={setCompareLevel}
+        onSelectVersion={setActiveVersion}
+        onGenerateModel={openModelForVersion}
+        onRefineVersion={refineVersion}
+      />
     );
   }
 

@@ -18,7 +18,9 @@ interface WorkflowLeftSidebarProps {
   onToggleCompare: (versionId: string) => void;
   onTabChange: (tab: WorkspaceTab) => void;
   onImportTab: () => void;
-  onOpenSheets: () => void;
+  onOpenPresentation: () => void;
+  /** @deprecated Use onOpenPresentation */
+  onOpenSheets?: () => void;
   onOpenReportEditor?: () => void;
 }
 
@@ -32,13 +34,20 @@ export function WorkflowLeftSidebar({
   onToggleCompare,
   onTabChange,
   onImportTab,
+  onOpenPresentation,
   onOpenSheets,
   onOpenReportEditor
 }: WorkflowLeftSidebarProps) {
+  const openPresentation = onOpenPresentation ?? onOpenSheets;
   let phasePanel: ReactNode = null;
 
   if (phase === "deliver") {
-    phasePanel = <ReportOutlineSidebar onOpenSheets={onOpenSheets} onOpenReportEditor={onOpenReportEditor} />;
+    phasePanel = (
+      <ReportOutlineSidebar
+        onOpenPresentation={openPresentation!}
+        onOpenReportEditor={onOpenReportEditor}
+      />
+    );
   }
 
   return (

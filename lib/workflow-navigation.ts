@@ -136,7 +136,7 @@ const deliverTabMap: Record<DeliverSubviewId, WorkspaceTab> = {
   presentation: "Presentation",
   render: "Render",
   export: "Export",
-  sheets: "Sheets"
+  sheets: "Presentation"
 };
 
 const quantifyTabMap: Record<QuantifySubview, WorkspaceTab> = {

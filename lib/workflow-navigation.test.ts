@@ -64,7 +64,7 @@ describe("workflow-navigation", () => {
     expect(normalizeSchemeSubview("model")).toBe("massing");
     expect(normalizeDeliverSubview("sheets")).toBe("presentation");
     expect(tabForSchemeSubview("model")).toBe("Model");
-    expect(tabForDeliverSubview("sheets")).toBe("Sheets");
+    expect(tabForDeliverSubview("sheets")).toBe("Presentation");
   });
 
   it("builds a resolved workflow view", () => {

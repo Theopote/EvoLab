@@ -27,7 +27,7 @@ const tabs: { id: BottomPanelTab; label: string }[] = [
   { id: "scores", label: "Scores" },
   { id: "quantities", label: "Quantities" },
   { id: "warnings", label: "Warnings" },
-  { id: "sheets", label: "Sheets" }
+  { id: "sheets", label: "Presentation" }
 ];
 
 export function BottomPanel({

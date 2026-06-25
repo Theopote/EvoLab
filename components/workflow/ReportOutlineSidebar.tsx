@@ -6,11 +6,18 @@ import { usePresentationUiStore } from "@/lib/presentation-ui-store";
 import { useProjectState, useSiteState } from "@/lib/project-store";
 
 interface ReportOutlineSidebarProps {
-  onOpenSheets: () => void;
+  onOpenPresentation: () => void;
+  /** @deprecated Use onOpenPresentation */
+  onOpenSheets?: () => void;
   onOpenReportEditor?: () => void;
 }
 
-export function ReportOutlineSidebar({ onOpenSheets, onOpenReportEditor }: ReportOutlineSidebarProps) {
+export function ReportOutlineSidebar({
+  onOpenPresentation,
+  onOpenSheets,
+  onOpenReportEditor
+}: ReportOutlineSidebarProps) {
+  const openPresentation = onOpenPresentation ?? onOpenSheets;
   const { project, activeVersion, brief } = useProjectState((state) => ({
     project: state.project,
     activeVersion: state.activeVersion,
@@ -53,8 +60,8 @@ export function ReportOutlineSidebar({ onOpenSheets, onOpenReportEditor }: Repor
       <div className="flex items-center justify-between">
         <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Report Outline</h2>
         <div className="flex items-center gap-2">
-          <button className="text-[11px] text-accent hover:underline" type="button" onClick={onOpenSheets}>
-            Open deck
+          <button className="text-[11px] text-accent hover:underline" type="button" onClick={openPresentation}>
+            Open presentation
           </button>
           {onOpenReportEditor ? (
             <button className="text-[11px] text-accent hover:underline" type="button" onClick={onOpenReportEditor}>
@@ -71,7 +78,7 @@ export function ReportOutlineSidebar({ onOpenSheets, onOpenReportEditor }: Repor
             type="button"
             onClick={() => {
               requestFocusSlide(slide.id);
-              onOpenSheets();
+              openPresentation?.();
             }}
           >
             <div className="text-[11px] text-muted">Slide {index + 1}</div>

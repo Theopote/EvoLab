@@ -34,7 +34,7 @@ export const WorkspaceLeftSidebar = memo(function WorkspaceLeftSidebar({
         setWorkflowPhase("import");
         setActiveTab("Import");
       }}
-      onOpenSheets={() => {
+      onOpenPresentation={() => {
         setWorkflowPhase("deliver");
         setActiveTab(tabForDeliverSubview("presentation"));
       }}

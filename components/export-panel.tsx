@@ -125,7 +125,7 @@ export function ExportPanel({ project, activeVersion, quantities, complianceItem
         <section className="rounded border border-line bg-panel/90 p-3">
           <h2 className="mb-3 text-sm font-semibold text-white">Presentation Export</h2>
           <p className="mb-3 text-xs text-muted">
-            For full storyboard decks with isometric diagrams and AI narrative, use the Sheets workspace.
+            For full storyboard decks with isometric diagrams and AI narrative, use the Presentation workspace.
           </p>
           <h2 className="mb-3 text-sm font-semibold text-white">Available Exports</h2>
           <div className="grid gap-3 lg:grid-cols-2">
