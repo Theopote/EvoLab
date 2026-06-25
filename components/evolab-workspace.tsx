@@ -1,8 +1,9 @@
 "use client";
 
 import { Loader2, RefreshCcw } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
+import { useInteractionStore } from "@/lib/interaction-store";
 import { BottomPanel } from "@/components/bottom-panel";
 import { CopilotConsole } from "@/components/copilot/CopilotConsole";
 import { CopilotProposalHistoryPanel } from "@/components/copilot/CopilotProposalHistoryPanel";
@@ -163,6 +164,13 @@ export function EvoLabWorkspace() {
   );
   const [reportEditorOpen, setReportEditorOpen] = useState(false);
   const nextStep = useMemo(() => recommendedNextStepDetail(project), [project]);
+  const setView3D = useInteractionStore((state) => state.setView3D);
+
+  useEffect(() => {
+    if (activeTab === "Facade") {
+      setView3D({ showFacadeOverlay: true });
+    }
+  }, [activeTab, setView3D]);
 
   return (
     <main className="flex min-h-screen flex-col bg-canvas text-slate-100">

@@ -10,7 +10,7 @@ export function roomsForHybridPicker(version: PlanVersion, levelId?: string): Ro
   }
 
   const resolvedLevel = getResolvedLevel(version, level.id);
-  return resolvedLevel.rooms;
+  return resolvedLevel?.rooms ?? version.rooms;
 }
 
 export function stampHybridVersion(

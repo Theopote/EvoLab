@@ -1,7 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useState, type PointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import type { TopologyGraph, TopologyGraphEdge, TopologyGraphRoom } from "@/lib/project-types";
+import {
+  bubbleRelationshipOrder,
+  cycleBubbleRelationship,
+  edgePairKey,
+  edgeStrokeStyle,
+  findEdge,
+  removeBubbleEdge,
+  upsertBubbleEdge,
+  type BubbleRelationship
+} from "@/lib/bubble-topology";
 
 interface BubbleDiagramCanvasProps {
   topology?: TopologyGraph;
@@ -24,6 +34,12 @@ const zoneColors: Record<TopologyGraphRoom["zone"], string> = {
   circulation: "#94a3b8"
 };
 
+const relationshipLabels: Record<BubbleRelationship, string> = {
+  direct: "Direct adjacency",
+  near: "Near / preferred",
+  separated: "Separated"
+};
+
 function layoutNodes(rooms: TopologyGraphRoom[]): LayoutNode[] {
   const centerX = 420;
   const centerY = 280;
@@ -41,14 +57,13 @@ function layoutNodes(rooms: TopologyGraphRoom[]): LayoutNode[] {
   });
 }
 
-function edgeKey(from: string, to: string) {
-  return [from, to].sort().join("|");
-}
-
 export function BubbleDiagramCanvas({ topology, programLabel, onTopologyChange }: BubbleDiagramCanvasProps) {
   const [nodePositions, setNodePositions] = useState<Record<string, { x: number; y: number }>>({});
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectedEdgeKey, setSelectedEdgeKey] = useState<string | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const dragOrigin = useRef<{ x: number; y: number } | null>(null);
+  const movedDuringDrag = useRef(false);
 
   useEffect(() => {
     if (!topology?.rooms.length) {
@@ -59,6 +74,7 @@ export function BubbleDiagramCanvas({ topology, programLabel, onTopologyChange }
     const layout = layoutNodes(topology.rooms);
     setNodePositions(Object.fromEntries(layout.map((node) => [node.room.id, { x: node.x, y: node.y }])));
     setSelectedIds([]);
+    setSelectedEdgeKey(null);
   }, [topology?.id, topology?.rooms.length]);
 
   const nodes = useMemo(() => {
@@ -80,58 +96,85 @@ export function BubbleDiagramCanvas({ topology, programLabel, onTopologyChange }
 
   const nodeById = useMemo(() => new Map(nodes.map((node) => [node.room.id, node])), [nodes]);
 
+  const selectedEdge = useMemo(() => {
+    if (!topology || !selectedEdgeKey) {
+      return null;
+    }
+
+    return topology.edges.find((edge) => edgePairKey(edge.from, edge.to) === selectedEdgeKey) ?? null;
+  }, [selectedEdgeKey, topology]);
+
   if (!topology?.rooms.length) {
     return (
       <div className="grid min-h-[520px] place-items-center rounded border border-dashed border-line bg-panel/60 p-8 text-center">
         <div className="max-w-md">
           <h2 className="text-base font-semibold text-white">Bubble diagram</h2>
           <p className="mt-2 text-sm leading-6 text-muted">
-            Generate a scheme or import a plan to populate topology. Drag bubbles to rearrange and click pairs to toggle
-            adjacency.
+            Generate a scheme or import a plan to populate topology. Drag bubbles, click edges to cycle relationship
+            types, or select two bubbles to connect them.
           </p>
         </div>
       </div>
     );
   }
 
-  function toggleSelection(roomId: string) {
+  function applyEdgeRelationship(from: string, to: string, relationship: BubbleRelationship | null) {
+    if (!topology || !onTopologyChange) {
+      return;
+    }
+
+    const edges: TopologyGraphEdge[] = relationship
+      ? upsertBubbleEdge(topology.edges, from, to, relationship)
+      : removeBubbleEdge(topology.edges, from, to);
+
+    onTopologyChange({ ...topology, edges });
+    setSelectedEdgeKey(relationship ? edgePairKey(from, to) : null);
+  }
+
+  function cycleEdge(from: string, to: string) {
+    if (!topology) {
+      return;
+    }
+
+    const existing = findEdge(topology.edges, from, to);
+    applyEdgeRelationship(from, to, cycleBubbleRelationship(existing?.relationship));
+  }
+
+  function handleNodePointerDown(roomId: string, event: PointerEvent<SVGCircleElement>) {
+    dragOrigin.current = { x: event.clientX, y: event.clientY };
+    movedDuringDrag.current = false;
+    setDraggingId(roomId);
+    setSelectedEdgeKey(null);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function handleNodePointerUp(roomId: string) {
+    if (movedDuringDrag.current) {
+      return;
+    }
+
     setSelectedIds((current) => {
-      if (current.includes(roomId)) {
-        return current.filter((id) => id !== roomId);
+      if (current.length === 1 && current[0] !== roomId) {
+        cycleEdge(current[0], roomId);
+        return [];
       }
 
-      if (current.length === 1) {
-        return [current[0], roomId];
+      if (current.includes(roomId)) {
+        return current.filter((id) => id !== roomId);
       }
 
       return [roomId];
     });
   }
 
-  function toggleEdge(from: string, to: string) {
-    if (!topology || !onTopologyChange) {
+  function handlePointerMove(event: PointerEvent<SVGSVGElement>) {
+    if (!draggingId || !dragOrigin.current) {
       return;
     }
 
-    const key = edgeKey(from, to);
-    const existing = topology.edges.find((edge) => edgeKey(edge.from, edge.to) === key);
-
-    const edges: TopologyGraphEdge[] = existing
-      ? topology.edges.filter((edge) => edgeKey(edge.from, edge.to) !== key)
-      : [...topology.edges, { from, to, relationship: "direct" }];
-
-    onTopologyChange({ ...topology, edges });
-    setSelectedIds([]);
-  }
-
-  function handleNodePointerDown(roomId: string) {
-    setDraggingId(roomId);
-    toggleSelection(roomId);
-  }
-
-  function handlePointerMove(event: PointerEvent<SVGSVGElement>) {
-    if (!draggingId) {
-      return;
+    const distance = Math.hypot(event.clientX - dragOrigin.current.x, event.clientY - dragOrigin.current.y);
+    if (distance > 4) {
+      movedDuringDrag.current = true;
     }
 
     const svg = event.currentTarget;
@@ -147,25 +190,77 @@ export function BubbleDiagramCanvas({ topology, programLabel, onTopologyChange }
   }
 
   function handlePointerUp() {
-    if (selectedIds.length === 2 && onTopologyChange) {
-      toggleEdge(selectedIds[0], selectedIds[1]);
+    if (draggingId) {
+      handleNodePointerUp(draggingId);
     }
 
     setDraggingId(null);
+    dragOrigin.current = null;
+    movedDuringDrag.current = false;
   }
 
   return (
     <section className="rounded border border-line bg-panel/90 p-4">
-      <div className="mb-3 flex items-center justify-between gap-3">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold text-white">{topology.label || "Program bubble"}</h2>
           <p className="mt-1 text-xs text-muted">
             {programLabel ? `${programLabel} · ` : ""}
-            Drag bubbles · select two to toggle adjacency · {topology.edges.length} edges
+            Drag bubbles · click edge or pick two bubbles to cycle direct → near → separated → remove
           </p>
         </div>
-        <span className="rounded border border-line px-2 py-1 text-xs text-muted">{topology.strategy}</span>
+        <div className="flex flex-wrap gap-2">
+          {bubbleRelationshipOrder.map((relationship) => {
+            const style = edgeStrokeStyle(relationship);
+            return (
+              <span className="inline-flex items-center gap-2 rounded border border-line px-2 py-1 text-[11px] text-muted" key={relationship}>
+                <svg aria-hidden className="h-3 w-8" viewBox="0 0 32 8">
+                  <line
+                    stroke={style.stroke}
+                    strokeDasharray={style.strokeDasharray}
+                    strokeWidth={style.strokeWidth}
+                    x1="0"
+                    x2="32"
+                    y1="4"
+                    y2="4"
+                  />
+                </svg>
+                {relationshipLabels[relationship]}
+              </span>
+            );
+          })}
+        </div>
       </div>
+
+      {selectedEdge ? (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded border border-accent/30 bg-accent/5 px-3 py-2 text-xs">
+          <span className="text-slate-200">
+            Selected edge: {topology.rooms.find((room) => room.id === selectedEdge.from)?.name ?? selectedEdge.from} ↔{" "}
+            {topology.rooms.find((room) => room.id === selectedEdge.to)?.name ?? selectedEdge.to}
+          </span>
+          {bubbleRelationshipOrder.map((relationship) => (
+            <button
+              className={`rounded border px-2 py-1 ${
+                selectedEdge.relationship === relationship
+                  ? "border-accent bg-accent/15 text-accent"
+                  : "border-line text-muted hover:border-accent/50"
+              }`}
+              key={relationship}
+              type="button"
+              onClick={() => applyEdgeRelationship(selectedEdge.from, selectedEdge.to, relationship)}
+            >
+              {relationship}
+            </button>
+          ))}
+          <button
+            className="rounded border border-line px-2 py-1 text-muted hover:border-warning hover:text-warning"
+            type="button"
+            onClick={() => applyEdgeRelationship(selectedEdge.from, selectedEdge.to, null)}
+          >
+            Remove
+          </button>
+        </div>
+      ) : null}
 
       <svg
         className="h-[560px] w-full rounded border border-line bg-[#0b1118] touch-none"
@@ -181,17 +276,36 @@ export function BubbleDiagramCanvas({ topology, programLabel, onTopologyChange }
             return null;
           }
 
+          const style = edgeStrokeStyle(edge.relationship);
+          const key = edgePairKey(edge.from, edge.to);
+
           return (
-            <line
-              key={`${edge.from}-${edge.to}`}
-              stroke={edge.relationship === "direct" ? "#5eead4" : "#475569"}
-              strokeDasharray={edge.relationship === "separated" ? "6 4" : undefined}
-              strokeWidth={edge.relationship === "direct" ? 2 : 1.5}
-              x1={from.x}
-              x2={to.x}
-              y1={from.y}
-              y2={to.y}
-            />
+            <g key={key}>
+              <line
+                stroke="transparent"
+                strokeWidth={16}
+                x1={from.x}
+                x2={to.x}
+                y1={from.y}
+                y2={to.y}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setSelectedEdgeKey(key);
+                  setSelectedIds([]);
+                  cycleEdge(edge.from, edge.to);
+                }}
+              />
+              <line
+                pointerEvents="none"
+                stroke={style.stroke}
+                strokeDasharray={style.strokeDasharray}
+                strokeWidth={style.strokeWidth}
+                x1={from.x}
+                x2={to.x}
+                y1={from.y}
+                y2={to.y}
+              />
+            </g>
           );
         })}
 
@@ -199,14 +313,7 @@ export function BubbleDiagramCanvas({ topology, programLabel, onTopologyChange }
           const isSelected = selectedIds.includes(node.room.id);
 
           return (
-            <g
-              key={node.room.id}
-              onPointerDown={(event) => {
-                event.currentTarget.setPointerCapture(event.pointerId);
-                handleNodePointerDown(node.room.id);
-              }}
-              style={{ cursor: "grab" }}
-            >
+            <g key={node.room.id}>
               <circle
                 cx={node.x}
                 cy={node.y}
@@ -214,6 +321,8 @@ export function BubbleDiagramCanvas({ topology, programLabel, onTopologyChange }
                 r={node.radius}
                 stroke={isSelected ? "#f8fafc" : zoneColors[node.room.zone]}
                 strokeWidth={isSelected ? 3 : 2}
+                onPointerDown={(event) => handleNodePointerDown(node.room.id, event)}
+                style={{ cursor: "grab" }}
               />
               <text fill="#e2e8f0" fontSize="12" pointerEvents="none" textAnchor="middle" x={node.x} y={node.y - 4}>
                 {node.room.name}

@@ -2,6 +2,7 @@
 
 import { RotateCcw } from "lucide-react";
 import type { FacadeEnvelope, FacadeZone } from "@/lib/building-domain";
+import { useInteractionStore } from "@/lib/interaction-store";
 
 interface FacadeEditorPanelProps {
   facade?: FacadeEnvelope;
@@ -13,6 +14,9 @@ const strategyOptions: FacadeZone["strategy"][] = ["curtain_wall", "punched_wind
 const edgeOptions: FacadeZone["edge"][] = ["north", "south", "east", "west"];
 
 export function FacadeEditorPanel({ facade, onChange, onResetFromPlan }: FacadeEditorPanelProps) {
+  const showFacadeOverlay = useInteractionStore((state) => state.view3d.showFacadeOverlay);
+  const setView3D = useInteractionStore((state) => state.setView3D);
+
   if (!facade) {
     return (
       <section className="rounded border border-line bg-panel/90 p-6 text-sm text-muted">
@@ -33,19 +37,31 @@ export function FacadeEditorPanel({ facade, onChange, onResetFromPlan }: FacadeE
 
   return (
     <section className="rounded border border-line bg-panel/90 p-6">
-      <div className="mb-4 flex items-start justify-between gap-3">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold text-white">Facade envelope</h2>
-          <p className="mt-1 text-sm text-muted">Edit window ratios and edge strategies. Manual edits are preserved across sync.</p>
+          <p className="mt-1 text-sm text-muted">
+            Edit window ratios and edge strategies. Enable 3D preview to see facade bands on Massing / Model views.
+          </p>
         </div>
-        <button
-          className="flex items-center gap-1 rounded border border-line px-2 py-1 text-xs text-muted hover:border-accent hover:text-accent"
-          type="button"
-          onClick={onResetFromPlan}
-        >
-          <RotateCcw className="h-3.5 w-3.5" />
-          Reset from plan
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="inline-flex items-center gap-2 rounded border border-line px-2 py-1 text-xs text-slate-200">
+            <input
+              checked={showFacadeOverlay}
+              type="checkbox"
+              onChange={(event) => setView3D({ showFacadeOverlay: event.target.checked })}
+            />
+            Preview in 3D
+          </label>
+          <button
+            className="flex items-center gap-1 rounded border border-line px-2 py-1 text-xs text-muted hover:border-accent hover:text-accent"
+            type="button"
+            onClick={onResetFromPlan}
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            Reset from plan
+          </button>
+        </div>
       </div>
 
       <div className="mb-4 grid grid-cols-2 gap-3">
@@ -69,6 +85,27 @@ export function FacadeEditorPanel({ facade, onChange, onResetFromPlan }: FacadeE
             onChange={(event) => onChange({ orientationStrategy: event.target.value })}
           />
         </label>
+      </div>
+
+      <div className="mb-4 flex flex-wrap gap-2">
+        {strategyOptions.map((strategy) => (
+          <span className="inline-flex items-center gap-2 rounded border border-line px-2 py-1 text-[11px] text-muted" key={strategy}>
+            <span
+              className="h-2.5 w-2.5 rounded-full"
+              style={{
+                backgroundColor:
+                  strategy === "curtain_wall"
+                    ? "#67e8f9"
+                    : strategy === "punched_window"
+                      ? "#86efac"
+                      : strategy === "solid"
+                        ? "#64748b"
+                        : "#fcd34d"
+              }}
+            />
+            {strategy.replace("_", " ")}
+          </span>
+        ))}
       </div>
 
       <div className="space-y-2">

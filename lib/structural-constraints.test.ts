@@ -84,17 +84,15 @@ describe("vertical alignment fix package", () => {
       return;
     }
 
-    const columnPosition = column.position;
-    if (Array.isArray(columnPosition[0])) {
-      return;
-    }
+    const point = column.position as [number, number];
+    const lockedPosition: [number, number] = [point[0], point[1]];
 
     const violations = validateStructuralConstraints(expanded, expanded.levels[0]!.id, {
       lockedPositions: [
         {
           id: column.id,
           kind: "column",
-          position: columnPosition,
+          position: lockedPosition,
           label: column.label
         }
       ]

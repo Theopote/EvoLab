@@ -16,6 +16,7 @@ export type ActiveTool =
 interface View3DState {
   frameloop: "always" | "demand";
   bvhEnabled: boolean;
+  showFacadeOverlay: boolean;
 }
 
 interface InteractionState {
@@ -39,7 +40,8 @@ export const useInteractionStore = create<InteractionState>((set) => ({
   explodeFactor: 0,
   view3d: {
     frameloop: "demand",
-    bvhEnabled: true
+    bvhEnabled: true,
+    showFacadeOverlay: false
   },
   setActiveTool: (tool) =>
     set(

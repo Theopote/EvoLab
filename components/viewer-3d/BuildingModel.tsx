@@ -3,13 +3,15 @@
 import * as THREE from "three";
 import { Text } from "@react-three/drei";
 import { useLayoutEffect, useMemo, useRef } from "react";
+import type { FacadeEnvelope } from "@/lib/building-domain";
 import type { OpeningElement, PlanVersion, Point, Room, Wall } from "@/lib/project-types";
+import { FacadeEnvelopeOverlay } from "@/components/viewer-3d/FacadeEnvelopeOverlay";
 import { resolveLevelRooms } from "@/lib/level-rooms";
 import {
   getGridColumnPositions,
   shouldRenderRoomLabels
 } from "@/lib/viewer-3d/building-model-utils";
-import { useBuildingModelSource } from "@/lib/viewer-3d/use-building-model-source";
+import { useBuildingModelSource, type BuildingModelSource } from "@/lib/viewer-3d/use-building-model-source";
 import { getRoomExplodeOffset } from "@/lib/viewer-3d/explode-utils";
 import { useInteractionStore } from "@/lib/interaction-store";
 import { getRoomMaterialSpec, type RoomMaterialSpec, modelPalette } from "@/components/viewer-3d/materials";
@@ -45,10 +47,11 @@ export function BuildingModel() {
     return null;
   }
 
-  return <BuildingModelContent key={source.geometryRevision} version={source.version} />;
+  return <BuildingModelContent key={`${source.geometryRevision}-${source.showFacadeOverlay}`} source={source} />;
 }
 
-function BuildingModelContent({ version }: { version: PlanVersion }) {
+function BuildingModelContent({ source }: { source: BuildingModelSource }) {
+  const version = source.version;
   const explodeFactor = useInteractionStore((state) => state.explodeFactor);
   const outlineBounds = useMemo(() => getPolygonBounds(version.outline), [version.outline]);
   const offsetX = -(outlineBounds.minX + outlineBounds.maxX) / 2;
@@ -64,6 +67,8 @@ function BuildingModelContent({ version }: { version: PlanVersion }) {
           level={level}
           explodeFactor={explodeFactor}
           columnPositions={columnPositions}
+          facadeEnvelope={source.showFacadeOverlay ? source.facadeEnvelope : undefined}
+          orientationDeg={source.orientationDeg}
         />
       ))}
     </group>
@@ -74,12 +79,16 @@ function LevelStack({
   version,
   level,
   explodeFactor,
-  columnPositions
+  columnPositions,
+  facadeEnvelope,
+  orientationDeg
 }: {
   version: PlanVersion;
   level: PlanVersion["levels"][number];
   explodeFactor: number;
   columnPositions: Array<[number, number]>;
+  facadeEnvelope?: FacadeEnvelope;
+  orientationDeg: number;
 }) {
   const rooms = useMemo(
     () => resolveLevelRooms(level, version.standardFloorGroups),
@@ -110,6 +119,15 @@ function LevelStack({
       <InstancedWalls walls={level.walls} />
       <InstancedOpenings openings={level.openings} />
       <InstancedGridColumns positions={columnPositions} levelHeight={level.height} />
+      {facadeEnvelope ? (
+        <FacadeEnvelopeOverlay
+          facade={facadeEnvelope}
+          levelHeight={level.height}
+          levelId={level.id}
+          orientationDeg={orientationDeg}
+          outline={version.outline}
+        />
+      ) : null}
     </group>
   );
 }
