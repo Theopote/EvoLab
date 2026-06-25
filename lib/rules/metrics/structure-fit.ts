@@ -43,6 +43,24 @@ const modularFitScore = (span: number, module: number) => {
 
 export const scoreStructureFit = (context: ScoringContext): MetricResult => {
   const version = context.version;
+  const scopedLevel = context.levelId ? version.levels.find((level) => level.id === context.levelId) : undefined;
+
+  if (scopedLevel?.isTransferFloor) {
+    const grossArea = version.rooms.reduce((total, room) => total + room.areaSqm, 0);
+    const coreRooms = version.rooms.filter((room) => coreTypes.has(room.type));
+    const coreRatio = grossArea > 0 ? coreRooms.reduce((total, room) => total + room.areaSqm, 0) / grossArea : 0;
+
+    return {
+      score: clampScore(78 + Math.min(12, coreRatio * 40)),
+      summary: `${scopedLevel.name} is a transfer floor; grid alignment uses relaxed structural scoring.`,
+      evidence: [
+        { label: "Transfer floor", value: scopedLevel.name, impact: "neutral" },
+        { label: "Core ratio", value: `${round1(coreRatio * 100)}%`, impact: "neutral" }
+      ],
+      hints: ["Transfer floors may intentionally offset columns and cores from the floors above/below."]
+    };
+  }
+
   const structural = buildStructuralSystem(version);
   const grid = version.building?.grids?.[0];
   const coreRooms = version.rooms.filter((room) => coreTypes.has(room.type));

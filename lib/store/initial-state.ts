@@ -3,6 +3,7 @@ import { computeBuildableEnvelope } from "@/lib/buildable-envelope";
 import { computeEnvironmentSurrogate } from "@/lib/environment-surrogate";
 import { initialProjectData } from "@/lib/evolab-data";
 import { getActiveSchedule, getCodeContext, getRulePack } from "@/lib/project-domain";
+import { calculateScopedQuantities } from "@/lib/metrics-scope";
 import { calculateQuantities, checkCompliance } from "@/lib/quantity-engine";
 import { defaultZoningConstraints } from "@/lib/site-types";
 import { defaultBrief, defaultOutline } from "@/lib/store/defaults";
@@ -54,6 +55,11 @@ export function createInitialState(): EvoProjectStoreData {
       activeVersion && activeLevel
         ? calculateQuantities(activeVersion, { levelId: activeLevel.id, scope: "level" })
         : undefined,
+    scopedQuantities:
+      activeVersion
+        ? calculateScopedQuantities(activeVersion, "building", activeLevel?.id)
+        : undefined,
+    metricsScope: "building",
     complianceItems: activeVersion
       ? checkCompliance(
           activeVersion,

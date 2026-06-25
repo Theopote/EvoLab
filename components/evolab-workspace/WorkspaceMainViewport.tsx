@@ -80,6 +80,8 @@ export const WorkspaceMainViewport = memo(function WorkspaceMainViewport() {
 
   const {
     quantities,
+    scopedQuantities,
+    metricsScope,
     activeSchedule,
     complianceItems,
     activeAnalysisLayers,
@@ -88,6 +90,8 @@ export const WorkspaceMainViewport = memo(function WorkspaceMainViewport() {
     mepError
   } = useAnalysisState((state) => ({
     quantities: state.quantities,
+    scopedQuantities: state.scopedQuantities,
+    metricsScope: state.metricsScope,
     activeSchedule: state.activeSchedule,
     complianceItems: state.complianceItems,
     activeAnalysisLayers: state.activeAnalysisLayers,
@@ -114,6 +118,7 @@ export const WorkspaceMainViewport = memo(function WorkspaceMainViewport() {
     appendGeneratedVersions,
     setActiveVersion,
     setCompareLevel,
+    setMetricsScope,
     updateStructuralSystem,
     updateFacadeEnvelope,
     updateFacadeZone,
@@ -367,8 +372,18 @@ export const WorkspaceMainViewport = memo(function WorkspaceMainViewport() {
   }
 
   if (activeTab === "Quantity") {
-    return quantities ? (
-      <QuantityTable quantities={quantities} activeSchedule={activeSchedule} includeSchedules={false} />
+    const displayQuantities = scopedQuantities ?? quantities;
+
+    return displayQuantities ? (
+      <QuantityTable
+        activeLevelId={activeLevelId}
+        activeSchedule={activeSchedule}
+        includeSchedules={false}
+        metricsScope={metricsScope}
+        quantities={displayQuantities}
+        version={activeVersion}
+        onMetricsScopeChange={setMetricsScope}
+      />
     ) : (
       <div className="grid min-h-[520px] place-items-center rounded border border-dashed border-line bg-panel/60 text-sm text-muted">
         Select or generate a plan version to calculate quantities.

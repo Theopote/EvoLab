@@ -1,5 +1,5 @@
 import type { CopilotFinding, MepLayout, MepRoute, MepShaft, MepSystemType, PlanVersion, Point, Room, VerticalElement } from "@/lib/project-types";
-import { resolveLevelRooms } from "@/lib/level-rooms";
+import { resolveLevelRooms, resolveAllVersionRooms } from "@/lib/level-rooms";
 import { scopeVersionForLevel } from "@/lib/plan-scope";
 import { deriveVerticalElements } from "@/lib/vertical-elements";
 
@@ -229,24 +229,31 @@ function routeAStar(version: PlanVersion, start: Point, goal: Point, walkableRoo
   return simplifyPath([start, [goal[0], start[1]], goal]);
 }
 
+function roomsForScopedVersion(version: PlanVersion) {
+  return version.levels.length === 1 ? version.rooms : resolveAllVersionRooms(version);
+}
+
 function routeRoomsForSystem(version: PlanVersion, system: MepSystemType) {
+  const rooms = roomsForScopedVersion(version);
+
   if (system === "plumbing_supply" || system === "plumbing_drain") {
-    return version.rooms.filter((room) => room.needsPlumbing || room.type === "equipment_room" || room.type === "shaft");
+    return rooms.filter((room) => room.needsPlumbing || room.type === "equipment_room" || room.type === "shaft");
   }
 
   if (system === "hvac") {
-    return version.rooms.filter((room) => room.type !== "shaft");
+    return rooms.filter((room) => room.type !== "shaft");
   }
 
   if (system === "electrical" || system === "elv" || system === "fire") {
-    return version.rooms.filter((room) => room.type !== "shaft");
+    return rooms.filter((room) => room.type !== "shaft");
   }
 
-  return version.rooms;
+  return rooms;
 }
 
 function walkableRoomsForSystem(version: PlanVersion, system: MepSystemType) {
-  const serviceRooms = version.rooms.filter((room) => ["corridor", "shaft", "equipment_room"].includes(room.type) || room.zone === "service");
+  const rooms = roomsForScopedVersion(version);
+  const serviceRooms = rooms.filter((room) => ["corridor", "shaft", "equipment_room"].includes(room.type) || room.zone === "service");
   if (serviceRooms.length > 0) {
     return serviceRooms;
   }
@@ -255,7 +262,7 @@ function walkableRoomsForSystem(version: PlanVersion, system: MepSystemType) {
     return routeRoomsForSystem(version, system);
   }
 
-  return version.rooms;
+  return rooms;
 }
 
 function choosePrimaryShaft(version: PlanVersion, seed?: MepLayout) {
@@ -270,14 +277,15 @@ function choosePrimaryShaft(version: PlanVersion, seed?: MepLayout) {
   }
 
   const groundLevel = version.levels[0];
-  const groundRooms = groundLevel ? resolveLevelRooms(groundLevel, version.standardFloorGroups) : version.rooms;
-  const shaftRoom = groundRooms.find((room) => room.type === "shaft") ?? version.rooms.find((room) => room.type === "shaft");
+  const allRooms = resolveAllVersionRooms(version);
+  const groundRooms = groundLevel ? resolveLevelRooms(groundLevel, version.standardFloorGroups) : allRooms;
+  const shaftRoom = groundRooms.find((room) => room.type === "shaft") ?? allRooms.find((room) => room.type === "shaft");
   if (shaftRoom) {
     return centroid(shaftRoom);
   }
 
   const equipmentRoom =
-    groundRooms.find((room) => room.type === "equipment_room") ?? version.rooms.find((room) => room.type === "equipment_room");
+    groundRooms.find((room) => room.type === "equipment_room") ?? allRooms.find((room) => room.type === "equipment_room");
   if (equipmentRoom) {
     return centroid(equipmentRoom);
   }
@@ -324,11 +332,12 @@ function deriveMepShafts(version: PlanVersion, seed: MepLayout | undefined, syst
 
   if (!stacks.length) {
     const groundLevel = version.levels[0];
-    const groundRooms = groundLevel ? resolveLevelRooms(groundLevel, version.standardFloorGroups) : version.rooms;
-    const shaftRoom = groundRooms.find((room) => room.type === "shaft") ?? version.rooms.find((room) => room.type === "shaft");
+    const allRooms = resolveAllVersionRooms(version);
+    const groundRooms = groundLevel ? resolveLevelRooms(groundLevel, version.standardFloorGroups) : allRooms;
+    const shaftRoom = groundRooms.find((room) => room.type === "shaft") ?? allRooms.find((room) => room.type === "shaft");
     const equipmentRoom =
       groundRooms.find((room) => room.type === "equipment_room") ??
-      version.rooms.find((room) => room.type === "equipment_room");
+      allRooms.find((room) => room.type === "equipment_room");
     const position = shaftRoom
       ? centroid(shaftRoom)
       : equipmentRoom
@@ -359,7 +368,8 @@ function shaftPositionForLevel(shafts: MepShaft[], levelId: string, fallback: Po
 }
 
 function chooseRouteGoal(version: PlanVersion, system: MepSystemType, targetRooms: Room[]) {
-  const corridors = version.rooms.filter((room) => room.type === "corridor");
+  const rooms = roomsForScopedVersion(version);
+  const corridors = rooms.filter((room) => room.type === "corridor");
 
   if (corridors.length > 0) {
     const targetCenter = targetRooms.length ? centroidFromPoints(targetRooms.map(centroid)) : [version.overallBounds.width * 0.5, version.overallBounds.height * 0.5] as Point;

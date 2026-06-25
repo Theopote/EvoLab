@@ -1,5 +1,5 @@
 import { resolveLevelRooms } from "@/lib/level-rooms";
-import type { PlanVersion, Point, Room, VerticalElement, VerticalElementKind } from "@/lib/project-types";
+import type { Level, PlanVersion, Point, Room, VerticalElement, VerticalElementKind } from "@/lib/project-types";
 import { getGridColumnPositions } from "@/lib/viewer-3d/building-model-utils";
 
 const CORE_ROOM_TYPES = new Set<Room["type"]>(["stair", "elevator", "shaft"]);
@@ -21,6 +21,30 @@ function resolveElementKind(room: Room): VerticalElementKind {
   return "core";
 }
 
+function splitLevelsByTransferFloors(levels: Level[]): Level[][] {
+  const sorted = [...levels].sort((left, right) => (left.floorNumber ?? 0) - (right.floorNumber ?? 0));
+  const segments: Level[][] = [];
+  let current: Level[] = [];
+
+  for (const level of sorted) {
+    if (level.isTransferFloor) {
+      if (current.length) {
+        segments.push(current);
+        current = [];
+      }
+      continue;
+    }
+
+    current.push(level);
+  }
+
+  if (current.length) {
+    segments.push(current);
+  }
+
+  return segments.length ? segments : [sorted];
+}
+
 export function deriveVerticalElements(version: PlanVersion): VerticalElement[] {
   const levels = version.levels;
 
@@ -28,18 +52,21 @@ export function deriveVerticalElements(version: PlanVersion): VerticalElement[] 
     return version.verticalElements ?? [];
   }
 
-  const firstLevelId = levels[0]!.id;
-  const lastLevelId = levels[levels.length - 1]!.id;
   const elements: VerticalElement[] = [];
 
-  getGridColumnPositions(version).forEach((position, index) => {
-    elements.push({
-      id: `vertical-column-${index}`,
-      kind: "column",
-      position,
-      appliesFromFloorId: firstLevelId,
-      appliesToFloorId: lastLevelId,
-      label: `Column ${index + 1}`
+  splitLevelsByTransferFloors(levels).forEach((segment, segmentIndex) => {
+    const firstLevelId = segment[0]!.id;
+    const lastLevelId = segment[segment.length - 1]!.id;
+
+    getGridColumnPositions(version).forEach((position, index) => {
+      elements.push({
+        id: `vertical-column-${segmentIndex}-${index}`,
+        kind: "column",
+        position,
+        appliesFromFloorId: firstLevelId,
+        appliesToFloorId: lastLevelId,
+        label: `Column ${segmentIndex + 1}.${index + 1}`
+      });
     });
   });
 
@@ -90,8 +117,8 @@ export function deriveVerticalElements(version: PlanVersion): VerticalElement[] 
       id: `vertical-core-${key}`,
       kind: stack.kind,
       position: stack.position,
-      appliesFromFloorId: sortedLevelIds[0] ?? firstLevelId,
-      appliesToFloorId: sortedLevelIds[sortedLevelIds.length - 1] ?? lastLevelId,
+      appliesFromFloorId: sortedLevelIds[0] ?? levels[0]!.id,
+      appliesToFloorId: sortedLevelIds[sortedLevelIds.length - 1] ?? levels[levels.length - 1]!.id,
       label: stack.label
     });
   });

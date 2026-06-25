@@ -80,4 +80,32 @@ describe("vertical alignment", () => {
 
     expect(issues.every((issue) => issue.floorId === "level-02")).toBe(true);
   });
+
+  it("skips column checks on transfer floors and splits column stacks at transfer boundaries", () => {
+    const expanded = expandPlanVersionToFloors(baseVersion, 4);
+    const transferLevelId = expanded.levels[1]?.id;
+
+    expect(transferLevelId).toBeTruthy();
+
+    const transferVersion: PlanVersion = {
+      ...expanded,
+      levels: expanded.levels.map((level) =>
+        level.id === transferLevelId ? { ...level, isTransferFloor: true } : level
+      )
+    };
+    const elements = deriveVerticalElements(transferVersion);
+
+    expect(elements.some((element) => element.kind === "column" && element.appliesFromFloorId === "level-01")).toBe(true);
+    expect(
+      elements.some(
+        (element) =>
+          element.kind === "column" &&
+          (element.appliesFromFloorId === "level-03" || element.appliesFromFloorId === "level-04")
+      )
+    ).toBe(true);
+
+    const issues = checkVerticalAlignment(transferVersion, elements, transferVersion.standardFloorGroups);
+
+    expect(issues.some((issue) => issue.floorId === transferLevelId && issue.elementKind === "column")).toBe(false);
+  });
 });

@@ -1,16 +1,31 @@
 "use client";
 
 import { Download, FileText } from "lucide-react";
+import { MetricsScopeToggle } from "@/components/inspector/MetricsScopeToggle";
 import type { ScheduleBundle } from "@/lib/building-domain";
+import type { PlanScopeKind } from "@/lib/plan-scope";
 import type { QuantityResult } from "@/lib/quantity-engine";
+import type { PlanVersion } from "@/lib/project-types";
 
 interface QuantityTableProps {
   quantities: QuantityResult;
   activeSchedule?: ScheduleBundle;
   includeSchedules?: boolean;
+  version?: PlanVersion;
+  activeLevelId?: string;
+  metricsScope?: PlanScopeKind;
+  onMetricsScopeChange?: (scope: PlanScopeKind) => void;
 }
 
-export function QuantityTable({ quantities, activeSchedule, includeSchedules = true }: QuantityTableProps) {
+export function QuantityTable({
+  quantities,
+  activeSchedule,
+  includeSchedules = true,
+  version,
+  activeLevelId,
+  metricsScope,
+  onMetricsScopeChange
+}: QuantityTableProps) {
   const roomSchedule = activeSchedule?.tables.find((table) => table.kind === "room");
   const openingSchedule = activeSchedule?.tables.find((table) => table.kind === "door_window");
 
@@ -20,7 +35,7 @@ export function QuantityTable({ quantities, activeSchedule, includeSchedules = t
       <div className="mb-3 flex items-center justify-between">
         <div>
           <h1 className="text-base font-semibold text-white">Quantity Takeoff</h1>
-          <p className="mt-1 text-xs text-muted">Calculated from activeVersion geometry and room metadata.</p>
+          <p className="mt-1 text-xs text-muted">Calculated from active scheme geometry at the selected metrics scope.</p>
         </div>
         <div className="flex gap-2">
           <button className="flex h-8 items-center gap-2 rounded border border-line px-2 text-xs text-slate-200 hover:border-accent/60" type="button">
@@ -33,6 +48,17 @@ export function QuantityTable({ quantities, activeSchedule, includeSchedules = t
           </button>
         </div>
       </div>
+
+      {metricsScope && onMetricsScopeChange ? (
+        <div className="mb-4 rounded border border-line bg-[#0b1118] p-3">
+          <MetricsScopeToggle
+            activeLevelId={activeLevelId}
+            scope={metricsScope}
+            version={version}
+            onScopeChange={onMetricsScopeChange}
+          />
+        </div>
+      ) : null}
 
       <div className="overflow-hidden rounded border border-line">
         <table className="w-full text-left text-sm">

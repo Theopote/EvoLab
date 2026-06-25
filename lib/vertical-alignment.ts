@@ -81,6 +81,24 @@ function elementLabel(element: VerticalElement) {
   return element.label ?? element.kind;
 }
 
+function sortedLevels(levels: Level[]) {
+  return [...levels].sort((left, right) => levelSortKey(left) - levelSortKey(right));
+}
+
+function levelBelow(level: Level, levels: Level[]) {
+  const sorted = sortedLevels(levels);
+  const index = sorted.findIndex((item) => item.id === level.id);
+  return index > 0 ? sorted[index - 1] : undefined;
+}
+
+function columnRoomPool(level: Level, rooms: Room[], levels: Level[]) {
+  if (level.isTransferFloor || levelBelow(level, levels)?.isTransferFloor) {
+    return rooms;
+  }
+
+  return roomsAllowingPointElement("column", rooms);
+}
+
 function issueMessage(level: Level, element: VerticalElement) {
   const label = elementLabel(element);
 
@@ -114,11 +132,18 @@ export function checkVerticalAlignment(
         return;
       }
 
+      if (level.isTransferFloor && element.kind === "column") {
+        return;
+      }
+
       const position = element.position;
       const pointElement = isPointElement(position);
-      const allowedRooms = pointElement
-        ? roomsAllowingPointElement(element.kind, rooms)
-        : roomsAllowingPolygonElement(element.kind, rooms);
+      const allowedRooms =
+        element.kind === "column"
+          ? columnRoomPool(level, rooms, version.levels)
+          : pointElement
+            ? roomsAllowingPointElement(element.kind, rooms)
+            : roomsAllowingPolygonElement(element.kind, rooms);
       const roomPool = allowedRooms.length ? allowedRooms : rooms;
       const ok = pointElement
         ? pointIsContained(position, roomPool)

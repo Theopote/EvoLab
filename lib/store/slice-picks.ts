@@ -55,6 +55,7 @@ export function pickProjectActions(state: EvoProjectStore): ProjectSliceActions 
     toggleCompareVersion: state.toggleCompareVersion,
     setCompareModeOpen: state.setCompareModeOpen,
     setActiveLevel: state.setActiveLevel,
+    setMetricsScope: state.setMetricsScope,
     setLevelTransferFloor: state.setLevelTransferFloor,
     setCompareLevel: state.setCompareLevel,
     replaceVersions: state.replaceVersions,
@@ -165,6 +166,8 @@ export function pickAnalysisState(state: EvoProjectStore): AnalysisSliceState {
   return {
     quantities: state.quantities,
     levelQuantities: state.levelQuantities,
+    scopedQuantities: state.scopedQuantities,
+    metricsScope: state.metricsScope,
     activeSchedule: state.activeSchedule,
     complianceItems: state.complianceItems,
     activeAnalysisLayers: state.activeAnalysisLayers,

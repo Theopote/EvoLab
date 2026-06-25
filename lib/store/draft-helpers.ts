@@ -19,6 +19,7 @@ import {
 import { applyPlanOperations } from "@/lib/plan-change-engine";
 import type { PlanOperation } from "@/lib/schemas/plan-change-proposal-schema";
 import { calculateQuantities, checkCompliance } from "@/lib/quantity-engine";
+import { calculateScopedQuantities } from "@/lib/metrics-scope";
 import { rescoreVersions, scoringInputFromDomain } from "@/lib/rules/resolve-version-scoring";
 import { isOutlineStale } from "@/lib/outline-sync";
 import type { PlanVersion, ProjectData } from "@/lib/project-types";
@@ -226,6 +227,12 @@ export function rescoreProjectVersions(state: EvoProjectStore) {
   }
 }
 
+export function refreshScopedQuantitiesDraft(state: EvoProjectStore) {
+  state.scopedQuantities = state.activeVersion
+    ? calculateScopedQuantities(state.activeVersion, state.metricsScope, state.activeLevelId)
+    : undefined;
+}
+
 export function refreshDerivedDraft(state: EvoProjectStore) {
   const activeVersion = getActiveVersion(state.project);
   const rawLevel = getLevel(activeVersion, state.activeLevelId);
@@ -242,6 +249,7 @@ export function refreshDerivedDraft(state: EvoProjectStore) {
     activeVersion && activeLevel
       ? calculateQuantities(activeVersion, { levelId: activeLevel.id, scope: "level" })
       : undefined;
+  refreshScopedQuantitiesDraft(state);
   state.complianceItems = activeVersion ? checkCompliance(activeVersion, codeContext, rulePack) : [];
   state.selectedRoom = activeLevel?.rooms.find((room) => room.id === state.selectedRoomId);
   state.selectedWall = activeLevel?.walls.find((wall) => wall.id === state.selectedWallId);
@@ -288,6 +296,7 @@ export function refreshQuantitiesDraft(state: EvoProjectStore) {
     state.activeVersion && activeLevel
       ? calculateQuantities(state.activeVersion, { levelId: activeLevel.id, scope: "level" })
       : undefined;
+  refreshScopedQuantitiesDraft(state);
   state.complianceItems = state.activeVersion
     ? checkCompliance(state.activeVersion, codeContext, getRulePack(state.project.domain, state.project.projectType))
     : [];

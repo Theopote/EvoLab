@@ -22,6 +22,7 @@ import type {
   WorkspaceTab
 } from "@/lib/project-types";
 import type { ComplianceItem, QuantityResult } from "@/lib/quantity-engine";
+import type { PlanScopeKind } from "@/lib/plan-scope";
 import type { WorkflowPhase, WorkflowPhaseId } from "@/lib/workflow-phases";
 
 export type SelectionType = "none" | "room" | "wall" | "opening";
@@ -62,6 +63,8 @@ export interface EvoProjectStore {
   mepError: string | null;
   quantities?: QuantityResult;
   levelQuantities?: QuantityResult;
+  scopedQuantities?: QuantityResult;
+  metricsScope: PlanScopeKind;
   activeSchedule?: ScheduleBundle;
   complianceItems: ComplianceItem[];
   outlineStale: boolean;
@@ -98,6 +101,7 @@ export interface EvoProjectStore {
   setActiveAnalysisLayers: (layers: AnalysisLayerId[]) => void;
   setActiveMepLayers: (layers: MepLayerId[]) => void;
   setActiveLevel: (levelId: string) => void;
+  setMetricsScope: (scope: PlanScopeKind) => void;
   setLevelTransferFloor: (levelId: string, isTransferFloor: boolean) => void;
   selectRoom: (roomId: string) => void;
   selectWall: (wallId: string) => void;

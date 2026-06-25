@@ -16,6 +16,7 @@ export type ProjectSliceActions = Pick<
   | "toggleCompareVersion"
   | "setCompareModeOpen"
   | "setActiveLevel"
+  | "setMetricsScope"
   | "setLevelTransferFloor"
   | "setCompareLevel"
   | "replaceVersions"
@@ -128,6 +129,8 @@ export type AnalysisSliceState = Pick<
   EvoProjectStore,
   | "quantities"
   | "levelQuantities"
+  | "scopedQuantities"
+  | "metricsScope"
   | "activeSchedule"
   | "complianceItems"
   | "activeAnalysisLayers"

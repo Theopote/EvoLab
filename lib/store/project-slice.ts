@@ -16,6 +16,7 @@ import {
   getActiveVersion,
   refreshDerivedDraft,
   refreshDomainDraft,
+  refreshScopedQuantitiesDraft,
   recordVersionChangeSet,
   rescoreProjectVersions,
   syncOutlineFromVersionDraft
@@ -214,6 +215,13 @@ export const createProjectSlice: StateCreator<EvoProjectStore, [], [], ProjectSl
         state.activeLevelId = levelId;
         state.compareLevelId = levelId;
         refreshDerivedDraft(state);
+      })
+    ),
+  setMetricsScope: (scope) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        state.metricsScope = scope;
+        refreshScopedQuantitiesDraft(state);
       })
     ),
   setLevelTransferFloor: (levelId, isTransferFloor) =>
