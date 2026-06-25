@@ -1,3 +1,7 @@
+import {
+  exportAuthoritativeWallNote,
+  resolveExportLevelGeometry
+} from "@/lib/geometry/walls/export-authoritative-walls";
 import type { OpeningElement, PlanVersion, Point, Room, Wall } from "@/lib/project-types";
 import { resolveLevelOutline, resolveLevelRooms } from "@/lib/level-rooms";
 
@@ -86,6 +90,62 @@ function wallPredefinedType(wall: Wall): IfcWallPayload["predefinedType"] {
 
 export function createIfcExportPayload(version: PlanVersion): IfcExportPayload {
   const groups = version.standardFloorGroups;
+  const notes = [
+    "This is an IFC handoff payload, not a STEP/IFC file.",
+    "A production exporter should create IfcProject, IfcSite, IfcBuilding, IfcBuildingStorey, IfcSpace, IfcSlab, IfcWall, IfcOpeningElement, IfcDoor and IfcWindow entities.",
+    "Use wall/opening ids as stable references when cutting openings in IfcOpenShell.",
+    "Walls and openings are exported only from authoritative Level.walls; room-derived wall graphs are never recomputed during export."
+  ];
+
+  const storeys = version.levels.map((level) => {
+    const rooms = resolveLevelRooms(level, groups);
+    const levelOutline = resolveLevelOutline(level, groups, version.outline);
+    const geometry = resolveExportLevelGeometry(level);
+    const omissionNote = exportAuthoritativeWallNote(level.name, geometry.authoritative);
+
+    if (omissionNote) {
+      notes.push(omissionNote);
+    }
+
+    return {
+      id: level.id,
+      name: level.name,
+      elevation: level.elevation,
+      height: level.height,
+      floor: {
+        id: level.floor?.id ?? `${level.id}-floor`,
+        outline: level.floor?.outline ?? levelOutline,
+        thickness: level.floor?.thickness ?? 0.18
+      },
+      spaces: rooms.map((room) => ({
+        id: room.id,
+        name: room.name,
+        roomType: room.type,
+        zone: room.zone,
+        footprint: room.polygon,
+        areaSqm: room.areaSqm,
+        height: room.ceilingHeight
+      })),
+      walls: geometry.walls.map((wall) => ({
+        id: wall.id,
+        start: wall.start,
+        end: wall.end,
+        thickness: wall.thickness,
+        height: wall.height,
+        predefinedType: wallPredefinedType(wall),
+        relatedSpaceIds: wall.roomIds
+      })),
+      openings: geometry.openings.map((opening) => ({
+        id: opening.id,
+        wallId: opening.wallId,
+        type: opening.type,
+        center: opening.center,
+        width: opening.width,
+        height: opening.height,
+        sillHeight: opening.sillHeight
+      }))
+    };
+  });
 
   return {
     schema: "IFC4",
@@ -105,53 +165,7 @@ export function createIfcExportPayload(version: PlanVersion): IfcExportPayload {
       id: version.building.id,
       name: version.building.name
     },
-    storeys: version.levels.map((level) => {
-      const rooms = resolveLevelRooms(level, groups);
-      const levelOutline = resolveLevelOutline(level, groups, version.outline);
-
-      return {
-        id: level.id,
-        name: level.name,
-        elevation: level.elevation,
-        height: level.height,
-        floor: {
-          id: level.floor?.id ?? `${level.id}-floor`,
-          outline: level.floor?.outline ?? levelOutline,
-          thickness: level.floor?.thickness ?? 0.18
-        },
-        spaces: rooms.map((room) => ({
-          id: room.id,
-          name: room.name,
-          roomType: room.type,
-          zone: room.zone,
-          footprint: room.polygon,
-          areaSqm: room.areaSqm,
-          height: room.ceilingHeight
-        })),
-        walls: level.walls.map((wall) => ({
-          id: wall.id,
-          start: wall.start,
-          end: wall.end,
-          thickness: wall.thickness,
-          height: wall.height,
-          predefinedType: wallPredefinedType(wall),
-          relatedSpaceIds: wall.roomIds
-        })),
-        openings: level.openings.map((opening) => ({
-          id: opening.id,
-          wallId: opening.wallId,
-          type: opening.type,
-          center: opening.center,
-          width: opening.width,
-          height: opening.height,
-          sillHeight: opening.sillHeight
-        }))
-      };
-    }),
-    notes: [
-      "This is an IFC handoff payload, not a STEP/IFC file.",
-      "A production exporter should create IfcProject, IfcSite, IfcBuilding, IfcBuildingStorey, IfcSpace, IfcSlab, IfcWall, IfcOpeningElement, IfcDoor and IfcWindow entities.",
-      "Use wall/opening ids as stable references when cutting openings in IfcOpenShell."
-    ]
+    storeys,
+    notes
   };
 }
