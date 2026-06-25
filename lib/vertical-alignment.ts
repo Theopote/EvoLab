@@ -114,13 +114,15 @@ export function checkVerticalAlignment(
         return;
       }
 
-      const pointElement = isPointElement(element.position);
+      const position = element.position;
+      const pointElement = isPointElement(position);
       const allowedRooms = pointElement
         ? roomsAllowingPointElement(element.kind, rooms)
         : roomsAllowingPolygonElement(element.kind, rooms);
+      const roomPool = allowedRooms.length ? allowedRooms : rooms;
       const ok = pointElement
-        ? pointIsContained(element.position, allowedRooms.length ? allowedRooms : rooms)
-        : polygonIsContained(element.position, allowedRooms.length ? allowedRooms : rooms);
+        ? pointIsContained(position, roomPool)
+        : polygonIsContained(position, roomPool);
 
       if (ok) {
         return;
@@ -134,7 +136,7 @@ export function checkVerticalAlignment(
         elementKind: element.kind,
         type: "no_containing_room",
         message: issueMessage(level, element),
-        position: pointElement ? element.position : undefined
+        position: pointElement ? position : undefined
       });
     });
   });

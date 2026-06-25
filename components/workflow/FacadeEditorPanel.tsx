@@ -22,6 +22,10 @@ export function FacadeEditorPanel({ facade, onChange, onResetFromPlan }: FacadeE
   }
 
   function updateZone(zoneId: string, patch: Partial<FacadeZone>) {
+    if (!facade) {
+      return;
+    }
+
     onChange({
       zones: facade.zones.map((zone) => (zone.id === zoneId ? { ...zone, ...patch } : zone))
     });
