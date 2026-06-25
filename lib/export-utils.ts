@@ -1,4 +1,5 @@
 import type { ComplianceItem, QuantityResult } from "@/lib/quantity-engine";
+import { createDxfExportDocument } from "@/lib/export-dxf";
 import { createIfcExportPayload } from "@/lib/ifc-export-contract";
 import { getResolvedLevel, resolveLevelOutline } from "@/lib/level-rooms";
 import type { PlanVersion, ProjectData, Room } from "@/lib/project-types";
@@ -135,4 +136,8 @@ export function exportVersionJson(version: PlanVersion) {
 
 export function exportIfcHandoffJson(version: PlanVersion) {
   downloadTextFile(`${version.id}-ifc-handoff.json`, JSON.stringify(createIfcExportPayload(version), null, 2), "application/json");
+}
+
+export function exportDxfDocument(version: PlanVersion) {
+  downloadTextFile(`${version.id}.dxf`, createDxfExportDocument(version), "application/dxf");
 }

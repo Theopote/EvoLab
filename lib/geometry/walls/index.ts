@@ -1,4 +1,9 @@
 export { shouldPreserveAuthoritativeWalls, openingsAlignWithWalls } from "@/lib/geometry/walls/authoritative-walls";
+export {
+  exportAuthoritativeWallNote,
+  resolveExportLevelGeometry,
+  type ExportLevelGeometry
+} from "@/lib/geometry/walls/export-authoritative-walls";
 export { resolveLevelWalls, resolveLevelRawOpenings } from "@/lib/geometry/walls/resolve-level-walls";
 export {
   reconcileAuthoritativeWalls,

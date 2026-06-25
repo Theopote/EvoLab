@@ -8,6 +8,7 @@ import {
   createPlanSvg,
   createQuantityCsv,
   downloadTextFile,
+  exportDxfDocument,
   exportIfcHandoffJson,
   exportProjectJson,
   exportVersionJson
@@ -201,6 +202,13 @@ export function ExportPanel({ project, activeVersion, quantities, complianceItem
               label="IFC handoff JSON"
               detail="IfcOpenShell service payload"
               onClick={() => activeVersion && exportIfcHandoffJson(activeVersion)}
+            />
+            <ExportCard
+              disabled={!canExportVersion}
+              icon={FileCode2}
+              label="Authoritative walls DXF"
+              detail="LINE entities from Level.walls when authoritative"
+              onClick={() => activeVersion && exportDxfDocument(activeVersion)}
             />
           </div>
         </section>
