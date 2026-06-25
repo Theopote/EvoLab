@@ -4,14 +4,31 @@ import { renderCompareReportHtml } from "@/lib/compare/render-compare-html";
 import { createDemoProjectData } from "@/lib/typologies";
 
 describe("compare report export", () => {
-  it("builds a report for pinned versions", () => {
+  function demoVersions() {
     const project = createDemoProjectData("office");
-    const versions = project.versions;
+    const primary = project.versions[0]!;
+
+    return {
+      project,
+      versions: [
+        primary,
+        {
+          ...primary,
+          id: `${primary.id}-alt`,
+          label: `${primary.label} B`,
+          createdAt: new Date(Date.now() + 60_000).toISOString()
+        }
+      ]
+    };
+  }
+
+  it("builds a report for pinned versions", () => {
+    const { project, versions } = demoVersions();
     const activeVersion = versions[0]!;
-    const compareVersionIds = versions.slice(0, 2).map((version) => version.id);
+    const compareVersionIds = versions.map((version) => version.id);
 
     const report = buildCompareReport({
-      projectName: project.name,
+      projectName: project.projectName,
       projectType: project.projectType,
       domain: project.domain,
       program: project.domain.program,
@@ -28,16 +45,15 @@ describe("compare report export", () => {
   });
 
   it("renders exportable html with recommendation and metrics", () => {
-    const project = createDemoProjectData("office");
-    const versions = project.versions;
+    const { project, versions } = demoVersions();
     const report = buildCompareReport({
-      projectName: project.name,
+      projectName: project.projectName,
       projectType: project.projectType,
       domain: project.domain,
       program: project.domain.program,
       activeVersionId: versions[0]!.id,
       versions,
-      compareVersionIds: versions.slice(0, 2).map((version) => version.id)
+      compareVersionIds: versions.map((version) => version.id)
     });
 
     expect(report).not.toBeNull();

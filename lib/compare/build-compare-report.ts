@@ -72,7 +72,7 @@ export function buildCompareReport(input: BuildCompareReportInput): CompareRepor
       isRecommended: version.id === recommended.id,
       roomCount: version.rooms.length,
       grossArea: quantities.summary.grossArea,
-      netArea: quantities.summary.netArea,
+      netArea: quantities.summary.netUsableArea,
       totalScore: computeTotalScore(scores, programGoals),
       areaEfficiency: scores.areaEfficiency,
       circulationScore: scores.circulationScore,
