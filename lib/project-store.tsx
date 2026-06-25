@@ -66,8 +66,14 @@ import type {
   Wall,
   WorkspaceTab
 } from "@/lib/project-types";
-import type { WorkflowPhase } from "@/lib/workflow-phases";
-import { phaseForTab, resolvePhaseTab } from "@/lib/workflow-phases";
+import type { WorkflowPhase, WorkflowPhaseId } from "@/lib/workflow-phases";
+import {
+  isBriefContextPhase,
+  normalizeWorkflowPhase,
+  normalizeWorkspaceTab,
+  phaseForTab,
+  resolvePhaseTab
+} from "@/lib/workflow-navigation";
 
 const defaultOutline: Point[] = [
   [0, 0],
@@ -142,7 +148,7 @@ interface EvoProjectStore {
   updateBrief: (brief: DesignBrief) => void;
   updateScoringConfig: (patch: Partial<ScoringConfig>) => void;
   resetScoringConfig: () => void;
-  setWorkflowPhase: (phase: WorkflowPhase) => void;
+  setWorkflowPhase: (phase: WorkflowPhaseId) => void;
   toggleCompareVersion: (versionId: string) => void;
   setActiveAnalysisLayers: (layers: AnalysisLayerId[]) => void;
   setActiveMepLayers: (layers: MepLayerId[]) => void;
@@ -598,7 +604,7 @@ function createInitialState(): Omit<
     showSiteContextLayer: true,
     showEnvironmentOverlay: true,
     brief: defaultBrief,
-    workflowPhase: "brief_site",
+    workflowPhase: "site",
     compareVersionIds: [],
     activeTab: "Plan",
     activeAnalysisLayers: ["function_zones", "primary_flow", "egress_path", "daylight"],
@@ -633,9 +639,9 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
       produce<EvoProjectStore>((state) => {
         state.activeTab = tab;
 
-        if (tab === "Plan") {
-          if (state.workflowPhase !== "brief_site" && state.workflowPhase !== "scheme") {
-            state.workflowPhase = "brief_site";
+        if (tab === "Plan" || normalizeWorkspaceTab(tab) === "Plan") {
+          if (!isBriefContextPhase(state.workflowPhase) && normalizeWorkflowPhase(state.workflowPhase) !== "scheme") {
+            state.workflowPhase = "site";
           }
           return;
         }
@@ -802,7 +808,7 @@ export const useEvoProjectStore = create<EvoProjectStore>((set, get) => ({
   setWorkflowPhase: (phase) =>
     set(
       produce<EvoProjectStore>((state) => {
-        state.workflowPhase = phase;
+        state.workflowPhase = normalizeWorkflowPhase(phase);
         state.activeTab = resolvePhaseTab(phase, state.activeTab);
       })
     ),

@@ -1,12 +1,12 @@
 import { Cloud, GitCompareArrows, Share2, Sparkles } from "lucide-react";
 import { pendingChangeSets } from "@/lib/project-domain";
-import { workflowPhaseDefinitions, type WorkflowPhase } from "@/lib/workflow-phases";
+import { workflowPhaseDefinitions, type WorkflowPhase, type WorkflowPhaseId } from "@/lib/workflow-phases";
 import type { ProjectData } from "@/lib/project-types";
 
 interface TopNavProps {
   project: ProjectData;
   workflowPhase: WorkflowPhase;
-  onPhaseChange: (phase: WorkflowPhase) => void;
+  onPhaseChange: (phase: WorkflowPhaseId) => void;
   onOpenReviews?: () => void;
 }
 

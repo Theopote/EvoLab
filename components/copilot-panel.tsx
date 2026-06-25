@@ -6,6 +6,7 @@ import { PlanChangeProposalPanel } from "@/components/copilot/PlanChangeProposal
 import type { ModifyPlanResponse } from "@/lib/copilot-modify-types";
 import { useEvoProject } from "@/lib/project-store";
 import { useShallow } from "zustand/react/shallow";
+import { normalizeWorkspaceTab } from "@/lib/workflow-navigation";
 import type {
   CopilotAction,
   CopilotFinding,
@@ -221,13 +222,12 @@ export function CopilotPanel({
 
   function handleAction(action: CopilotAction) {
     if (action.id === "switch-tab") {
-      const tab = action.payload as WorkspaceTab | undefined;
-      onTabChange(tab ?? "Model");
+      onTabChange(normalizeWorkspaceTab(action.payload ?? "Massing"));
       return;
     }
 
     if (action.id === "generate-massing" || action.id === "generate-flow-diagram") {
-      onTabChange(action.id === "generate-massing" ? "Model" : "Analysis");
+      onTabChange(action.id === "generate-massing" ? "Massing" : "Analysis");
       return;
     }
 

@@ -3,13 +3,16 @@
 import {
   analyzeSubviewForTab,
   deliverSubviewForTab,
+  quantifySubviewForTab,
   schemeSubviewForTab,
   tabForAnalyzeSubview,
   tabForDeliverSubview,
+  tabForQuantifySubview,
   tabForSchemeSubview,
   workflowPhaseDefinitions,
   type AnalyzeSubview,
   type DeliverSubview,
+  type QuantifySubview,
   type SchemeSubview,
   type WorkflowPhase
 } from "@/lib/workflow-phases";
@@ -22,9 +25,12 @@ interface PhaseSubNavProps {
 }
 
 const schemeItems: { id: SchemeSubview; label: string }[] = [
+  { id: "bubble", label: "Bubble" },
   { id: "plan", label: "Plan" },
+  { id: "compare", label: "Compare" },
   { id: "massing", label: "Massing" },
-  { id: "model", label: "3D Model" }
+  { id: "facade", label: "Facade" },
+  { id: "structure", label: "Structure" }
 ];
 
 const analyzeItems: { id: AnalyzeSubview; label: string }[] = [
@@ -32,15 +38,28 @@ const analyzeItems: { id: AnalyzeSubview; label: string }[] = [
   { id: "systems", label: "MEP Systems" }
 ];
 
+const quantifyItems: { id: QuantifySubview; label: string }[] = [
+  { id: "quantity", label: "Quantity" },
+  { id: "review", label: "Review" }
+];
+
 const deliverItems: { id: DeliverSubview; label: string }[] = [
-  { id: "sheets", label: "Sheets" },
+  { id: "presentation", label: "Presentation" },
   { id: "render", label: "Render" },
   { id: "export", label: "Export" }
 ];
 
 export function PhaseSubNav({ phase, activeTab, onTabChange }: PhaseSubNavProps) {
   const items =
-    phase === "scheme" ? schemeItems : phase === "analyze" ? analyzeItems : phase === "deliver" ? deliverItems : [];
+    phase === "scheme"
+      ? schemeItems
+      : phase === "analyze"
+        ? analyzeItems
+        : phase === "quantify"
+          ? quantifyItems
+          : phase === "deliver"
+            ? deliverItems
+            : [];
 
   if (items.length === 0) {
     return null;
@@ -51,7 +70,9 @@ export function PhaseSubNav({ phase, activeTab, onTabChange }: PhaseSubNavProps)
       ? schemeSubviewForTab(activeTab) ?? "plan"
       : phase === "analyze"
         ? analyzeSubviewForTab(activeTab) ?? "analysis"
-        : deliverSubviewForTab(activeTab) ?? "sheets";
+        : phase === "quantify"
+          ? quantifySubviewForTab(activeTab) ?? "quantity"
+          : deliverSubviewForTab(activeTab) ?? "presentation";
 
   return (
     <div className="flex items-center gap-1 border-b border-line bg-[#0a0f15] px-4 py-2">
@@ -61,7 +82,7 @@ export function PhaseSubNav({ phase, activeTab, onTabChange }: PhaseSubNavProps)
       {items.map((item) => (
         <button
           className={`h-8 rounded px-3 text-xs ${
-            activeSubview === item.id
+            activeSubview === item.id || (item.id === "massing" && activeSubview === "model")
               ? "bg-accent/15 text-accent"
               : "text-muted hover:bg-white/[0.04] hover:text-slate-100"
           }`}
@@ -75,6 +96,11 @@ export function PhaseSubNav({ phase, activeTab, onTabChange }: PhaseSubNavProps)
 
             if (phase === "analyze") {
               onTabChange(tabForAnalyzeSubview(item.id as AnalyzeSubview));
+              return;
+            }
+
+            if (phase === "quantify") {
+              onTabChange(tabForQuantifySubview(item.id as QuantifySubview));
               return;
             }
 

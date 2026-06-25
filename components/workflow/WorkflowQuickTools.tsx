@@ -13,14 +13,14 @@ const tools: {
   tool: ActiveTool;
   phases: WorkflowPhase[];
 }[] = [
-  { label: "Select", title: "Select", icon: MousePointer2, tool: "select", phases: ["brief_site", "scheme", "analyze"] },
-  { label: "Outline", title: "Draw outline", icon: DraftingCompass, tool: "outline", phases: ["brief_site", "scheme"] },
+  { label: "Select", title: "Select", icon: MousePointer2, tool: "select", phases: ["import", "site", "program", "scheme", "analyze"] },
+  { label: "Outline", title: "Draw outline", icon: DraftingCompass, tool: "outline", phases: ["import", "site", "program", "scheme"] },
   { label: "Trace", title: "Trace room vertices", icon: Wand2, tool: "trace", phases: ["scheme"] },
   { label: "Inpaint", title: "AI inpaint brush", icon: Sparkles, tool: "inpaint", phases: ["scheme"] },
   { label: "Sketch", title: "Tablet sketch room input", icon: Pencil, tool: "sketch_input", phases: ["scheme"] },
   { label: "Reshape", title: "Boundary reshape along wall span", icon: Spline, tool: "reshape_boundary", phases: ["scheme"] },
   { label: "Protrude", title: "Add bay window or bump-out", icon: SquarePlus, tool: "add_protrusion", phases: ["scheme"] },
-  { label: "Upload", title: "Upload drawing", icon: Upload, tool: "upload", phases: ["brief_site", "scheme"] },
+  { label: "Upload", title: "Upload drawing", icon: Upload, tool: "upload", phases: ["import", "site", "program", "scheme"] },
   { label: "Flow", title: "Analysis flows", icon: Waypoints, tool: "flow", phases: ["analyze"] },
   { label: "Model", title: "3D model", icon: Boxes, tool: "model", phases: ["scheme"] }
 ];

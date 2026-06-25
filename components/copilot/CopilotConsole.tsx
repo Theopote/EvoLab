@@ -20,6 +20,7 @@ import { useCopilotUploadStore } from "@/lib/copilot-upload-store";
 import { diffRoomIds } from "@/lib/design-decision-log";
 import { pendingInsightCount } from "@/lib/copilot-insight-queue";
 import { detectCopilotPlan, type CopilotPlan } from "@/lib/copilot-plan";
+import { normalizeWorkspaceTab } from "@/lib/workflow-navigation";
 import { isImagePinnedFile, readCopilotUpload, type CopilotPinnedFile } from "@/lib/copilot-upload";
 import { useShallow } from "zustand/react/shallow";
 
@@ -458,12 +459,12 @@ export function CopilotConsole({
 
   function handleAction(action: CopilotAction) {
     if (action.id === "switch-tab") {
-      onTabChange((action.payload as WorkspaceTab | undefined) ?? "Model");
+      onTabChange(normalizeWorkspaceTab(action.payload ?? "Massing"));
       return;
     }
 
     if (action.id === "generate-massing" || action.id === "generate-flow-diagram") {
-      onTabChange(action.id === "generate-massing" ? "Model" : "Analysis");
+      onTabChange(action.id === "generate-massing" ? "Massing" : "Analysis");
       return;
     }
 

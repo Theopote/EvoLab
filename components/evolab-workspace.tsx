@@ -1,10 +1,11 @@
 "use client";
 
 import { Loader2, RefreshCcw } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { BottomPanel } from "@/components/bottom-panel";
 import { CopilotConsole } from "@/components/copilot/CopilotConsole";
+import { CopilotProposalHistoryPanel } from "@/components/copilot/CopilotProposalHistoryPanel";
 import { DiagramCanvas } from "@/components/diagrams/DiagramCanvas";
 import { DiagramLayerList } from "@/components/diagrams/DiagramLayerList";
 import { ExportPanel } from "@/components/export-panel";
@@ -13,9 +14,6 @@ import { InspectorPanel } from "@/components/inspector/InspectorPanel";
 import { MassingPanel } from "@/components/massing-panel";
 import { MepCanvas } from "@/components/mep/MepCanvas";
 import { MepLayerList } from "@/components/mep/MepLayerList";
-import { SiteContextPanel } from "@/components/site/SiteContextPanel";
-import { BriefForm } from "@/components/plan-editor/BriefForm";
-import { OutlineCanvas } from "@/components/plan-editor/OutlineCanvas";
 import { PlanResultGrid } from "@/components/plan-editor/PlanResultGrid";
 import { ChangeSetApprovalPanel } from "@/components/quantity/ChangeSetApprovalPanel";
 import { ComplianceChecklist } from "@/components/quantity/ComplianceChecklist";
@@ -26,15 +24,26 @@ import { TopNav } from "@/components/top-nav";
 import { PresentationWorkspace } from "@/components/presentation/PresentationWorkspace";
 import { VersionCompareGrid } from "@/components/version-compare/VersionCompareGrid";
 import { ReportEditor } from "@/components/report-editor/ReportEditor";
+import { BubbleDiagramCanvas } from "@/components/workflow/BubbleDiagramCanvas";
+import {
+  FacadePreviewPanel,
+  ProgramWorkspace,
+  SiteWorkspace,
+  StructurePreviewPanel
+} from "@/components/workflow/DomainWorkspaces";
+import { ImportWorkspace } from "@/components/workflow/ImportWorkspace";
 import { PhaseSubNav } from "@/components/workflow/PhaseSubNav";
 import { SchemeSplitViewport } from "@/components/workflow/SchemeSplitViewport";
 import { ExplodeSlider } from "@/components/viewer-3d/ExplodeSlider";
 import { VersionSplitCompare } from "@/components/workflow/VersionSplitCompare";
+import { VerticalAlignmentPanel } from "@/components/workflow/VerticalAlignmentPanel";
 import { ViewportKpiHud } from "@/components/workflow/ViewportKpiHud";
 import { WorkflowLeftSidebar } from "@/components/workflow/WorkflowLeftSidebar";
+import { WorkflowNextStepBanner } from "@/components/workflow/WorkflowNextStepBanner";
 import { useCopilotTimelineStore } from "@/lib/copilot-timeline-store";
 import { Scene } from "@/components/viewer-3d/Scene";
 import { tabForDeliverSubview } from "@/lib/workflow-phases";
+import { recommendedNextStepDetail } from "@/lib/workflow-navigation";
 import { useEvoProject } from "@/lib/project-store";
 
 export function EvoLabWorkspace() {
@@ -85,7 +94,10 @@ export function EvoLabWorkspace() {
     generateMep,
     openModelForVersion,
     refineVersion,
-    returnToPlanGeneration
+    returnToPlanGeneration,
+    updateScoringConfig,
+    resetScoringConfig,
+    setLevelTransferFloor
   } = useEvoProject(
     useShallow((state) => ({
       project: state.project,
@@ -134,10 +146,14 @@ export function EvoLabWorkspace() {
       generateMep: state.generateMep,
       openModelForVersion: state.openModelForVersion,
       refineVersion: state.refineVersion,
-      returnToPlanGeneration: state.returnToPlanGeneration
+      returnToPlanGeneration: state.returnToPlanGeneration,
+      updateScoringConfig: state.updateScoringConfig,
+      resetScoringConfig: state.resetScoringConfig,
+      setLevelTransferFloor: state.setLevelTransferFloor
     }))
   );
   const [reportEditorOpen, setReportEditorOpen] = useState(false);
+  const nextStep = useMemo(() => recommendedNextStepDetail(project), [project]);
 
   return (
     <main className="flex min-h-screen flex-col bg-canvas text-slate-100">
@@ -146,23 +162,35 @@ export function EvoLabWorkspace() {
         workflowPhase={workflowPhase}
         onPhaseChange={setWorkflowPhase}
         onOpenReviews={() => {
-          setWorkflowPhase("scheme");
-          setActiveTab("Quantity");
+          setWorkflowPhase("quantify");
+          setActiveTab("Review");
         }}
       />
+      {nextStep ? (
+        <WorkflowNextStepBanner
+          currentPhase={workflowPhase}
+          description={nextStep.description}
+          label={nextStep.label}
+          targetPhase={nextStep.phase}
+          onGoToPhase={setWorkflowPhase}
+        />
+      ) : null}
       <PhaseSubNav phase={workflowPhase} activeTab={activeTab} onTabChange={setActiveTab} />
       <section className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_auto_218px] overflow-hidden">
         <div className="grid min-h-0 grid-cols-[260px_minmax(0,1fr)_300px] overflow-hidden">
           <WorkflowLeftSidebar
             phase={workflowPhase}
+            activeTab={activeTab}
             versions={project.versions}
             activeVersionId={project.activeVersionId}
             compareVersionIds={compareVersionIds}
             onSelectVersion={setActiveVersion}
             onToggleCompare={toggleCompareVersion}
+            onTabChange={setActiveTab}
+            onImportTab={() => setWorkflowPhase("import")}
             onOpenSheets={() => {
               setWorkflowPhase("deliver");
-              setActiveTab(tabForDeliverSubview("sheets"));
+              setActiveTab(tabForDeliverSubview("presentation"));
             }}
             onOpenReportEditor={() => setReportEditorOpen(true)}
           />
@@ -181,16 +209,7 @@ export function EvoLabWorkspace() {
           </section>
 
           <aside className="min-h-0 overflow-auto border-l border-line bg-[#0d141d] p-4">
-            {workflowPhase === "brief_site" && activeTab === "Plan" ? (
-              <div className="space-y-4">
-                <SiteContextPanel />
-                <BriefForm value={brief} onChange={updateBrief} />
-              </div>
-            ) : null}
-
-            <div className={workflowPhase === "brief_site" && activeTab === "Plan" ? "mt-4" : ""}>
-              <InspectorPanel />
-            </div>
+            <InspectorPanel />
           </aside>
         </div>
         <CopilotConsole
@@ -229,6 +248,109 @@ export function EvoLabWorkspace() {
   );
 
   function renderMainViewport() {
+    if (activeTab === "Import") {
+      return (
+        <ImportWorkspace
+          onImported={(result) => {
+            handleAnalyzedVersion(result.version, { fileName: result.fileName });
+            setWorkflowPhase("scheme");
+            setActiveTab("Plan");
+          }}
+        />
+      );
+    }
+
+    if (activeTab === "Site") {
+      return (
+        <SiteWorkspace
+          outline={outline}
+          outlineClosed={outlineClosed}
+          onOutlineChange={setOutline}
+          onOutlineClosedChange={setOutlineClosed}
+        />
+      );
+    }
+
+    if (activeTab === "Program") {
+      return (
+        <ProgramWorkspace
+          activeVersion={activeVersion}
+          brief={brief}
+          domain={project.domain}
+          program={project.domain.program}
+          projectType={project.projectType}
+          onBriefChange={updateBrief}
+          onScoringConfigChange={updateScoringConfig}
+          onScoringConfigReset={resetScoringConfig}
+        />
+      );
+    }
+
+    if (activeTab === "Compare") {
+      return (
+        <VersionCompareGrid
+          versions={project.versions}
+          activeVersionId={project.activeVersionId}
+          compareLevelId={compareLevelId}
+          domain={project.domain}
+          program={project.domain.program}
+          projectType={project.projectType}
+          orientationDeg={project.domain.site.orientationDeg}
+          onCompareLevelChange={setCompareLevel}
+          onSelectVersion={setActiveVersion}
+          onGenerateModel={openModelForVersion}
+          onRefineVersion={refineVersion}
+          onHybridAccepted={handleHybridAccepted}
+        />
+      );
+    }
+
+    if (activeTab === "Review") {
+      return (
+        <section className="grid min-h-full grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)] gap-4">
+          <ChangeSetApprovalPanel
+            changeSets={project.domain.changeSets}
+            versions={project.versions}
+            selectedChangeSetId={selectedChangeSetId}
+            lockedElementIds={project.domain.lockedElementIds}
+            onSelectChangeSet={selectChangeSet}
+            onApprove={approveChangeSet}
+            onReject={rejectChangeSet}
+            onToggleElementLock={toggleElementLock}
+          />
+          <CopilotProposalHistoryPanel proposals={project.domain.copilotProposals} />
+        </section>
+      );
+    }
+
+    if (activeTab === "Bubble") {
+      return (
+        <BubbleDiagramCanvas
+          programLabel={project.domain.program.label}
+          topology={activeVersion?.metadata?.topologyGraph}
+        />
+      );
+    }
+
+    if (activeTab === "Facade") {
+      return <FacadePreviewPanel facade={project.domain.facadeEnvelope} />;
+    }
+
+    if (activeTab === "Structure") {
+      return (
+        <section className="grid min-h-full grid-cols-[minmax(0,1fr)_minmax(360px,0.9fr)] gap-4">
+          <StructurePreviewPanel levelCount={activeVersion?.levels.length} structure={project.domain.structuralSystem} />
+          {activeVersion ? (
+            <VerticalAlignmentPanel
+              activeLevelId={activeLevelId}
+              version={activeVersion}
+              onMarkTransferFloor={(levelId) => setLevelTransferFloor(levelId, true)}
+            />
+          ) : null}
+        </section>
+      );
+    }
+
     if (activeTab === "Model") {
       return <ModelWorkspace />;
     }
@@ -309,7 +431,7 @@ export function EvoLabWorkspace() {
       return <RenderPanel activeVersion={activeVersion} />;
     }
 
-    if (activeTab === "Sheets") {
+    if (activeTab === "Sheets" || activeTab === "Presentation") {
       return (
         <section className="grid min-h-full grid-rows-[auto_minmax(0,1fr)] gap-4">
           <PresentationWorkspace />
