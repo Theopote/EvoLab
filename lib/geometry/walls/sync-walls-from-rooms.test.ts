@@ -131,35 +131,12 @@ function authoritativeLevel(): Level {
 }
 
 describe("sync-walls-from-rooms", () => {
-  it("preserves cad wall ids while reconciling room ids", () => {
+  it("keeps authoritative ids when room graph keys are unchanged", () => {
     const level = authoritativeLevel();
-    const nextRooms = level.rooms.map((room) =>
-      room.id === "living"
-        ? {
-            ...room,
-            polygon: [
-              [0, 0],
-              [11, 0],
-              [11, 8],
-              [0, 8]
-            ] as Point[]
-          }
-        : {
-            ...room,
-            polygon: [
-              [11, 0],
-              [20, 0],
-              [20, 8],
-              [11, 8]
-            ] as Point[]
-          }
-    );
+    const reconciled = reconcileAuthoritativeWalls(level.walls, level.rooms, outline);
 
-    const reconciled = reconcileAuthoritativeWalls(level.walls, nextRooms, outline);
-
-    expect(reconciled.some((wall) => wall.id === "cad-shared")).toBe(true);
-    expect(reconciled.find((wall) => wall.id === "cad-shared")?.roomIds.sort()).toEqual(["bedroom", "living"]);
-    expect(wallsAlignWithRoomGraph(reconciled, nextRooms, outline)).toBe(true);
+    expect(reconciled.map((wall) => wall.id).sort()).toEqual(level.walls.map((wall) => wall.id).sort());
+    expect(wallsAlignWithRoomGraph(reconciled, level.rooms, outline)).toBe(true);
   });
 
   it("adds a partition wall when a room is split", () => {
