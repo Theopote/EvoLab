@@ -2,15 +2,12 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { ImageBlockParam, MessageParam, TextBlockParam } from "@anthropic-ai/sdk/resources/messages";
 import { z, type ZodType } from "zod";
 import { hasAnthropicKey } from "@/lib/anthropic-json";
+import type { AnthropicImageMediaType, AnthropicToolImageInput } from "@/lib/anthropic-types";
+import "server-only";
 
 const MODEL = "claude-sonnet-4-20250514";
 
-export type AnthropicImageMediaType = "image/jpeg" | "image/png" | "image/gif" | "image/webp";
-
-export interface AnthropicToolImageInput {
-  base64: string;
-  mediaType: AnthropicImageMediaType;
-}
+export type { AnthropicImageMediaType, AnthropicToolImageInput };
 
 interface RequestAnthropicToolOptions<T> {
   system: string;

@@ -1,4 +1,5 @@
-import type { AnthropicImageMediaType } from "@/lib/anthropic-tool";
+import type { AnthropicImageMediaType } from "@/lib/anthropic-types";
+import type { SheetCornerDetectionResult } from "@/lib/schemas/sheet-corner-detection-schema";
 
 export type ImagePoint = [number, number];
 
@@ -75,4 +76,13 @@ export function quadToPixelCoordinates(quad: PerspectiveQuad, width: number, hei
 
 export function clampPerspectiveQuad(quad: PerspectiveQuad): PerspectiveQuad {
   return quad.map(([x, y]) => [Math.min(1, Math.max(0, x)), Math.min(1, Math.max(0, y))]) as PerspectiveQuad;
+}
+
+export function cornersResultToQuad(result: SheetCornerDetectionResult): PerspectiveQuad {
+  return clampPerspectiveQuad([
+    result.corners.topLeft,
+    result.corners.topRight,
+    result.corners.bottomRight,
+    result.corners.bottomLeft
+  ]);
 }

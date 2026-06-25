@@ -1,5 +1,5 @@
-import type { AnthropicImageMediaType } from "@/lib/anthropic-tool";
-import { cornersResultToQuad } from "@/lib/import-corner-detection";
+import type { AnthropicImageMediaType } from "@/lib/anthropic-types";
+import { cornersResultToQuad } from "@/lib/import-image-utils";
 import type { PerspectiveQuad } from "@/lib/import-image-utils";
 import type { SheetCornerDetectionResult } from "@/lib/schemas/sheet-corner-detection-schema";
 

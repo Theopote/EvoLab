@@ -4,16 +4,9 @@ import {
   SheetCornerDetectionToolInputSchema,
   type SheetCornerDetectionResult
 } from "@/lib/schemas/sheet-corner-detection-schema";
-import { clampPerspectiveQuad, type PerspectiveQuad } from "@/lib/import-image-utils";
+import "server-only";
 
-export function cornersResultToQuad(result: SheetCornerDetectionResult): PerspectiveQuad {
-  return clampPerspectiveQuad([
-    result.corners.topLeft,
-    result.corners.topRight,
-    result.corners.bottomRight,
-    result.corners.bottomLeft
-  ]);
-}
+export { cornersResultToQuad } from "@/lib/import-image-utils";
 
 export function createMockSheetCornerDetection(): SheetCornerDetectionResult {
   return {
