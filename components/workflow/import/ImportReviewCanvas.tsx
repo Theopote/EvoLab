@@ -172,9 +172,9 @@ export function ImportReviewCanvas({
             svgRef={svgRef}
             wallDragEnabled={false}
             walls={previewWalls}
-            onCancelPreview={handleRoomsGeometryCancel}
-            onCommitRooms={handleRoomsGeometryCommit}
-            onPreviewRooms={handleRoomsGeometryPreview}
+            onRoomsGeometryCancel={handleRoomsGeometryCancel}
+            onRoomsGeometryCommit={handleRoomsGeometryCommit}
+            onRoomsGeometryPreview={handleRoomsGeometryPreview}
           />
           <ImportTraceLayer
             enabled={traceEnabled}

@@ -290,6 +290,7 @@ export function buildFloorValidationSummary(
     summaries.unshift({
       levelId: "building",
       levelName: "Building-wide",
+      floorProgram: undefined,
       ...summarizeIssues(buildingWideIssues)
     });
   }

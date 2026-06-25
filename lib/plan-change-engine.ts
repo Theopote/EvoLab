@@ -376,7 +376,8 @@ function applyAddRoom(version: PlanVersion, operation: Extract<PlanOperation, { 
     polygon: operation.room.polygon,
     areaSqm: operation.room.areaSqm,
     doors: operation.room.doors,
-    windows: operation.room.windows
+    windows: operation.room.windows,
+    ceilingHeight: 3
   };
 
   return replaceRoomsInVersion(version, [...version.rooms, room]);

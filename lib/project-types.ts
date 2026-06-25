@@ -105,6 +105,18 @@ export interface TransferFloorHint {
   message: string;
 }
 
+export interface FloorValidationSummary {
+  levelId: string;
+  levelName: string;
+  floorProgram?: FloorProgram;
+  issueCount: number;
+  errorCount: number;
+  warningCount: number;
+  valid: boolean;
+  issueIds: string[];
+  messages: string[];
+}
+
 export interface PlanVersionMetadata {
   strategy?: string;
   topology?: {
@@ -120,6 +132,7 @@ export interface PlanVersionMetadata {
   topologyGraph?: TopologyGraph;
   relayoutedAt?: string;
   validationWarnings?: string[];
+  floorValidationSummary?: FloorValidationSummary[];
   repairs?: string[];
   zoningApplied?: boolean;
   envelopeCompliant?: boolean;
@@ -386,6 +399,7 @@ export interface MepShaft {
   id: string;
   position: Point;
   systems: MepSystemType[];
+  levelIds?: string[];
 }
 
 export interface MepRoute {
@@ -393,6 +407,7 @@ export interface MepRoute {
   system: MepSystemType;
   path: Point[];
   connectsRoomIds: string[];
+  levelId?: string;
 }
 
 export type MepSystemType =

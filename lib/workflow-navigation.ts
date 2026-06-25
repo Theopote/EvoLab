@@ -16,7 +16,7 @@ export type LegacyWorkflowPhase = "brief_site";
 
 export type WorkflowPhaseId = WorkflowPhase | LegacyWorkflowPhase;
 
-export type SchemeSubview = "bubble" | "plan" | "compare" | "massing" | "facade" | "structure";
+export type SchemeSubview = "bubble" | "plan" | "compare" | "massing" | "facade" | "structure" | "furniture";
 
 /** @deprecated Use `massing` — 3D model lives under Massing / scheme split viewport. */
 export type LegacySchemeSubview = "model";
@@ -105,6 +105,7 @@ const tabToPhase: Record<WorkspaceTab, WorkflowPhase> = {
   Model: "scheme",
   Facade: "scheme",
   Structure: "scheme",
+  Furniture: "scheme",
   Analysis: "analyze",
   Systems: "analyze",
   Quantity: "quantify",
@@ -122,7 +123,8 @@ const schemeTabMap: Record<SchemeSubviewId, WorkspaceTab> = {
   massing: "Massing",
   model: "Model",
   facade: "Facade",
-  structure: "Structure"
+  structure: "Structure",
+  furniture: "Furniture"
 };
 
 const analyzeTabMap: Record<AnalyzeSubview, WorkspaceTab> = {
@@ -226,6 +228,10 @@ export function schemeSubviewForTab(tab: WorkspaceTab): SchemeSubviewId | undefi
 
   if (canonical === "Structure") {
     return "structure";
+  }
+
+  if (canonical === "Furniture") {
+    return "furniture";
   }
 
   return undefined;

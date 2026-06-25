@@ -1,7 +1,7 @@
 import { summarizeRoomChanges } from "@/lib/plan-change-diff";
 import { buildPreviewVersion } from "@/lib/plan-change-engine";
 import type { ModifyPlanResponse } from "@/lib/copilot-modify-types";
-import type { PlanChangeProposal } from "@/lib/schemas/plan-change-proposal-schema";
+import type { PlanChangeProposal, PlanOperation } from "@/lib/schemas/plan-change-proposal-schema";
 import type { CopilotFinding, PlanVersion } from "@/lib/project-types";
 
 export interface HybridProposalMeta {
@@ -43,7 +43,7 @@ export function buildHybridProposal(
         label: "Apply hybrid layout",
         rationale: "Merge fixed regions from both schemes and fill the remaining outline.",
         targetRoomIds: changedRoomIds.length ? changedRoomIds : mergedVersion.rooms.map((room) => room.id),
-        rooms: mergedVersion.rooms
+        rooms: mergedVersion.rooms as Extract<PlanOperation, { type: "replace_rooms" }>["rooms"]
       }
     ]
   };
