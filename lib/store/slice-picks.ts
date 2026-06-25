@@ -107,6 +107,7 @@ export function pickGeometryActions(state: EvoProjectStore): GeometrySliceAction
     updateRoom: state.updateRoom,
     updateRoomGeometry: state.updateRoomGeometry,
     applyLevelRoomsGeometry: state.applyLevelRoomsGeometry,
+    applyWallDragCommit: state.applyWallDragCommit,
     splitActiveRoom: state.splitActiveRoom,
     mergeActiveRoomWith: state.mergeActiveRoomWith,
     addParametricOpening: state.addParametricOpening,

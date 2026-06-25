@@ -27,6 +27,12 @@ import type { WorkflowPhase, WorkflowPhaseId } from "@/lib/workflow-phases";
 
 export type SelectionType = "none" | "room" | "wall" | "opening";
 
+export type WallDragCommitInput = {
+  wallId: string;
+  offset: number;
+  normal: Point;
+};
+
 export interface EvoProjectStore {
   project: ProjectData;
   activeVersion?: PlanVersion;
@@ -110,6 +116,7 @@ export interface EvoProjectStore {
   updateRoom: (roomId: string, patch: Partial<Room>) => void;
   updateRoomGeometry: (roomId: string, patch: Partial<Room>) => void;
   applyLevelRoomsGeometry: (rooms: Room[]) => void;
+  applyWallDragCommit: (input: WallDragCommitInput) => void;
   splitActiveRoom: (input: {
     axis: "horizontal" | "vertical";
     splitRatio: number;

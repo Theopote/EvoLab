@@ -1,7 +1,11 @@
-import type { Point, Room, Wall } from "@/lib/project-types";
+import type { Level, Point, Room, Wall } from "@/lib/project-types";
 import { clientToSvgPoint } from "@/components/floor-plan/floor-plan-utils";
+import { applyLevelWallDrag } from "@/lib/geometry/walls/apply-wall-drag";
 import { applyWallDragByOffset } from "@/lib/wall-graph";
 import { projectDeltaOntoNormal, snapPoint, wallUnitNormal, type GridSnapStep } from "@/lib/plan-snap";
+import type { WallDragCommitInput } from "@/lib/store/types";
+
+export type { WallDragCommitInput };
 
 export interface WallDragSession {
   pointerId: number;
@@ -32,6 +36,23 @@ export function wallDragOffsetFromPointer(
 
 export function previewWallDrag(session: WallDragSession, offset: number) {
   return applyWallDragByOffset(session.originalRooms, session.wallId, offset, session.wallNormal);
+}
+
+export function previewLevelWallDrag(level: Level, session: WallDragSession, offset: number, levelOutline: Point[]) {
+  const previewLevel = applyLevelWallDrag(level, session.wallId, offset, session.wallNormal, levelOutline);
+
+  return {
+    rooms: previewLevel.rooms,
+    walls: previewLevel.walls
+  };
+}
+
+export function wallDragCommitInput(session: WallDragSession, offset: number): WallDragCommitInput {
+  return {
+    wallId: session.wallId,
+    offset,
+    normal: session.wallNormal
+  };
 }
 
 export function createWallDragSession(

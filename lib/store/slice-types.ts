@@ -1,4 +1,6 @@
-import type { EvoProjectStore } from "@/lib/store/types";
+import type { EvoProjectStore, WallDragCommitInput } from "@/lib/store/types";
+
+export type { WallDragCommitInput };
 
 export type ProjectSliceActions = Pick<
   EvoProjectStore,
@@ -69,6 +71,7 @@ export type GeometrySliceActions = Pick<
   | "updateRoom"
   | "updateRoomGeometry"
   | "applyLevelRoomsGeometry"
+  | "applyWallDragCommit"
   | "splitActiveRoom"
   | "mergeActiveRoomWith"
   | "addParametricOpening"
