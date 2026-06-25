@@ -1,7 +1,7 @@
 "use client";
 
 import { Loader2, MapPin, Ruler, Sparkles } from "lucide-react";
-import { useSiteSlice } from "@/lib/project-store";
+import { useSiteState, useSiteActions } from "@/lib/project-store";
 
 export function SiteContextPanel() {
   const {
@@ -12,14 +12,25 @@ export function SiteContextPanel() {
     zoning,
     buildableEnvelope,
     showSiteContextLayer,
-    showEnvironmentOverlay,
+    showEnvironmentOverlay
+  } = useSiteState((state) => ({
+    siteAddressQuery: state.siteAddressQuery,
+    siteContext: state.siteContext,
+    isFetchingSite: state.isFetchingSite,
+    siteError: state.siteError,
+    zoning: state.zoning,
+    buildableEnvelope: state.buildableEnvelope,
+    showSiteContextLayer: state.showSiteContextLayer,
+    showEnvironmentOverlay: state.showEnvironmentOverlay
+  }));
+  const {
     setSiteAddressQuery,
     fetchSiteContext,
     applySuggestedSiteOutline,
     setZoning,
     setShowSiteContextLayer,
     setShowEnvironmentOverlay
-  } = useSiteSlice();
+  } = useSiteActions();
 
   return (
     <section className="rounded border border-line bg-panel/90 p-3">

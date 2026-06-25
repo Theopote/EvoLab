@@ -2,9 +2,11 @@
 
 import { useEffect, useReducer } from "react";
 import { useInteractionStore } from "@/lib/interaction-store";
-import { useEvoProjectStore, useProjectState } from "@/lib/project-store";
+import { pickProjectState } from "@/lib/store/slice-picks";
+import { useEvoProjectStore } from "@/lib/store/store";
 import type { PlanVersion } from "@/lib/project-types";
 import type { FacadeEnvelope } from "@/lib/building-domain";
+import { useProjectState } from "@/lib/project-store";
 
 export interface BuildingModelSource {
   version: PlanVersion;
@@ -19,11 +21,14 @@ export function useBuildingModelSource(): BuildingModelSource | null {
 
   useEffect(() => {
     return useEvoProjectStore.subscribe((state, previousState) => {
+      const current = pickProjectState(state);
+      const previous = pickProjectState(previousState);
+
       if (
-        state.geometryRevision !== previousState.geometryRevision ||
-        state.activeVersion?.id !== previousState.activeVersion?.id ||
-        state.project.domain.facadeEnvelope !== previousState.project.domain.facadeEnvelope ||
-        state.project.domain.site.orientationDeg !== previousState.project.domain.site.orientationDeg
+        current.geometryRevision !== previous.geometryRevision ||
+        current.activeVersion?.id !== previous.activeVersion?.id ||
+        current.project.domain.facadeEnvelope !== previous.project.domain.facadeEnvelope ||
+        current.project.domain.site.orientationDeg !== previous.project.domain.site.orientationDeg
       ) {
         rerender();
       }
@@ -38,7 +43,7 @@ export function useBuildingModelSource(): BuildingModelSource | null {
     });
   }, []);
 
-  const { activeVersion, geometryRevision, project } = useEvoProjectStore.getState();
+  const { activeVersion, geometryRevision, project } = pickProjectState(useEvoProjectStore.getState());
   const showFacadeOverlay = useInteractionStore.getState().view3d.showFacadeOverlay;
 
   if (!activeVersion) {

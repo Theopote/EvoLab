@@ -1,5 +1,5 @@
 import { useShallow } from "zustand/react/shallow";
-import { useEvoProjectStore } from "@/lib/project-store";
+import { useEvoProjectStore } from "@/lib/store/store";
 import {
   pickAnalysisActions,
   pickAnalysisSlice,
@@ -21,6 +21,7 @@ import {
   pickSiteState,
   pickWorkspaceSlice
 } from "@/lib/store/slice-picks";
+import { pickFloorPlanEditorState, pickSelectionIds } from "@/lib/store/slice-selectors";
 import type {
   AnalysisSlice,
   ExportSliceActions,
@@ -61,6 +62,8 @@ export const useSelectionSlice = createSliceHook<SelectionSlice>(pickSelectionSl
 export const useSelectionState = createSliceHook(pickSelectionState);
 export const useSelectionActions = createActionsHook(pickSelectionActions);
 export const useSelectionEditorSlice = createSliceHook<SelectionEditorSlice>(pickSelectionEditorSlice);
+export const useFloorPlanEditorState = createSliceHook(pickFloorPlanEditorState);
+export const useSelectionIds = createSliceHook(pickSelectionIds);
 
 export const useGeometryActions = createActionsHook<GeometrySliceActions>(pickGeometryActions);
 

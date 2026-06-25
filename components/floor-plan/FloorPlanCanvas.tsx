@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PlanVersion, Room } from "@/lib/project-types";
 import { CoreSymbolLayer } from "@/components/floor-plan/layers/CoreSymbolLayer";
 import { GridLayer } from "@/components/floor-plan/layers/GridLayer";
@@ -24,7 +24,11 @@ import { WallLayer } from "@/components/floor-plan/layers/WallLayer";
 import { getViewBox } from "@/components/floor-plan/floor-plan-utils";
 import { parseViewBox, formatViewBox } from "@/lib/comparison-viewport";
 import { getResolvedLevel } from "@/lib/level-rooms";
-import { useSelectionEditorSlice } from "@/lib/project-store";
+import {
+  useFloorPlanEditorState,
+  useGeometryActions,
+  useSelectionActions
+} from "@/lib/project-store";
 import { useInteractionStore } from "@/lib/interaction-store";
 import { createSetbackBoundary } from "@/lib/polygon-offset";
 import { useEditPreviewStore } from "@/lib/edit-preview-store";
@@ -52,7 +56,7 @@ function roomsGeometrySignature(rooms: Room[]) {
   return JSON.stringify(rooms.map((room) => [room.id, room.polygon]));
 }
 
-export function FloorPlanCanvas({
+export const FloorPlanCanvas = memo(function FloorPlanCanvas({
   version,
   className,
   levelId: levelIdProp,
@@ -85,17 +89,16 @@ export function FloorPlanCanvas({
     selectedWallId: wallSelectionFromStore,
     selectedOpeningId: openingSelectionFromStore,
     activeLevelId,
-    selectRoom,
-    selectWall,
-    selectOpening,
-    clearSelection,
+    lockedElementIds
+  } = useFloorPlanEditorState();
+  const { selectRoom, selectWall, selectOpening, clearSelection } = useSelectionActions();
+  const {
     applyLevelRoomsGeometry,
     splitActiveRoom,
     mergeActiveRoomWith,
     addParametricOpening,
-    updateOpening,
-    lockedElementIds
-  } = useSelectionEditorSlice();
+    updateOpening
+  } = useGeometryActions();
   const selectedRoomId = interactive ? selectedRoomIdProp ?? roomSelectionFromStore : selectedRoomIdProp;
   const selectedWallId = interactive ? wallSelectionFromStore : undefined;
   const selectedOpeningId = interactive ? openingSelectionFromStore : undefined;
@@ -490,4 +493,4 @@ export function FloorPlanCanvas({
       </div>
     </div>
   );
-}
+});
