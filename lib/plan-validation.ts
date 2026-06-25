@@ -3,8 +3,9 @@ import type { FloorValidationSummary, PlanVersion, Point, Room } from "@/lib/pro
 import {
   intersectionArea,
   isPolygonInside,
-  polygonArea as booleanPolygonArea
-} from "@/lib/polygon-ops";
+  polygonArea
+} from "@/lib/geometry/kernel";
+import { distance, polygonCentroid } from "@/lib/geometry/kernel/point";
 import { createSetbackBoundary } from "@/lib/polygon-offset";
 import { collectLevelValidationUnits, scopeVersionForLevel } from "@/lib/plan-scope";
 import { computeWetCorePathMetrics } from "@/lib/rules/path-metrics";
@@ -34,17 +35,10 @@ export interface PlanValidationOptions {
   rulePack?: RulePack;
 }
 
-export function distance(a: Point, b: Point) {
-  return Math.hypot(a[0] - b[0], a[1] - b[1]);
-}
-
-export function polygonArea(points: Point[]) {
-  return booleanPolygonArea(points);
-}
+export { distance, polygonArea };
 
 export function centroid(room: Room): Point {
-  const total = room.polygon.reduce((acc, [x, y]) => [acc[0] + x, acc[1] + y] as Point, [0, 0]);
-  return [total[0] / room.polygon.length, total[1] / room.polygon.length];
+  return polygonCentroid(room.polygon);
 }
 
 function validateCorridorConnectivity(rooms: Room[]) {

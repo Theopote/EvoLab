@@ -1,6 +1,6 @@
 import ClipperLib from "clipper-lib";
 import type { Point } from "@/lib/project-types";
-import { polygonArea } from "@/lib/polygon-ops";
+import { polygonArea } from "@/lib/geometry/kernel";
 
 export type OffsetJoinType = "miter" | "square" | "round";
 
