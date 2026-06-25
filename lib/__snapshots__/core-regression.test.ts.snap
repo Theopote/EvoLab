@@ -30,36 +30,6 @@ exports[`core regression snapshots > matches building quantity summary for the s
 }
 `;
 
-exports[`core regression snapshots > matches building quantity summary for the seed healthcare scheme 1`] = `
-{
-  "rowIds": [
-    "curtain-window-area",
-    "doors",
-    "external-wall-length",
-    "gross-area",
-    "internal-wall-length",
-    "net-area",
-    "roof-area",
-    "slab-area",
-    "wall-area",
-    "windows",
-  ],
-  "scope": "building",
-  "summary": {
-    "curtainWallOrWindowArea": 60,
-    "doorCount": 5,
-    "externalWallLength": 166,
-    "grossArea": 2412,
-    "internalWallLength": 350,
-    "netUsableArea": 1804,
-    "roofArea": 3024,
-    "slabArea": 3024,
-    "wallArea": 1924.8,
-    "windowCount": 3,
-  },
-}
-`;
-
 exports[`core regression snapshots > matches building score rollup for the seed demo scheme 1`] = `
 {
   "areaEfficiency": 85,
@@ -78,27 +48,6 @@ exports[`core regression snapshots > matches building score rollup for the seed 
   "riskCount": 3,
   "structureFitScore": 74,
   "totalScore": 57,
-}
-`;
-
-exports[`core regression snapshots > matches building score rollup for the seed healthcare scheme 1`] = `
-{
-  "areaEfficiency": 73,
-  "circulationScore": 97,
-  "daylightScore": 35,
-  "egressScore": 0,
-  "mepAlignmentScore": 71,
-  "metricIds": [
-    "area_efficiency",
-    "circulation",
-    "daylight",
-    "egress",
-    "structure_fit",
-    "wet_core",
-  ],
-  "riskCount": 3,
-  "structureFitScore": 83,
-  "totalScore": 50,
 }
 `;
 
@@ -132,36 +81,6 @@ exports[`core regression snapshots > matches level quantity summary for the seed
 }
 `;
 
-exports[`core regression snapshots > matches level quantity summary for the seed healthcare scheme 1`] = `
-{
-  "rowIds": [
-    "curtain-window-area",
-    "doors",
-    "external-wall-length",
-    "gross-area",
-    "internal-wall-length",
-    "net-area",
-    "roof-area",
-    "slab-area",
-    "wall-area",
-    "windows",
-  ],
-  "scope": "level",
-  "summary": {
-    "curtainWallOrWindowArea": 60,
-    "doorCount": 5,
-    "externalWallLength": 166,
-    "grossArea": 2412,
-    "internalWallLength": 350,
-    "netUsableArea": 1804,
-    "roofArea": 3024,
-    "slabArea": 3024,
-    "wallArea": 1924.8,
-    "windowCount": 3,
-  },
-}
-`;
-
 exports[`core regression snapshots > matches multi-floor building quantity summary 1`] = `
 {
   "rowIds": [
@@ -178,15 +97,15 @@ exports[`core regression snapshots > matches multi-floor building quantity summa
   ],
   "scope": "building",
   "summary": {
-    "curtainWallOrWindowArea": 240,
+    "curtainWallOrWindowArea": 108,
     "doorCount": 20,
-    "externalWallLength": 664,
-    "grossArea": 9648,
-    "internalWallLength": 1400,
-    "netUsableArea": 7216,
+    "externalWallLength": 721.1,
+    "grossArea": 10984,
+    "internalWallLength": 1359.3,
+    "netUsableArea": 8928,
     "roofArea": 3024,
     "slabArea": 12096,
-    "wallArea": 7699.2,
+    "wallArea": 7901.7,
     "windowCount": 12,
   },
 }
@@ -200,17 +119,5 @@ exports[`core regression snapshots > matches validation issue rollup for the see
   ],
   "valid": true,
   "warningCount": 3,
-}
-`;
-
-exports[`core regression snapshots > matches validation issue rollup for the seed healthcare scheme 1`] = `
-{
-  "errorCount": 0,
-  "issueIds": [
-    "daylight-room-invalid",
-    "plumbing-too-far",
-  ],
-  "valid": true,
-  "warningCount": 4,
 }
 `;

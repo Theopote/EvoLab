@@ -5,6 +5,7 @@ import {
   findSemanticEgressRoute
 } from "@/lib/analysis/egress-semantics";
 import { createDemoProjectData } from "@/lib/typologies/demo-project";
+import { initialProjectData } from "@/lib/evolab-data";
 import type { PlanVersion, Point } from "@/lib/project-types";
 import { computeEgressPathMetrics } from "@/lib/rules/path-metrics";
 

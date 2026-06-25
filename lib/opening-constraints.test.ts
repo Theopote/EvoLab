@@ -73,16 +73,20 @@ describe("opening constraints", () => {
 
   it("enforces opening constraints on a full version", () => {
     const version = initialProjectData.versions[0]!;
+    const patchOfficeWindows = (room: Room) =>
+      room.id === "office-01"
+        ? {
+            ...room,
+            windows: [{ wall: "north" as const, position: 0.99, width: 20 }]
+          }
+        : room;
     const withBadOpening: typeof version = {
       ...version,
-      rooms: version.rooms.map((entry) =>
-        entry.id === "office-01"
-          ? {
-              ...entry,
-              windows: [{ wall: "north", position: 0.99, width: 20 }]
-            }
-          : entry
-      )
+      rooms: version.rooms.map(patchOfficeWindows),
+      levels: version.levels.map((level) => ({
+        ...level,
+        rooms: level.rooms.map(patchOfficeWindows)
+      }))
     };
 
     const result = enforceOpeningConstraintsOnVersion(withBadOpening);
