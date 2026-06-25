@@ -13,6 +13,7 @@ interface ImportPlanOptions {
   imageBase64?: string;
   fileName?: string;
   sourceType?: PlanImportSource;
+  pdfPageNumber?: number;
 }
 
 function buildStructuredResult(
@@ -60,10 +61,11 @@ export async function importPlan(options: ImportPlanOptions): Promise<PlanImport
     return buildStructuredResult(graph, "dxf", options.fileName);
   }
 
-  const graph = await parsePdfToGraph(buffer);
+  const pdfPageNumber = options.pdfPageNumber ?? 1;
+  const graph = await parsePdfToGraph(buffer, options.pdfPageNumber);
 
   if (shouldFallbackPdfToVision(graph)) {
-    const renderedImage = await renderPdfPageToImage(buffer);
+    const renderedImage = await renderPdfPageToImage(buffer, pdfPageNumber);
     const result = await importPlanFromImage(renderedImage, options.fileName);
 
     return {
@@ -71,7 +73,7 @@ export async function importPlan(options: ImportPlanOptions): Promise<PlanImport
       sourceType: "pdf",
       warnings: [
         ...result.warnings,
-        "PDF text layer was sparse, so EvoLab rendered page 1 and used visual recognition."
+        `PDF text layer was sparse, so EvoLab rendered page ${pdfPageNumber} and used visual recognition.`
       ]
     };
   }

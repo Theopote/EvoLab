@@ -3,15 +3,17 @@
 import { useRef, useState } from "react";
 import { FileImage, FileSpreadsheet, FileType2, Loader2, Upload, Wand2 } from "lucide-react";
 import { ImportImageCorrectionPanel } from "@/components/workflow/import/ImportImageCorrectionPanel";
+import { ImportPdfPagePanel } from "@/components/workflow/import/ImportPdfPagePanel";
 import { ImportPreviewPanel } from "@/components/workflow/import/ImportPreviewPanel";
 import { readCopilotUpload, type CopilotPinnedFile } from "@/lib/copilot-upload";
 import { analyzePlanDrawing } from "@/lib/plan-import/analyze-plan-client";
 import type { AnalyzePlanClientResult } from "@/lib/plan-import/analyze-plan-client";
+import { fetchPdfPageInfo } from "@/lib/plan-import/pdf-page-info-client";
 import { resolveImportReferencePreview } from "@/lib/import-reference-preview-resolver";
 import type { PlanImportSource } from "@/lib/plan-import/types";
 import type { PlanVersion } from "@/lib/project-types";
 
-type ImportWizardStep = "home" | "upload" | "correct" | "analyzing" | "review";
+type ImportWizardStep = "home" | "upload" | "select-page" | "correct" | "analyzing" | "review";
 type ImportKind = PlanImportSource;
 
 const importKinds: Array<{
@@ -36,7 +38,7 @@ const importKinds: Array<{
     description: "Vector or text-based PDFs. Structured extraction with vision fallback.",
     icon: FileType2,
     accept: ".pdf,application/pdf",
-    pipeline: "Text/vector extract → contour rebuild"
+    pipeline: "Page select → vector extract → vision fallback"
   },
   {
     id: "dxf",
@@ -70,12 +72,15 @@ export function ImportWizard({ onImportComplete, onContinueToTrace }: ImportWiza
   const [recognizedVersion, setRecognizedVersion] = useState<PlanVersion | undefined>();
   const [draftVersion, setDraftVersion] = useState<PlanVersion | undefined>();
   const [referencePreviewUrl, setReferencePreviewUrl] = useState<string | undefined>();
+  const [pdfPageCount, setPdfPageCount] = useState<number | undefined>();
+  const [selectedPdfPage, setSelectedPdfPage] = useState(1);
+  const [isPreparingImport, setIsPreparingImport] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [isDragging, setIsDragging] = useState(false);
 
   const selectedKindConfig = importKinds.find((kind) => kind.id === selectedKind) ?? importKinds[0];
 
-  async function recognizePinnedFile(file: CopilotPinnedFile) {
+  async function recognizePinnedFile(file: CopilotPinnedFile, pdfPageNumber?: number) {
     setError(undefined);
     setStep("analyzing");
 
@@ -83,17 +88,43 @@ export function ImportWizard({ onImportComplete, onContinueToTrace }: ImportWiza
       const result = await analyzePlanDrawing({
         fileBase64: file.base64,
         fileName: file.fileName,
-        sourceType: file.sourceType
+        sourceType: file.sourceType,
+        pdfPageNumber: file.sourceType === "pdf" ? pdfPageNumber : undefined
       });
 
       setAnalysis(result);
       setRecognizedVersion(result.version);
       setDraftVersion(result.version);
-      setReferencePreviewUrl(await resolveImportReferencePreview(file, result));
+      setReferencePreviewUrl(
+        await resolveImportReferencePreview(file, result, pdfPageNumber ?? selectedPdfPage)
+      );
       setStep("review");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Import failed.");
-      setStep(file.sourceType === "image" ? "correct" : "upload");
+      setStep(file.sourceType === "image" ? "correct" : file.sourceType === "pdf" && (pdfPageCount ?? 0) > 1 ? "select-page" : "upload");
+    }
+  }
+
+  async function preparePdfImport(file: CopilotPinnedFile) {
+    setError(undefined);
+    setIsPreparingImport(true);
+
+    try {
+      const { numPages } = await fetchPdfPageInfo(file.base64);
+      setPdfPageCount(numPages);
+      setSelectedPdfPage(1);
+
+      if (numPages > 1) {
+        setStep("select-page");
+        return;
+      }
+
+      await recognizePinnedFile(file, 1);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Import failed.");
+      setStep("upload");
+    } finally {
+      setIsPreparingImport(false);
     }
   }
 
@@ -106,6 +137,11 @@ export function ImportWizard({ onImportComplete, onContinueToTrace }: ImportWiza
 
       if (pinned.sourceType === "image") {
         setStep("correct");
+        return;
+      }
+
+      if (pinned.sourceType === "pdf") {
+        await preparePdfImport(pinned);
         return;
       }
 
@@ -127,6 +163,9 @@ export function ImportWizard({ onImportComplete, onContinueToTrace }: ImportWiza
     setRecognizedVersion(undefined);
     setDraftVersion(undefined);
     setReferencePreviewUrl(undefined);
+    setPdfPageCount(undefined);
+    setSelectedPdfPage(1);
+    setIsPreparingImport(false);
     setError(undefined);
   }
 
@@ -233,7 +272,8 @@ export function ImportWizard({ onImportComplete, onContinueToTrace }: ImportWiza
           <button
             className={`grid min-h-[280px] flex-1 place-items-center rounded border border-dashed p-8 text-center transition ${
               isDragging ? "border-accent bg-accent/10" : "border-line bg-panel/60 hover:border-accent/40 hover:bg-accent/5"
-            }`}
+            } ${isPreparingImport ? "pointer-events-none opacity-70" : ""}`}
+            disabled={isPreparingImport}
             type="button"
             onClick={openFilePicker}
             onDragEnter={(event) => {
@@ -259,8 +299,14 @@ export function ImportWizard({ onImportComplete, onContinueToTrace }: ImportWiza
             }}
           >
             <div>
-              <Upload className="mx-auto h-8 w-8 text-accent" />
-              <p className="mt-4 text-sm font-medium text-white">Drop a file or click to upload</p>
+              {isPreparingImport ? (
+                <Loader2 className="mx-auto h-8 w-8 animate-spin text-accent" />
+              ) : (
+                <Upload className="mx-auto h-8 w-8 text-accent" />
+              )}
+              <p className="mt-4 text-sm font-medium text-white">
+                {isPreparingImport ? "Reading PDF pages…" : "Drop a file or click to upload"}
+              </p>
               <p className="mt-2 text-xs text-muted">
                 {selectedKind === "image"
                   ? "PNG, JPEG, GIF, WebP"
@@ -273,6 +319,21 @@ export function ImportWizard({ onImportComplete, onContinueToTrace }: ImportWiza
 
           {error ? <p className="text-sm text-rose-300">{error}</p> : null}
         </div>
+      ) : null}
+
+      {step === "select-page" && pinnedFile && pdfPageCount && pdfPageCount > 1 ? (
+        <ImportPdfPagePanel
+          fileBase64={pinnedFile.base64}
+          fileName={pinnedFile.fileName}
+          numPages={pdfPageCount}
+          selectedPage={selectedPdfPage}
+          onBack={() => setStep("upload")}
+          onContinue={(pageNumber) => {
+            setSelectedPdfPage(pageNumber);
+            void recognizePinnedFile(pinnedFile, pageNumber);
+          }}
+          onSelectedPageChange={setSelectedPdfPage}
+        />
       ) : null}
 
       {step === "correct" && pinnedFile ? (
@@ -324,7 +385,13 @@ export function ImportWizard({ onImportComplete, onContinueToTrace }: ImportWiza
                 setRecognizedVersion(undefined);
                 setDraftVersion(undefined);
                 setReferencePreviewUrl(undefined);
-                setStep(pinnedFile.sourceType === "image" ? "correct" : "upload");
+                setStep(
+                  pinnedFile.sourceType === "image"
+                    ? "correct"
+                    : pinnedFile.sourceType === "pdf" && (pdfPageCount ?? 0) > 1
+                      ? "select-page"
+                      : "upload"
+                );
               }}
             >
               Upload another file
@@ -357,6 +424,7 @@ function WizardSteps({ step, selectedKind }: { step: ImportWizardStep; selectedK
   const steps = [
     { id: "home", label: "Choose source" },
     { id: "upload", label: "Upload" },
+    { id: "select-page", label: "Page" },
     { id: "correct", label: "Correct" },
     { id: "analyzing", label: "Recognize" },
     { id: "review", label: "Review" }
@@ -369,7 +437,9 @@ function WizardSteps({ step, selectedKind }: { step: ImportWizardStep; selectedK
       {steps.map((entry, index) => {
         const isActive = index === activeIndex;
         const isComplete = index < activeIndex;
-        const isSkipped = entry.id === "correct" && selectedKind !== "image";
+        const isSkipped =
+          (entry.id === "correct" && selectedKind !== "image") ||
+          (entry.id === "select-page" && selectedKind !== "pdf");
 
         return (
           <li

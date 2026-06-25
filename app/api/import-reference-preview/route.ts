@@ -6,6 +6,7 @@ import type { PlanImportSource } from "@/lib/plan-import/types";
 interface ImportReferencePreviewRequest {
   fileBase64?: string;
   sourceType?: PlanImportSource;
+  pageNumber?: number;
 }
 
 export async function POST(request: Request) {
@@ -26,7 +27,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "fileBase64 must be valid base64." }, { status: 400 });
     }
 
-    const rendered = await renderPdfPageToImage(buffer);
+    const rendered = await renderPdfPageToImage(buffer, body.pageNumber ?? 1);
 
     return NextResponse.json({
       previewUrl: `data:image/png;base64,${rendered.base64}`,

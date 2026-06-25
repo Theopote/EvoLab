@@ -5,7 +5,8 @@ import { fetchPdfImportReferencePreview } from "@/lib/import-reference-preview-c
 
 export async function resolveImportReferencePreview(
   file: CopilotPinnedFile,
-  analysis: AnalyzePlanClientResult
+  analysis: AnalyzePlanClientResult,
+  pdfPageNumber = 1
 ): Promise<string | undefined> {
   if (file.sourceType === "image") {
     return file.previewUrl;
@@ -13,7 +14,7 @@ export async function resolveImportReferencePreview(
 
   if (file.sourceType === "pdf") {
     try {
-      return await fetchPdfImportReferencePreview(file.base64);
+      return await fetchPdfImportReferencePreview(file.base64, pdfPageNumber);
     } catch {
       return undefined;
     }

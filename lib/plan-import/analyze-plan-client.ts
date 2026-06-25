@@ -5,6 +5,7 @@ export interface AnalyzePlanClientInput {
   fileBase64: string;
   fileName: string;
   sourceType: PlanImportSource;
+  pdfPageNumber?: number;
 }
 
 export interface AnalyzePlanClientResult extends PlanImportResult {
@@ -18,7 +19,8 @@ export async function analyzePlanDrawing(input: AnalyzePlanClientInput): Promise
     body: JSON.stringify({
       fileBase64: input.fileBase64,
       fileName: input.fileName,
-      sourceType: input.sourceType
+      sourceType: input.sourceType,
+      pdfPageNumber: input.pdfPageNumber
     })
   });
 

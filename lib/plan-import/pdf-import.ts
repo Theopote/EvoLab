@@ -470,7 +470,22 @@ export async function renderPdfPageToImage(
   }
 }
 
-export async function parsePdfToGraph(buffer: Buffer): Promise<RecognizedPlanGraph> {
+export async function getPdfPageCount(buffer: Buffer): Promise<number> {
+  const loadingTask = pdfjs.getDocument({
+    data: new Uint8Array(buffer),
+    verbosity: pdfjs.VerbosityLevel.ERRORS,
+    stopAtErrors: false
+  });
+
+  try {
+    const document = await loadingTask.promise;
+    return document.numPages;
+  } finally {
+    await loadingTask.destroy();
+  }
+}
+
+export async function parsePdfToGraph(buffer: Buffer, pageNumber?: number): Promise<RecognizedPlanGraph> {
   const loadingTask = pdfjs.getDocument({
     data: new Uint8Array(buffer),
     verbosity: pdfjs.VerbosityLevel.ERRORS,
@@ -480,8 +495,12 @@ export async function parsePdfToGraph(buffer: Buffer): Promise<RecognizedPlanGra
   try {
     const document = await loadingTask.promise;
     const levels: RecognizedLevelGraph[] = [];
+    const pageIndexes =
+      pageNumber !== undefined
+        ? [Math.min(Math.max(pageNumber, 1), document.numPages)]
+        : Array.from({ length: document.numPages }, (_, index) => index + 1);
 
-    for (let pageIndex = 1; pageIndex <= document.numPages; pageIndex += 1) {
+    for (const pageIndex of pageIndexes) {
       const page = await document.getPage(pageIndex);
       const level = await buildPdfLevel(page);
       page.cleanup();

@@ -169,10 +169,13 @@ export const WorkspaceMainViewport = memo(function WorkspaceMainViewport() {
       }
 
       if (result.openTrace) {
-        setWorkflowPhase("scheme");
-        setActiveTab(tabForSchemeSubview("plan"));
         useInteractionStore.getState().setActiveTool("trace");
+      } else {
+        useInteractionStore.getState().setActiveTool("select");
       }
+
+      setWorkflowPhase("scheme");
+      setActiveTab(tabForSchemeSubview("plan"));
     },
     [activeVersion, appendGeneratedVersions, setActiveTab, setWorkflowPhase]
   );

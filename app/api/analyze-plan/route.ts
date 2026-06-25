@@ -8,6 +8,7 @@ interface AnalyzePlanRequest {
   imageBase64?: string;
   fileName?: string;
   sourceType?: PlanImportSource;
+  pdfPageNumber?: number;
 }
 
 export async function POST(request: Request) {
@@ -19,7 +20,8 @@ export async function POST(request: Request) {
       fileBase64: body.fileBase64 ?? body.imageBase64,
       imageBase64: body.imageBase64,
       fileName: body.fileName,
-      sourceType: body.sourceType
+      sourceType: body.sourceType,
+      pdfPageNumber: body.pdfPageNumber
     });
 
     return NextResponse.json({
