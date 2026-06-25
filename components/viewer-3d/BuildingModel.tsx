@@ -2,7 +2,7 @@
 
 import * as THREE from "three";
 import { Text } from "@react-three/drei";
-import { useLayoutEffect, useMemo, useRef } from "react";
+import { useLayoutEffect, useMemo, useRef, memo } from "react";
 import type { FacadeEnvelope } from "@/lib/building-domain";
 import type { OpeningElement, PlanVersion, Point, Room, Wall } from "@/lib/project-types";
 import { FacadeEnvelopeOverlay } from "@/components/viewer-3d/FacadeEnvelopeOverlay";
@@ -40,17 +40,27 @@ const wallMaterialSpec: Record<Wall["type"], { color: string; opacity: number }>
   core: { color: "#a87534", opacity: 0.78 }
 };
 
-export function BuildingModel() {
+export const BuildingModel = memo(function BuildingModel() {
   const source = useBuildingModelSource();
 
   if (!source) {
     return null;
   }
 
-  return <BuildingModelContent key={`${source.geometryRevision}-${source.showFacadeOverlay}`} source={source} />;
+  return <BuildingModelContent source={source} />;
+});
+
+function buildingModelSourceEqual(previous: BuildingModelSource, next: BuildingModelSource) {
+  return (
+    previous.geometryRevision === next.geometryRevision &&
+    previous.showFacadeOverlay === next.showFacadeOverlay &&
+    previous.orientationDeg === next.orientationDeg &&
+    previous.facadeEnvelope === next.facadeEnvelope &&
+    previous.version === next.version
+  );
 }
 
-function BuildingModelContent({ source }: { source: BuildingModelSource }) {
+const BuildingModelContent = memo(function BuildingModelContent({ source }: { source: BuildingModelSource }) {
   const version = source.version;
   const explodeFactor = useInteractionStore((state) => state.explodeFactor);
   const outlineBounds = useMemo(() => getPolygonBounds(version.outline), [version.outline]);
@@ -73,7 +83,7 @@ function BuildingModelContent({ source }: { source: BuildingModelSource }) {
       ))}
     </group>
   );
-}
+}, (previous, next) => buildingModelSourceEqual(previous.source, next.source));
 
 function LevelStack({
   version,

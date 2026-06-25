@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { memo, useState } from "react";
 import { FloorPlan } from "@/components/floor-plan";
 import { ExplodeSlider } from "@/components/viewer-3d/ExplodeSlider";
 import { Scene } from "@/components/viewer-3d/Scene";
@@ -14,10 +14,25 @@ type ViewportMode = "split" | "alignment";
 interface SchemeSplitViewportProps {
   activeVersion?: PlanVersion;
   activeLevelId?: string;
+  geometryRevision: number;
   onLevelChange: (levelId: string) => void;
 }
 
-export function SchemeSplitViewport({
+function schemeSplitViewportPropsEqual(
+  previous: SchemeSplitViewportProps,
+  next: SchemeSplitViewportProps
+) {
+  return (
+    previous.activeLevelId === next.activeLevelId &&
+    previous.geometryRevision === next.geometryRevision &&
+    previous.onLevelChange === next.onLevelChange &&
+    previous.activeVersion?.id === next.activeVersion?.id &&
+    previous.activeVersion?.label === next.activeVersion?.label &&
+    previous.activeVersion?.levels.length === next.activeVersion?.levels.length
+  );
+}
+
+export const SchemeSplitViewport = memo(function SchemeSplitViewport({
   activeVersion,
   activeLevelId,
   onLevelChange
@@ -115,4 +130,4 @@ export function SchemeSplitViewport({
       )}
     </section>
   );
-}
+}, schemeSplitViewportPropsEqual);

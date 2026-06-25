@@ -54,7 +54,8 @@ export const WorkspaceMainViewport = memo(function WorkspaceMainViewport() {
     compareLevelId,
     outlineStale,
     isRelayouting,
-    relayoutError
+    relayoutError,
+    geometryRevision
   } = useProjectState((state) => ({
     project: state.project,
     activeVersion: state.activeVersion,
@@ -67,7 +68,8 @@ export const WorkspaceMainViewport = memo(function WorkspaceMainViewport() {
     compareLevelId: state.compareLevelId,
     outlineStale: state.outlineStale,
     isRelayouting: state.isRelayouting,
-    relayoutError: state.relayoutError
+    relayoutError: state.relayoutError,
+    geometryRevision: state.geometryRevision
   }));
 
   const { outline, outlineClosed, zoning } = useSiteState((state) => ({
@@ -412,6 +414,7 @@ export const WorkspaceMainViewport = memo(function WorkspaceMainViewport() {
       <SchemeSplitViewport
         activeVersion={activeVersion}
         activeLevelId={activeLevelId}
+        geometryRevision={geometryRevision}
         onLevelChange={setActiveLevel}
       />
       <PlanResultGrid
