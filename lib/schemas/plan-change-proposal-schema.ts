@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { CopilotFindingSchema } from "@/lib/schemas/copilot-schema";
+import { RoomSchema } from "@/lib/schemas/plan-version-schema";
 
 const DirectionSchema = z.enum(["north", "south", "east", "west"]);
 
@@ -139,6 +140,11 @@ export const AddProtrusionOperationSchema = BaseOperationSchema.extend({
   })
 });
 
+export const ReplaceRoomsOperationSchema = BaseOperationSchema.extend({
+  type: z.literal("replace_rooms"),
+  rooms: z.array(RoomSchema).min(1)
+});
+
 export const PlanOperationSchema = z.discriminatedUnion("type", [
   MoveCoreOperationSchema,
   ShiftRoomsOperationSchema,
@@ -152,7 +158,8 @@ export const PlanOperationSchema = z.discriminatedUnion("type", [
   ResizeOpeningOperationSchema,
   UpdateRoomPolygonOperationSchema,
   AddRoomOperationSchema,
-  AddProtrusionOperationSchema
+  AddProtrusionOperationSchema,
+  ReplaceRoomsOperationSchema
 ]);
 
 export const PlanChangeProposalSchema = z.object({

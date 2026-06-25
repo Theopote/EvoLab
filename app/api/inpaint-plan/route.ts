@@ -1,21 +1,20 @@
 import { NextResponse } from "next/server";
-import { normalizePlanVersion } from "@/lib/architecture-model";
 import { requestAnthropicTool } from "@/lib/anthropic-tool";
 import { normalizeImageInputs } from "@/lib/image-input";
-import { commitLevelRoomsToVersion, resolveLevelRooms } from "@/lib/level-rooms";
-import { createMockModifiedVersion } from "@/lib/mock-api";
-import { postProcessPlanVersion } from "@/lib/plan-postprocess";
-import { inpaintPlanPrompt } from "@/lib/prompts/inpaintPlanPrompt";
-import { enforceRegionLock } from "@/lib/region-lock";
-import { enforceOpeningConstraintsOnVersion } from "@/lib/opening-constraints";
-import { ModifyPlanToolInputSchema } from "@/lib/schemas/plan-version-schema";
+import { createMockInpaintProposal } from "@/lib/mock-api";
+import { buildPreviewVersion } from "@/lib/plan-change-engine";
+import { proposeInpaintChangesPrompt } from "@/lib/prompts/proposeInpaintChangesPrompt";
+import { ProposePlanChangesToolInputSchema } from "@/lib/schemas/plan-change-proposal-schema";
 import { StructuralConstraintSetSchema } from "@/lib/schemas/structural-constraints-schema";
 import {
   enrichUserRequestWithStructuralConstraints,
   validateStructuralConstraints,
   type StructuralConstraintSet
 } from "@/lib/structural-constraints";
-import type { CopilotFinding, PlanVersion } from "@/lib/project-types";
+import type { ModifyPlanResponse } from "@/lib/copilot-modify-types";
+import type { PlanVersion } from "@/lib/project-types";
+
+export type { ModifyPlanResponse as InpaintPlanResponse } from "@/lib/copilot-modify-types";
 
 interface InpaintPlanRequest {
   currentVersion?: PlanVersion;
@@ -23,39 +22,9 @@ interface InpaintPlanRequest {
   baseImage?: string;
   maskImage?: string;
   allowedRoomIds?: string[];
+  lockedElementIds?: string[];
   levelId?: string;
   structuralConstraints?: StructuralConstraintSet;
-}
-
-function mergeInpaintResult(
-  baseVersion: PlanVersion,
-  aiVersion: PlanVersion,
-  options: {
-    allowedRoomIds: Set<string>;
-    levelId?: string;
-  }
-) {
-  if (options.levelId) {
-    const level = baseVersion.levels.find((item) => item.id === options.levelId);
-
-    if (!level) {
-      return baseVersion;
-    }
-
-    const originalLevelRooms = resolveLevelRooms(level, baseVersion.standardFloorGroups);
-    const allowedOnLevel = new Set(
-      [...options.allowedRoomIds].filter((roomId) => originalLevelRooms.some((room) => room.id === roomId))
-    );
-    const aiLevelRooms = aiVersion.rooms.filter((room) => allowedOnLevel.has(room.id));
-    const mergedLevelRooms = enforceRegionLock(originalLevelRooms, aiLevelRooms, allowedOnLevel);
-
-    return commitLevelRoomsToVersion(baseVersion, options.levelId, mergedLevelRooms);
-  }
-
-  return {
-    ...aiVersion,
-    rooms: enforceRegionLock(baseVersion.rooms, aiVersion.rooms, options.allowedRoomIds)
-  };
 }
 
 export async function POST(request: Request) {
@@ -78,28 +47,34 @@ export async function POST(request: Request) {
   }
 
   const structuralConstraints = constraintResult?.success ? constraintResult.data : undefined;
+  const allowedRoomIds =
+    body.allowedRoomIds?.length ? body.allowedRoomIds : body.currentVersion.rooms.map((room) => room.id);
   const userRequest = enrichUserRequestWithStructuralConstraints(body.userRequest, structuralConstraints, {
     floorName: body.levelId
       ? body.currentVersion.levels.find((level) => level.id === body.levelId)?.name
       : undefined
   });
-  const fallback = createMockModifiedVersion(body.currentVersion, userRequest);
+  const fallback = createMockInpaintProposal(body.currentVersion, userRequest, allowedRoomIds);
 
   try {
-    const images = normalizeImageInputs([
-      body.baseImage ? { base64: body.baseImage, fileName: "plan-context.png" } : undefined,
-      body.maskImage ? { base64: body.maskImage, fileName: "inpaint-mask.png" } : undefined
-    ].filter(Boolean) as Array<{ base64: string; fileName: string }>);
+    const images = normalizeImageInputs(
+      [
+        body.baseImage ? { base64: body.baseImage, fileName: "plan-context.png" } : undefined,
+        body.maskImage ? { base64: body.maskImage, fileName: "inpaint-mask.png" } : undefined
+      ].filter(Boolean) as Array<{ base64: string; fileName: string }>
+    );
 
     if (images.length < 2) {
       return NextResponse.json({ error: "baseImage and maskImage are required." }, { status: 400 });
     }
 
-    const data = await requestAnthropicTool({
-      system: inpaintPlanPrompt,
+    const proposalData = await requestAnthropicTool({
+      system: proposeInpaintChangesPrompt,
       input: {
         currentVersion: body.currentVersion,
         userRequest,
+        allowedRoomIds,
+        lockedElementIds: body.lockedElementIds ?? [],
         structuralConstraints,
         levelId: body.levelId,
         hasBaseImage: true,
@@ -109,51 +84,45 @@ export async function POST(request: Request) {
         base64: image.base64,
         mediaType: image.mediaType
       })),
-      toolName: "inpaint_plan",
-      toolDescription: "Return a complete PlanVersion with localized edits inside the masked region.",
-      schema: ModifyPlanToolInputSchema,
+      toolName: "propose_plan_changes",
+      toolDescription:
+        "Return a structured PlanChangeProposal with localized geometry operations inside the masked region.",
+      schema: ProposePlanChangesToolInputSchema,
       maxTokens: 8192
     });
 
-    if (!data.version?.rooms || !Array.isArray(data.findings)) {
-      return NextResponse.json(fallback);
+    if (proposalData.proposal?.operations?.length) {
+      const version = buildPreviewVersion(body.currentVersion, proposalData.proposal, {
+        allowedRoomIds,
+        lockedElementIds: body.lockedElementIds
+      });
+
+      const structuralViolations = structuralConstraints
+        ? validateStructuralConstraints(
+            version,
+            body.levelId ?? body.currentVersion.levels[0]?.id ?? "level-01",
+            structuralConstraints
+          )
+        : [];
+
+      return NextResponse.json({
+        mode: "proposal",
+        proposal: proposalData.proposal,
+        version,
+        findings: proposalData.findings ?? [],
+        structuralViolations,
+        warning:
+          structuralViolations.length > 0
+            ? `Proposal preview applied, but structural constraints remain: ${structuralViolations.join(" ")}`
+            : undefined
+      } satisfies ModifyPlanResponse);
     }
-
-    const allowedIds = new Set(body.allowedRoomIds ?? []);
-    const aiVersion = normalizePlanVersion(data.version);
-    const mergedVersion = mergeInpaintResult(body.currentVersion, aiVersion, {
-      allowedRoomIds: allowedIds,
-      levelId: body.levelId
-    });
-    const openingEnforced = enforceOpeningConstraintsOnVersion(mergedVersion);
-    const processed = postProcessPlanVersion({
-      ...openingEnforced.version,
-      parentVersionId: data.version.parentVersionId ?? body.currentVersion.id,
-      metadata: {
-        ...openingEnforced.version.metadata,
-        repairs: [...(openingEnforced.version.metadata?.repairs ?? []), ...openingEnforced.repairs]
-      }
-    });
-
-    const structuralViolations = structuralConstraints
-      ? validateStructuralConstraints(processed, body.levelId ?? body.currentVersion.levels[0]?.id ?? "level-01", structuralConstraints)
-      : [];
-
-    return NextResponse.json({
-      ...data,
-      version: processed,
-      openingRepairs: openingEnforced.repairs,
-      structuralViolations,
-      warning:
-        structuralViolations.length > 0
-          ? `Inpaint applied, but structural constraints remain: ${structuralViolations.join(" ")}`
-          : undefined
-    });
-  } catch (error) {
-    return NextResponse.json({
-      ...fallback,
-      fallback: true,
-      warning: error instanceof Error ? error.message : "Failed to inpaint plan."
-    });
+  } catch {
+    // Fall through to deterministic mock proposal.
   }
+
+  return NextResponse.json({
+    ...fallback,
+    fallback: true
+  } satisfies ModifyPlanResponse);
 }
