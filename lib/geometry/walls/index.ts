@@ -9,6 +9,7 @@ export {
 export { findWallEdgeForWall, updateWallEndpoints } from "@/lib/geometry/walls/sync-rooms-from-walls";
 export { applyLevelWallDrag } from "@/lib/geometry/walls/apply-wall-drag";
 export { applyWallGeometryPatch } from "@/lib/geometry/walls/apply-wall-geometry";
+export { applyLevelWallMerge, applyLevelWallSplit, findMergeableWallIds } from "@/lib/geometry/walls/apply-wall-topology";
 export {
   canMergeWalls,
   mergeWalls,

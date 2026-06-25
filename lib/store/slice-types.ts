@@ -72,6 +72,8 @@ export type GeometrySliceActions = Pick<
   | "updateRoomGeometry"
   | "applyLevelRoomsGeometry"
   | "applyWallDragCommit"
+  | "mergeSelectedWallWith"
+  | "splitSelectedWallAt"
   | "splitActiveRoom"
   | "mergeActiveRoomWith"
   | "addParametricOpening"

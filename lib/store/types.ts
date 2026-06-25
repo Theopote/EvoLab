@@ -117,6 +117,8 @@ export interface EvoProjectStore {
   updateRoomGeometry: (roomId: string, patch: Partial<Room>) => void;
   applyLevelRoomsGeometry: (rooms: Room[]) => void;
   applyWallDragCommit: (input: WallDragCommitInput) => void;
+  mergeSelectedWallWith: (otherWallId: string) => void;
+  splitSelectedWallAt: (param: number) => void;
   splitActiveRoom: (input: {
     axis: "horizontal" | "vertical";
     splitRatio: number;

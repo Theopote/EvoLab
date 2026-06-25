@@ -2,6 +2,7 @@ import { produce } from "immer";
 import { normalizePlanVersion } from "@/lib/architecture-model";
 import { applyLevelWallDrag } from "@/lib/geometry/walls/apply-wall-drag";
 import { applyWallGeometryPatch } from "@/lib/geometry/walls/apply-wall-geometry";
+import { applyLevelWallMerge, applyLevelWallSplit } from "@/lib/geometry/walls/apply-wall-topology";
 import { findWallEdgeForWall } from "@/lib/geometry/walls/sync-rooms-from-walls";
 import { applyLevelRoomsToVersion, applyRoomPatchToVersion, resolveLevelOutline } from "@/lib/level-rooms";
 import { deriveWallGraph, findWallEdge } from "@/lib/wall-graph";
@@ -183,6 +184,133 @@ export const createGeometrySlice: StateCreator<EvoProjectStore, [], [], Geometry
           item.id === committedVersion.id ? committedVersion : item
         );
         state.project.activeVersionId = committedVersion.id;
+
+        if (previousVersion) {
+          recordGeometryVersionChangeSet(state, previousVersion, committedVersion);
+        }
+
+        bumpGeometryRevision(state);
+        refreshDerivedDraft(state);
+      })
+    ),
+  mergeSelectedWallWith: (otherWallId) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        const wallId = state.selectedWallId;
+
+        if (!wallId || !state.activeVersion || wallId === otherWallId) {
+          return;
+        }
+
+        if (isElementLocked(state, wallId) || isElementLocked(state, otherWallId)) {
+          return;
+        }
+
+        const normalized = normalizePlanVersion(state.activeVersion);
+        const level = getLevel(normalized, state.activeLevelId);
+
+        if (!level) {
+          return;
+        }
+
+        const wall = level.walls.find((candidate) => candidate.id === wallId);
+        const otherWall = level.walls.find((candidate) => candidate.id === otherWallId);
+
+        if (!wall || !otherWall) {
+          return;
+        }
+
+        const affectedRoomIds = new Set([...wall.roomIds, ...otherWall.roomIds]);
+
+        if ([...affectedRoomIds].some((roomId) => isElementLocked(state, roomId))) {
+          return;
+        }
+
+        const updatedLevel = applyLevelWallMerge(level, wallId, otherWallId);
+
+        if (!updatedLevel) {
+          return;
+        }
+
+        const nextLevels = normalized.levels.map((item) => (item.id === level.id ? updatedLevel : item));
+        const nextVersion = {
+          ...normalized,
+          levels: nextLevels,
+          building: {
+            ...normalized.building,
+            levels: nextLevels
+          }
+        };
+        const previousVersion = normalized;
+        const committedVersion = normalizePlanVersion(nextVersion);
+
+        state.project.versions = state.project.versions.map((item) =>
+          item.id === committedVersion.id ? committedVersion : item
+        );
+        state.project.activeVersionId = committedVersion.id;
+        state.selectedWallId = wallId;
+
+        if (previousVersion) {
+          recordGeometryVersionChangeSet(state, previousVersion, committedVersion);
+        }
+
+        bumpGeometryRevision(state);
+        refreshDerivedDraft(state);
+      })
+    ),
+  splitSelectedWallAt: (param) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        const wallId = state.selectedWallId;
+
+        if (!wallId || !state.activeVersion) {
+          return;
+        }
+
+        if (isElementLocked(state, wallId)) {
+          return;
+        }
+
+        const normalized = normalizePlanVersion(state.activeVersion);
+        const level = getLevel(normalized, state.activeLevelId);
+
+        if (!level) {
+          return;
+        }
+
+        const wall = level.walls.find((candidate) => candidate.id === wallId);
+
+        if (!wall) {
+          return;
+        }
+
+        if (wall.roomIds.some((roomId) => isElementLocked(state, roomId))) {
+          return;
+        }
+
+        const updatedLevel = applyLevelWallSplit(level, wallId, param);
+
+        if (!updatedLevel) {
+          return;
+        }
+
+        const nextLevels = normalized.levels.map((item) => (item.id === level.id ? updatedLevel : item));
+        const nextVersion = {
+          ...normalized,
+          levels: nextLevels,
+          building: {
+            ...normalized.building,
+            levels: nextLevels
+          }
+        };
+        const previousVersion = normalized;
+        const committedVersion = normalizePlanVersion(nextVersion);
+
+        state.project.versions = state.project.versions.map((item) =>
+          item.id === committedVersion.id ? committedVersion : item
+        );
+        state.project.activeVersionId = committedVersion.id;
+        state.selectedWallId = wallId;
 
         if (previousVersion) {
           recordGeometryVersionChangeSet(state, previousVersion, committedVersion);
