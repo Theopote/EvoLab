@@ -68,3 +68,24 @@ export async function downloadPresentationPptxViaApi(deck: PresentationDeck) {
   anchor.click();
   URL.revokeObjectURL(url);
 }
+
+export async function downloadPresentationPdfViaApi(deck: PresentationDeck) {
+  const response = await fetch("/api/export-presentation-pdf", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ deck })
+  });
+
+  if (!response.ok) {
+    const data = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error ?? `export-presentation-pdf failed with ${response.status}`);
+  }
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `${deck.projectName.replace(/\s+/g, "-").toLowerCase()}-presentation.pdf`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}

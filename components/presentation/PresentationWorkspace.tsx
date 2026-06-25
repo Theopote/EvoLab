@@ -6,13 +6,14 @@ import { PresentationCaptureCanvas } from "@/components/presentation/Presentatio
 import { attachModelCaptures } from "@/lib/presentation/merge-captures";
 import { MODEL_SLIDE_ID, extractModelCaptures } from "@/lib/presentation/model-slide";
 import { downloadPresentationHtml, downloadPresentationViaApi, renderPresentationHtml } from "@/lib/presentation/render-html";
-import { downloadPresentationPptxViaApi, prepareDeckForPptx } from "@/lib/presentation/render-pptx-client";
+import { downloadPresentationPdfViaApi, downloadPresentationPptxViaApi, prepareDeckForPptx } from "@/lib/presentation/render-pptx-client";
+import { getPresentationSession } from "@/lib/store/presentation-slice";
 import { buildPresentationDeck } from "@/lib/presentation/storyboard";
 import { presentationTemplates } from "@/lib/presentation/templates";
 import type { PresentationDeck, PresentationTemplateId } from "@/lib/presentation/types";
 import { usePresentationCaptureStore } from "@/lib/presentation-capture-store";
 import { usePresentationUiStore } from "@/lib/presentation-ui-store";
-import { useProjectState, useSiteState } from "@/lib/project-store";
+import { usePresentationActions, usePresentationState, useProjectState, useSiteState } from "@/lib/project-store";
 
 export function PresentationWorkspace() {
   const { project, activeVersion, brief, compareVersionIds } = useProjectState((state) => ({
@@ -35,14 +36,24 @@ export function PresentationWorkspace() {
   const resetCapture = usePresentationCaptureStore((state) => state.resetCapture);
   const consumeFocusSlide = usePresentationUiStore((state) => state.consumeFocusSlide);
   const focusSlideId = usePresentationUiStore((state) => state.focusSlideId);
+  const { presentationSessions } = usePresentationState();
+  const {
+    savePresentationSession,
+    clearPresentationSession,
+    setPresentationActiveSlide,
+    setPresentationTemplateId
+  } = usePresentationActions();
 
-  const [deck, setDeck] = useState<PresentationDeck | undefined>(undefined);
-  const [templateId, setTemplateId] = useState<PresentationTemplateId>("classic");
-  const [activeSlide, setActiveSlide] = useState(0);
+  const versionId = activeVersion?.id;
+  const session = getPresentationSession(presentationSessions, versionId);
+  const templateId = session?.templateId ?? "classic";
+  const activeSlide = session?.activeSlideIndex ?? 0;
+
   const [isGenerating, setIsGenerating] = useState(false);
   const [isBuildingFullDeck, setIsBuildingFullDeck] = useState(false);
   const [isExportingPptx, setIsExportingPptx] = useState(false);
   const [isExportingServerHtml, setIsExportingServerHtml] = useState(false);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   const localDeck = useMemo(() => {
@@ -62,9 +73,34 @@ export function PresentationWorkspace() {
     });
   }, [activeVersion, brief, buildableEnvelope, compareVersionIds, environmentSurrogate, outline, project, siteContext]);
 
-  const currentDeck = deck ?? localDeck;
+  const currentDeck = session?.deck ?? localDeck;
   const exportDeck = currentDeck ? { ...currentDeck, templateId } : undefined;
   const slide = currentDeck?.slides[activeSlide];
+  const hasPersistedDeck = Boolean(session?.deck);
+
+  function persistDeck(
+    nextDeck: PresentationDeck,
+    patch?: { activeSlideIndex?: number; templateId?: PresentationTemplateId }
+  ) {
+    if (!versionId) {
+      return;
+    }
+
+    savePresentationSession(versionId, {
+      deck: nextDeck,
+      templateId: patch?.templateId ?? templateId,
+      activeSlideIndex: patch?.activeSlideIndex ?? activeSlide
+    });
+  }
+
+  function resetDeckFromModel() {
+    if (!versionId) {
+      return;
+    }
+
+    clearPresentationSession(versionId);
+    setNotice("Reset deck to current model outline.");
+  }
 
   useEffect(() => {
     if (!focusSlideId || !currentDeck) {
@@ -74,30 +110,37 @@ export function PresentationWorkspace() {
     const index = currentDeck.slides.findIndex((item) => item.id === focusSlideId);
 
     if (index >= 0) {
-      setActiveSlide(index);
+      if (versionId) {
+        if (session?.deck) {
+          setPresentationActiveSlide(versionId, index);
+        } else if (localDeck) {
+          persistDeck(localDeck, { activeSlideIndex: index });
+        }
+      }
     }
 
     consumeFocusSlide();
-  }, [consumeFocusSlide, currentDeck, focusSlideId]);
+  }, [consumeFocusSlide, currentDeck, focusSlideId, localDeck, session?.deck, setPresentationActiveSlide, versionId]);
 
   useEffect(() => {
     if (captureStatus !== "done" || captureImages.length === 0) {
       return;
     }
 
-    setDeck((previous) => {
-      const base = previous ?? localDeck;
+    const base = session?.deck ?? localDeck;
 
-      if (!base) {
-        return previous;
-      }
+    if (!base) {
+      return;
+    }
 
-      return attachModelCaptures(base, captureImages);
+    const nextDeck = attachModelCaptures(base, captureImages);
+    persistDeck(nextDeck, {
+      activeSlideIndex: nextDeck.slides.findIndex((item) => item.id === MODEL_SLIDE_ID)
     });
 
-    const modelSlideIndex = (deck ?? localDeck)?.slides.findIndex((item) => item.id === MODEL_SLIDE_ID) ?? -1;
-    if (modelSlideIndex >= 0) {
-      setActiveSlide(modelSlideIndex);
+    const modelSlideIndex = nextDeck.slides.findIndex((item) => item.id === MODEL_SLIDE_ID);
+    if (modelSlideIndex >= 0 && versionId && session?.deck) {
+      setPresentationActiveSlide(versionId, modelSlideIndex);
     }
 
     setNotice(
@@ -107,7 +150,7 @@ export function PresentationWorkspace() {
     );
     setIsBuildingFullDeck(false);
     resetCapture();
-  }, [captureImages, captureStatus, deck, isBuildingFullDeck, localDeck, resetCapture]);
+  }, [captureImages, captureStatus, isBuildingFullDeck, localDeck, resetCapture, session?.deck, versionId]);
 
   useEffect(() => {
     if (captureStatus === "error" && captureError) {
@@ -150,14 +193,13 @@ export function PresentationWorkspace() {
       throw new Error("No presentation deck returned.");
     }
 
-    const preservedCaptures = extractModelCaptures(deck ?? localDeck);
+    const preservedCaptures = extractModelCaptures(session?.deck ?? localDeck);
     const mergedDeck = {
       ...(preservedCaptures.length ? attachModelCaptures(data.deck, preservedCaptures) : data.deck),
       templateId
     };
 
-    setDeck(mergedDeck);
-    setActiveSlide(0);
+    persistDeck(mergedDeck, { activeSlideIndex: 0 });
     setNotice(
       data.warning
         ? data.warning
@@ -182,7 +224,7 @@ export function PresentationWorkspace() {
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Failed to generate storyboard.");
       if (localDeck) {
-        setDeck(localDeck);
+        persistDeck(localDeck, { activeSlideIndex: 0 });
       }
     } finally {
       setIsGenerating(false);
@@ -205,7 +247,7 @@ export function PresentationWorkspace() {
       setIsBuildingFullDeck(false);
       setNotice(error instanceof Error ? error.message : "Failed to build full deck.");
       if (localDeck) {
-        setDeck(localDeck);
+        persistDeck(localDeck, { activeSlideIndex: 0 });
       }
     } finally {
       setIsGenerating(false);
@@ -235,6 +277,24 @@ export function PresentationWorkspace() {
       setNotice(error instanceof Error ? error.message : "Server HTML export failed.");
     } finally {
       setIsExportingServerHtml(false);
+    }
+  }
+
+  async function exportServerPdf() {
+    if (!exportDeck) {
+      return;
+    }
+
+    setIsExportingPdf(true);
+    setNotice(null);
+
+    try {
+      await downloadPresentationPdfViaApi(exportDeck);
+      setNotice("Presentation PDF downloaded via server export API.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Server PDF export failed.");
+    } finally {
+      setIsExportingPdf(false);
     }
   }
 
@@ -302,6 +362,7 @@ export function PresentationWorkspace() {
             <h2 className="text-base font-semibold text-white">Automated Presentation</h2>
             <p className="mt-1 text-xs text-muted">
               Storyboard, evolution narrative, diagrams, cost ROM, 3D captures, and AI per-slide copy.
+              {hasPersistedDeck ? " Saved for this scheme in session storage." : ""}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -312,7 +373,21 @@ export function PresentationWorkspace() {
               className="h-9 rounded border border-line bg-[#0b1118] px-2 text-xs text-slate-100"
               id="presentation-template"
               value={templateId}
-              onChange={(event) => setTemplateId(event.target.value as PresentationTemplateId)}
+              onChange={(event) => {
+                const nextTemplate = event.target.value as PresentationTemplateId;
+                if (!versionId) {
+                  return;
+                }
+
+                if (session?.deck) {
+                  setPresentationTemplateId(versionId, nextTemplate);
+                  return;
+                }
+
+                if (localDeck) {
+                  persistDeck(localDeck, { templateId: nextTemplate });
+                }
+              }}
             >
               {Object.values(presentationTemplates).map((template) => (
                 <option key={template.id} value={template.id}>
@@ -381,13 +456,30 @@ export function PresentationWorkspace() {
               Export PPTX
             </button>
             <button
-              className="flex h-9 items-center gap-2 rounded bg-accent px-3 text-xs font-medium text-[#061014]"
+              className="flex h-9 items-center gap-2 rounded border border-line px-3 text-xs text-slate-100 hover:border-accent/50"
+              type="button"
+              onClick={resetDeckFromModel}
+              disabled={!hasPersistedDeck}
+            >
+              Reset deck
+            </button>
+            <button
+              className="flex h-9 items-center gap-2 rounded border border-line px-3 text-xs text-slate-100 hover:border-accent/50"
+              type="button"
+              onClick={() => void exportServerPdf()}
+              disabled={!currentDeck || isExportingPdf}
+            >
+              {isExportingPdf ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
+              Export PDF
+            </button>
+            <button
+              className="flex h-9 items-center gap-2 rounded border border-line px-3 text-xs text-slate-100 hover:border-accent/50"
               type="button"
               onClick={printPdf}
               disabled={!currentDeck}
             >
               <FileText className="h-3.5 w-3.5" />
-              Print / PDF
+              Print
             </button>
           </div>
         </div>
@@ -408,7 +500,20 @@ export function PresentationWorkspace() {
                   index === activeSlide ? "border-accent/60 bg-accent/10 text-accent" : "border-line text-muted"
                 }`}
                 type="button"
-                onClick={() => setActiveSlide(index)}
+                onClick={() => {
+                  if (!versionId) {
+                    return;
+                  }
+
+                  if (session?.deck) {
+                    setPresentationActiveSlide(versionId, index);
+                    return;
+                  }
+
+                  if (localDeck) {
+                    persistDeck(localDeck, { activeSlideIndex: index });
+                  }
+                }}
               >
                 <div className="font-medium text-slate-100">{item.title}</div>
                 <div className="mt-1 capitalize">{item.kind}</div>

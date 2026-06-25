@@ -6,6 +6,9 @@ import {
   pickAnalysisState,
   pickExportActions,
   pickGeometryActions,
+  pickPresentationActions,
+  pickPresentationSlice,
+  pickPresentationState,
   pickProjectActions,
   pickProjectSlice,
   pickProjectState,
@@ -26,6 +29,8 @@ import type {
   AnalysisSlice,
   ExportSliceActions,
   GeometrySliceActions,
+  PresentationSlice,
+  PresentationSliceActions,
   ProjectSlice,
   ProjectSliceActions,
   ReviewSlice,
@@ -81,12 +86,18 @@ export const useReviewActions = createActionsHook(pickReviewActions);
 
 export const useExportActions = createActionsHook<ExportSliceActions>(pickExportActions);
 
+export const usePresentationSlice = createSliceHook<PresentationSlice>(pickPresentationSlice);
+export const usePresentationState = createSliceHook(pickPresentationState);
+export const usePresentationActions = createActionsHook<PresentationSliceActions>(pickPresentationActions);
+
 /** Root workspace shell: intentionally broad, but scoped to workspace fields only. */
 export const useWorkspaceSlice = createSliceHook(pickWorkspaceSlice);
 
 export {
   pickAnalysisSlice,
   pickAnalysisState,
+  pickPresentationSlice,
+  pickPresentationState,
   pickProjectSlice,
   pickProjectState,
   pickReviewSlice,

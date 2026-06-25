@@ -87,6 +87,16 @@ export type ExportSliceActions = Pick<
   "openModelForVersion" | "refineVersion" | "returnToPlanGeneration"
 >;
 
+export type PresentationSliceActions = Pick<
+  EvoProjectStore,
+  | "savePresentationSession"
+  | "clearPresentationSession"
+  | "setPresentationActiveSlide"
+  | "setPresentationTemplateId"
+>;
+
+export type PresentationSliceState = Pick<EvoProjectStore, "presentationSessions">;
+
 export type ProjectSliceState = Pick<
   EvoProjectStore,
   | "project"
@@ -158,6 +168,7 @@ export type SelectionSlice = SelectionSliceState & SelectionSliceActions;
 export type SiteSlice = SiteSliceState & SiteSliceActions;
 export type AnalysisSlice = AnalysisSliceState & AnalysisSliceActions;
 export type ReviewSlice = ReviewSliceState & ReviewSliceActions;
+export type PresentationSlice = PresentationSliceState & PresentationSliceActions;
 export type GeometrySlice = GeometrySliceActions;
 export type ExportSlice = ExportSliceActions;
 

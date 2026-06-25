@@ -5,6 +5,9 @@ import type {
   AnalysisSliceState,
   ExportSliceActions,
   GeometrySliceActions,
+  PresentationSlice,
+  PresentationSliceActions,
+  PresentationSliceState,
   ProjectSlice,
   ProjectSliceActions,
   ProjectSliceState,
@@ -236,6 +239,28 @@ export function pickExportActions(state: EvoProjectStore): ExportSliceActions {
     openModelForVersion: state.openModelForVersion,
     refineVersion: state.refineVersion,
     returnToPlanGeneration: state.returnToPlanGeneration
+  };
+}
+
+export function pickPresentationState(state: EvoProjectStore): PresentationSliceState {
+  return {
+    presentationSessions: state.presentationSessions
+  };
+}
+
+export function pickPresentationActions(state: EvoProjectStore): PresentationSliceActions {
+  return {
+    savePresentationSession: state.savePresentationSession,
+    clearPresentationSession: state.clearPresentationSession,
+    setPresentationActiveSlide: state.setPresentationActiveSlide,
+    setPresentationTemplateId: state.setPresentationTemplateId
+  };
+}
+
+export function pickPresentationSlice(state: EvoProjectStore): PresentationSlice {
+  return {
+    ...pickPresentationState(state),
+    ...pickPresentationActions(state)
   };
 }
 

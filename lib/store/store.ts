@@ -5,6 +5,7 @@ import { createAnalysisSlice } from "@/lib/store/analysis-slice";
 import { createExportSlice } from "@/lib/store/export-slice";
 import { createGeometrySlice } from "@/lib/store/geometry-slice";
 import { createInitialState } from "@/lib/store/initial-state";
+import { createPresentationSlice } from "@/lib/store/presentation-slice";
 import { createProjectSlice } from "@/lib/store/project-slice";
 import { createReviewSlice } from "@/lib/store/review-slice";
 import { createSelectionSlice } from "@/lib/store/selection-slice";
@@ -20,7 +21,8 @@ export const useEvoProjectStore = create<EvoProjectStore>()((...args) =>
     ...createAnalysisSlice(...args),
     ...createReviewSlice(...args),
     ...createGeometrySlice(...args),
-    ...createExportSlice(...args)
+    ...createExportSlice(...args),
+    ...createPresentationSlice(...args)
   }) satisfies EvoProjectStore
 );
 

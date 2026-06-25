@@ -23,6 +23,8 @@ import type {
 } from "@/lib/project-types";
 import type { ComplianceItem, QuantityResult } from "@/lib/quantity-engine";
 import type { PlanScopeKind } from "@/lib/plan-scope";
+import type { PresentationSessionMap } from "@/lib/presentation/session-types";
+import type { PresentationDeck, PresentationTemplateId } from "@/lib/presentation/types";
 import type { WorkflowPhase, WorkflowPhaseId } from "@/lib/workflow-phases";
 
 export type SelectionType = "none" | "room" | "wall" | "opening";
@@ -78,6 +80,7 @@ export interface EvoProjectStore {
   relayoutError: string | null;
   compareLevelId?: string;
   selectedChangeSetId?: string;
+  presentationSessions: PresentationSessionMap;
   setActiveTab: (tab: WorkspaceTab) => void;
   setOutline: (outline: Point[]) => void;
   setOutlineClosed: (closed: boolean) => void;
@@ -175,6 +178,17 @@ export interface EvoProjectStore {
   openModelForVersion: (version: PlanVersion) => void;
   refineVersion: (version: PlanVersion) => void;
   returnToPlanGeneration: () => void;
+  savePresentationSession: (
+    versionId: string,
+    patch: {
+      deck?: PresentationDeck;
+      templateId?: PresentationTemplateId;
+      activeSlideIndex?: number;
+    }
+  ) => void;
+  clearPresentationSession: (versionId: string) => void;
+  setPresentationActiveSlide: (versionId: string, activeSlideIndex: number) => void;
+  setPresentationTemplateId: (versionId: string, templateId: PresentationTemplateId) => void;
 }
 
 export type EvoProjectStoreData = Omit<
