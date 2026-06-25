@@ -2,7 +2,7 @@
 
 import { useEffect, useReducer } from "react";
 import { useInteractionStore } from "@/lib/interaction-store";
-import { useEvoProjectStore } from "@/lib/project-store";
+import { useEvoProjectStore, useProjectState } from "@/lib/project-store";
 import type { PlanVersion } from "@/lib/project-types";
 import type { FacadeEnvelope } from "@/lib/building-domain";
 
@@ -55,5 +55,5 @@ export function useBuildingModelSource(): BuildingModelSource | null {
 }
 
 export function useHasBuildingModel() {
-  return useEvoProjectStore((state) => Boolean(state.activeVersion));
+  return useProjectState((state) => Boolean(state.activeVersion));
 }

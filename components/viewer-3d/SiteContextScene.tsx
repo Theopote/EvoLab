@@ -2,7 +2,7 @@
 
 import * as THREE from "three";
 import { useMemo } from "react";
-import { useEvoProjectStore } from "@/lib/project-store";
+import { useSiteState } from "@/lib/project-store";
 
 function polygonShape(points: Array<[number, number]>) {
   const shape = new THREE.Shape();
@@ -18,7 +18,7 @@ function polygonShape(points: Array<[number, number]>) {
 }
 
 export function SiteEnvelopeMesh() {
-  const buildableEnvelope = useEvoProjectStore((state) => state.buildableEnvelope);
+  const buildableEnvelope = useSiteState((state) => state.buildableEnvelope);
 
   const geometry = useMemo(() => {
     if (!buildableEnvelope?.valid || buildableEnvelope.footprint.length < 3) {
@@ -62,8 +62,10 @@ export function SiteEnvelopeMesh() {
 }
 
 export function SiteContextBuildings() {
-  const siteContext = useEvoProjectStore((state) => state.siteContext);
-  const showSiteContextLayer = useEvoProjectStore((state) => state.showSiteContextLayer);
+  const { siteContext, showSiteContextLayer } = useSiteState((state) => ({
+    siteContext: state.siteContext,
+    showSiteContextLayer: state.showSiteContextLayer
+  }));
 
   if (!showSiteContextLayer || !siteContext?.buildings.length) {
     return null;

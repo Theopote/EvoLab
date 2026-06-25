@@ -238,6 +238,7 @@ export function pickWorkspaceSlice(state: EvoProjectStore) {
     ...pickSiteSlice(state),
     ...pickAnalysisSlice(state),
     ...pickReviewSlice(state),
-    ...pickExportActions(state)
+    ...pickExportActions(state),
+    ...pickSelectionActions(state)
   };
 }

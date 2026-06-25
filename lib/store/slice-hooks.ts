@@ -38,7 +38,7 @@ function createSliceHook<TSlice>(pick: (state: import("@/lib/store/types").EvoPr
   function useSlice<T>(selector: (slice: TSlice) => T): T;
   function useSlice<T>(selector?: (slice: TSlice) => T) {
     if (!selector) {
-      return useEvoProjectStore(useShallow(pick)) as T;
+      return useEvoProjectStore(useShallow(pick)) as unknown as T;
     }
 
     return useEvoProjectStore(useShallow((state) => selector(pick(state))));

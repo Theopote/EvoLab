@@ -1,6 +1,10 @@
 "use client";
 
 import { useEffect } from "react";
+import { OpeningInspector } from "@/components/inspector/OpeningInspector";
+import { ProjectInspector } from "@/components/inspector/ProjectInspector";
+import { RoomInspector } from "@/components/inspector/RoomInspector";
+import { WallInspector } from "@/components/inspector/WallInspector";
 import { useSelectionSlice } from "@/lib/project-store";
 
 export function InspectorPanel() {
