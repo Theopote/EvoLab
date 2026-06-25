@@ -5,7 +5,7 @@ import { FloorPlan } from "@/components/floor-plan";
 import { ExplodeSlider } from "@/components/viewer-3d/ExplodeSlider";
 import { Scene } from "@/components/viewer-3d/Scene";
 import { VerticalAlignmentPanel } from "@/components/workflow/VerticalAlignmentPanel";
-import { useEvoProject } from "@/lib/project-store";
+import { useProjectActions } from "@/lib/project-store";
 import { isLevelLinkedToStandardGroup, standardFloorGroupLabel } from "@/lib/standard-floor-group";
 import type { PlanVersion } from "@/lib/project-types";
 
@@ -23,7 +23,7 @@ export function SchemeSplitViewport({
   onLevelChange
 }: SchemeSplitViewportProps) {
   const [viewportMode, setViewportMode] = useState<ViewportMode>("split");
-  const setLevelTransferFloor = useEvoProject((state) => state.setLevelTransferFloor);
+  const { setLevelTransferFloor } = useProjectActions();
 
   if (!activeVersion) {
     return (

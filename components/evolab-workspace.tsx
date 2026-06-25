@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useShallow } from "zustand/react/shallow";
 import { BottomPanel } from "@/components/bottom-panel";
 import { CopilotConsole } from "@/components/copilot/CopilotConsole";
 import { DiagramCanvas } from "@/components/diagrams/DiagramCanvas";
@@ -38,7 +37,7 @@ import { PlanResultGrid } from "@/components/plan-editor/PlanResultGrid";
 import { useCopilotTimelineStore } from "@/lib/copilot-timeline-store";
 import { Scene } from "@/components/viewer-3d/Scene";
 import { tabForDeliverSubview, tabForSchemeSubview } from "@/lib/workflow-phases";
-import { useEvoProject } from "@/lib/project-store";
+import { useWorkspaceSlice } from "@/lib/project-store";
 import { useInteractionStore } from "@/lib/interaction-store";
 import { useImportSessionStore } from "@/lib/import-session-store";
 import type { ImportWizardResult } from "@/components/workflow/import/ImportWizard";
@@ -100,65 +99,7 @@ export function EvoLabWorkspace() {
     openModelForVersion,
     refineVersion,
     returnToPlanGeneration
-  } = useEvoProject(
-    useShallow((state) => ({
-      project: state.project,
-      activeVersion: state.activeVersion,
-      activeLevelId: state.activeLevelId,
-      outline: state.outline,
-      outlineClosed: state.outlineClosed,
-      brief: state.brief,
-      zoning: state.zoning,
-      siteContext: state.siteContext,
-      buildableEnvelope: state.buildableEnvelope,
-      environmentSurrogate: state.environmentSurrogate,
-      activeTab: state.activeTab,
-      workflowPhase: state.workflowPhase,
-      compareVersionIds: state.compareVersionIds,
-      compareModeOpen: state.compareModeOpen,
-      selectedProposalId: state.selectedProposalId,
-      activeAnalysisLayers: state.activeAnalysisLayers,
-      activeMepLayers: state.activeMepLayers,
-      isGeneratingMep: state.isGeneratingMep,
-      mepError: state.mepError,
-      quantities: state.quantities,
-      activeSchedule: state.activeSchedule,
-      complianceItems: state.complianceItems,
-      outlineStale: state.outlineStale,
-      isRelayouting: state.isRelayouting,
-      relayoutError: state.relayoutError,
-      compareLevelId: state.compareLevelId,
-      selectedChangeSetId: state.selectedChangeSetId,
-      setActiveTab: state.setActiveTab,
-      setWorkflowPhase: state.setWorkflowPhase,
-      toggleCompareVersion: state.toggleCompareVersion,
-      setCompareModeOpen: state.setCompareModeOpen,
-      selectCopilotProposal: state.selectCopilotProposal,
-      updateStructuralSystem: state.updateStructuralSystem,
-      updateFacadeEnvelope: state.updateFacadeEnvelope,
-      updateFacadeZone: state.updateFacadeZone,
-      updateFurnitureItem: state.updateFurnitureItem,
-      setActiveLevel: state.setActiveLevel,
-      setOutline: state.setOutline,
-      setOutlineClosed: state.setOutlineClosed,
-      updateBrief: state.updateBrief,
-      setActiveAnalysisLayers: state.setActiveAnalysisLayers,
-      setActiveMepLayers: state.setActiveMepLayers,
-      appendGeneratedVersions: state.appendGeneratedVersions,
-      setActiveVersion: state.setActiveVersion,
-      updateActiveVersion: state.updateActiveVersion,
-      relayoutActiveVersion: state.relayoutActiveVersion,
-      setCompareLevel: state.setCompareLevel,
-      selectChangeSet: state.selectChangeSet,
-      approveChangeSet: state.approveChangeSet,
-      rejectChangeSet: state.rejectChangeSet,
-      toggleElementLock: state.toggleElementLock,
-      generateMep: state.generateMep,
-      openModelForVersion: state.openModelForVersion,
-      refineVersion: state.refineVersion,
-      returnToPlanGeneration: state.returnToPlanGeneration
-    }))
-  );
+  } = useWorkspaceSlice();
   const [reportEditorOpen, setReportEditorOpen] = useState(false);
 
   return (

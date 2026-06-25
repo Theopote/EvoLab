@@ -1,19 +1,18 @@
 "use client";
 
-import { useShallow } from "zustand/react/shallow";
-import { useEvoProject } from "@/lib/project-store";
+import { useAnalysisState, useProjectState } from "@/lib/project-store";
 
 export function ProjectInspector() {
-  const { project, activeVersion, quantities, levelQuantities, activeSchedule, complianceItems } = useEvoProject(
-    useShallow((state) => ({
-      project: state.project,
-      activeVersion: state.activeVersion,
-      quantities: state.quantities,
-      levelQuantities: state.levelQuantities,
-      activeSchedule: state.activeSchedule,
-      complianceItems: state.complianceItems
-    }))
-  );
+  const { project, activeVersion } = useProjectState((state) => ({
+    project: state.project,
+    activeVersion: state.activeVersion
+  }));
+  const { quantities, levelQuantities, activeSchedule, complianceItems } = useAnalysisState((state) => ({
+    quantities: state.quantities,
+    levelQuantities: state.levelQuantities,
+    activeSchedule: state.activeSchedule,
+    complianceItems: state.complianceItems
+  }));
   const domain = project.domain;
   const roomSchedule = activeSchedule?.tables.find((table) => table.kind === "room");
   const recentChange = domain.changeSets[0];

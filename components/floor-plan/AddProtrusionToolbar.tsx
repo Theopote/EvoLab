@@ -8,7 +8,7 @@ import type { CopilotFinding } from "@/lib/project-types";
 import type { PlanVersion } from "@/lib/project-types";
 import { useLocalFormEditStore } from "@/lib/local-form-edit-store";
 import { buildProposalFromVersionPreview } from "@/lib/proposal-from-preview";
-import { useEvoProject } from "@/lib/project-store";
+import { useReviewState } from "@/lib/project-store";
 
 interface AddProtrusionToolbarProps {
   version?: PlanVersion;
@@ -16,7 +16,7 @@ interface AddProtrusionToolbarProps {
 }
 
 export function AddProtrusionToolbar({ version, levelId }: AddProtrusionToolbarProps) {
-  const scoringConfig = useEvoProject((state) => state.project.domain.scoringConfig);
+  const scoringConfig = useReviewState((state) => state.scoringConfig);
   const protrusionPlacement = useLocalFormEditStore((state) => state.protrusionPlacement);
   const protrusionPrompt = useLocalFormEditStore((state) => state.protrusionPrompt);
   const protrusionWidthM = useLocalFormEditStore((state) => state.protrusionWidthM);

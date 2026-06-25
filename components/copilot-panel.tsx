@@ -5,8 +5,7 @@ import { useMemo, useState } from "react";
 import { PlanChangeProposalPanel } from "@/components/copilot/PlanChangeProposalPanel";
 import { useComplianceFixAction } from "@/components/copilot/useComplianceFixAction";
 import type { ModifyPlanResponse } from "@/lib/copilot-modify-types";
-import { useEvoProject } from "@/lib/project-store";
-import { useShallow } from "zustand/react/shallow";
+import { useReviewSlice } from "@/lib/project-store";
 import { normalizeWorkspaceTab } from "@/lib/workflow-navigation";
 import type {
   CopilotAction,
@@ -58,17 +57,15 @@ export function CopilotPanel({
     dismissCopilotProposal,
     addCopilotProposalComment,
     scoringConfig
-  } = useEvoProject(
-    useShallow((state) => ({
-      lockedElementIds: state.project.domain.lockedElementIds,
-      copilotProposals: state.project.domain.copilotProposals,
-      registerCopilotProposal: state.registerCopilotProposal,
-      applyCopilotProposal: state.applyCopilotProposal,
-      dismissCopilotProposal: state.dismissCopilotProposal,
-      addCopilotProposalComment: state.addCopilotProposalComment,
-      scoringConfig: state.project.domain.scoringConfig
-    }))
-  );
+  } = useReviewSlice((state) => ({
+    lockedElementIds: state.lockedElementIds,
+    copilotProposals: state.copilotProposals,
+    registerCopilotProposal: state.registerCopilotProposal,
+    applyCopilotProposal: state.applyCopilotProposal,
+    dismissCopilotProposal: state.dismissCopilotProposal,
+    addCopilotProposalComment: state.addCopilotProposalComment,
+    scoringConfig: state.scoringConfig
+  }));
   const {
     handleComplianceAction,
     isComplianceFixing

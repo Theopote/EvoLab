@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useShallow } from "zustand/react/shallow";
 import {
   findOpeningWall,
   wallLength
@@ -14,18 +13,14 @@ import {
   openingSillHeightRange,
   validateOpeningDraft
 } from "@/lib/opening-wall-utils";
-import { useEvoProject } from "@/lib/project-store";
+import { useGeometryActions, useProjectState, useReviewState, useSelectionState } from "@/lib/project-store";
 import type { Point } from "@/lib/project-types";
 
 export function OpeningInspector() {
-  const { selectedOpening, activeLevel, lockedElementIds, updateOpening } = useEvoProject(
-    useShallow((state) => ({
-      selectedOpening: state.selectedOpening,
-      activeLevel: state.activeLevel,
-      lockedElementIds: state.project.domain.lockedElementIds,
-      updateOpening: state.updateOpening
-    }))
-  );
+  const selectedOpening = useSelectionState((state) => state.selectedOpening);
+  const activeLevel = useProjectState((state) => state.activeLevel);
+  const lockedElementIds = useReviewState((state) => state.lockedElementIds);
+  const { updateOpening } = useGeometryActions();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const idleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastCommittedRef = useRef<string>("");

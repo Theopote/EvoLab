@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useShallow } from "zustand/react/shallow";
 import type { PlanVersion, Room } from "@/lib/project-types";
 import { CoreSymbolLayer } from "@/components/floor-plan/layers/CoreSymbolLayer";
 import { GridLayer } from "@/components/floor-plan/layers/GridLayer";
@@ -25,7 +24,7 @@ import { WallLayer } from "@/components/floor-plan/layers/WallLayer";
 import { getViewBox } from "@/components/floor-plan/floor-plan-utils";
 import { parseViewBox, formatViewBox } from "@/lib/comparison-viewport";
 import { getResolvedLevel } from "@/lib/level-rooms";
-import { useEvoProject } from "@/lib/project-store";
+import { useSelectionEditorSlice } from "@/lib/project-store";
 import { useInteractionStore } from "@/lib/interaction-store";
 import { createSetbackBoundary } from "@/lib/polygon-offset";
 import { useEditPreviewStore } from "@/lib/edit-preview-store";
@@ -96,24 +95,7 @@ export function FloorPlanCanvas({
     addParametricOpening,
     updateOpening,
     lockedElementIds
-  } = useEvoProject(
-    useShallow((state) => ({
-      selectedRoomId: state.selectedRoomId,
-      selectedWallId: state.selectedWallId,
-      selectedOpeningId: state.selectedOpeningId,
-      activeLevelId: state.activeLevelId,
-      selectRoom: state.selectRoom,
-      selectWall: state.selectWall,
-      selectOpening: state.selectOpening,
-      clearSelection: state.clearSelection,
-      applyLevelRoomsGeometry: state.applyLevelRoomsGeometry,
-      splitActiveRoom: state.splitActiveRoom,
-      mergeActiveRoomWith: state.mergeActiveRoomWith,
-      addParametricOpening: state.addParametricOpening,
-      updateOpening: state.updateOpening,
-      lockedElementIds: state.project.domain.lockedElementIds
-    }))
-  );
+  } = useSelectionEditorSlice();
   const selectedRoomId = interactive ? selectedRoomIdProp ?? roomSelectionFromStore : selectedRoomIdProp;
   const selectedWallId = interactive ? wallSelectionFromStore : undefined;
   const selectedOpeningId = interactive ? openingSelectionFromStore : undefined;

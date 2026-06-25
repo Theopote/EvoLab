@@ -7,7 +7,7 @@ import { CopilotProposalHistoryPanel } from "@/components/copilot/CopilotProposa
 import { PlanChangeProposalPanel } from "@/components/copilot/PlanChangeProposalPanel";
 import { useComplianceFixAction } from "@/components/copilot/useComplianceFixAction";
 import type { ModifyPlanResponse } from "@/lib/copilot-modify-types";
-import { useEvoProject } from "@/lib/project-store";
+import { useReviewActions, useReviewState } from "@/lib/project-store";
 import type {
   CopilotAction,
   CopilotFinding,
@@ -24,7 +24,6 @@ import { detectCopilotPlan, type CopilotPlan } from "@/lib/copilot-plan";
 import { analyzePlanFromUpload } from "@/lib/plan-import-client";
 import { normalizeWorkspaceTab } from "@/lib/workflow-navigation";
 import { isImagePinnedFile, readCopilotUpload, type CopilotPinnedFile } from "@/lib/copilot-upload";
-import { useShallow } from "zustand/react/shallow";
 
 interface CopilotConsoleProps {
   projectVersions: PlanVersion[];
@@ -62,15 +61,8 @@ export function CopilotConsole({
   const [pinnedFiles, setPinnedFiles] = useState<CopilotPinnedFile[]>([]);
   const [pendingPlan, setPendingPlan] = useState<CopilotPlan | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { addCopilotProposalComment, refreshCopilotInsights, reviewCopilotInsights, scoringConfig } =
-    useEvoProject(
-      useShallow((state) => ({
-        addCopilotProposalComment: state.addCopilotProposalComment,
-        refreshCopilotInsights: state.refreshCopilotInsights,
-        reviewCopilotInsights: state.reviewCopilotInsights,
-        scoringConfig: state.project.domain.scoringConfig
-      }))
-    );
+  const { addCopilotProposalComment, refreshCopilotInsights, reviewCopilotInsights } = useReviewActions();
+  const scoringConfig = useReviewState((state) => state.scoringConfig);
   const {
     lockedElementIds,
     copilotProposals,
@@ -85,7 +77,7 @@ export function CopilotConsole({
       refreshCopilotInsights();
     }
   });
-  const insightQueue = useEvoProject((state) => state.project.domain.copilotInsightQueue);
+  const insightQueue = useReviewState((state) => state.copilotInsightQueue);
   const pendingInsights = pendingInsightCount(insightQueue);
   const appendAssistantMessage = (content: string) => {
     setMessages((current) => [

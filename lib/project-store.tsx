@@ -13,6 +13,27 @@ import { createSiteSlice } from "@/lib/store/site-slice";
 import type { EvoProjectStore } from "@/lib/store/types";
 
 export type { EvoProjectStore, SelectionType } from "@/lib/store/types";
+export {
+  useAnalysisActions,
+  useAnalysisSlice,
+  useAnalysisState,
+  useExportActions,
+  useGeometryActions,
+  useProjectActions,
+  useProjectSlice,
+  useProjectState,
+  useReviewActions,
+  useReviewSlice,
+  useReviewState,
+  useSelectionActions,
+  useSelectionEditorSlice,
+  useSelectionSlice,
+  useSelectionState,
+  useSiteActions,
+  useSiteSlice,
+  useSiteState,
+  useWorkspaceSlice
+} from "@/lib/store/slice-hooks";
 export { resetGeometryChangeBurstForTests } from "@/lib/store/geometry-change-burst";
 
 export const useEvoProjectStore = create<EvoProjectStore>()((...args) =>

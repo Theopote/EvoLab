@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import { wallLength } from "@/components/floor-plan/floor-plan-utils";
-import { useEvoProject } from "@/lib/project-store";
+import { useSelectionState } from "@/lib/project-store";
 
 export function WallInspector() {
-  const selectedWall = useEvoProject((state) => state.selectedWall);
+  const selectedWall = useSelectionState((state) => state.selectedWall);
   const [copied, setCopied] = useState<string | null>(null);
 
   if (!selectedWall) {

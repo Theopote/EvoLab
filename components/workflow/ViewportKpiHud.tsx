@@ -2,11 +2,10 @@
 
 import { GitCompareArrows } from "lucide-react";
 import { useMemo } from "react";
-import { useShallow } from "zustand/react/shallow";
 import { formatCost, calculateCostEstimate } from "@/lib/cost-engine";
 import { getProgramGoals } from "@/lib/project-domain";
 import { calculateQuantities } from "@/lib/quantity-engine";
-import { useEvoProject } from "@/lib/project-store";
+import { useProjectActions, useProjectState, useSiteState } from "@/lib/project-store";
 import { computeTotalScore } from "@/lib/rules/version-total-score";
 
 function polygonArea(points: Array<[number, number]>) {
@@ -19,19 +18,18 @@ function polygonArea(points: Array<[number, number]>) {
 }
 
 export function ViewportKpiHud() {
-  const { project, activeVersion, outline, zoning, buildableEnvelope, compareModeOpen, compareVersionIds, setCompareModeOpen } =
-    useEvoProject(
-      useShallow((state) => ({
-        project: state.project,
-        activeVersion: state.activeVersion,
-        outline: state.outline,
-        zoning: state.zoning,
-        buildableEnvelope: state.buildableEnvelope,
-        compareModeOpen: state.compareModeOpen,
-        compareVersionIds: state.compareVersionIds,
-        setCompareModeOpen: state.setCompareModeOpen
-      }))
-    );
+  const { project, activeVersion, compareModeOpen, compareVersionIds } = useProjectState((state) => ({
+    project: state.project,
+    activeVersion: state.activeVersion,
+    compareModeOpen: state.compareModeOpen,
+    compareVersionIds: state.compareVersionIds
+  }));
+  const { outline, zoning, buildableEnvelope } = useSiteState((state) => ({
+    outline: state.outline,
+    zoning: state.zoning,
+    buildableEnvelope: state.buildableEnvelope
+  }));
+  const { setCompareModeOpen } = useProjectActions();
 
   const metrics = useMemo(() => {
     if (!activeVersion) {

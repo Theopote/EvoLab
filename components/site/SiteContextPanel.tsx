@@ -1,8 +1,7 @@
 "use client";
 
 import { Loader2, MapPin, Ruler, Sparkles } from "lucide-react";
-import { useShallow } from "zustand/react/shallow";
-import { useEvoProject } from "@/lib/project-store";
+import { useSiteSlice } from "@/lib/project-store";
 
 export function SiteContextPanel() {
   const {
@@ -20,24 +19,7 @@ export function SiteContextPanel() {
     setZoning,
     setShowSiteContextLayer,
     setShowEnvironmentOverlay
-  } = useEvoProject(
-    useShallow((state) => ({
-      siteAddressQuery: state.siteAddressQuery,
-      siteContext: state.siteContext,
-      isFetchingSite: state.isFetchingSite,
-      siteError: state.siteError,
-      zoning: state.zoning,
-      buildableEnvelope: state.buildableEnvelope,
-      showSiteContextLayer: state.showSiteContextLayer,
-      showEnvironmentOverlay: state.showEnvironmentOverlay,
-      setSiteAddressQuery: state.setSiteAddressQuery,
-      fetchSiteContext: state.fetchSiteContext,
-      applySuggestedSiteOutline: state.applySuggestedSiteOutline,
-      setZoning: state.setZoning,
-      setShowSiteContextLayer: state.setShowSiteContextLayer,
-      setShowEnvironmentOverlay: state.setShowEnvironmentOverlay
-    }))
-  );
+  } = useSiteSlice();
 
   return (
     <section className="rounded border border-line bg-panel/90 p-3">

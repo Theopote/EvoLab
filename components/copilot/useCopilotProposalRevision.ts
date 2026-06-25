@@ -3,10 +3,9 @@
 import { useCallback, useMemo, useState } from "react";
 import { useCopilotTimelineStore } from "@/lib/copilot-timeline-store";
 import { diffRoomIds } from "@/lib/design-decision-log";
-import { useEvoProject } from "@/lib/project-store";
 import type { CopilotFinding, PlanVersion } from "@/lib/project-types";
 import type { PlanChangeProposal } from "@/lib/schemas/plan-change-proposal-schema";
-import { useShallow } from "zustand/react/shallow";
+import { useReviewSlice } from "@/lib/project-store";
 
 export interface PreparedCopilotProposalInput {
   prompt: string;
@@ -37,16 +36,14 @@ export function useCopilotProposalRevision(options: UseCopilotProposalRevisionOp
     applyCopilotProposal,
     dismissCopilotProposal,
     recordDesignDecision
-  } = useEvoProject(
-    useShallow((state) => ({
-      lockedElementIds: state.project.domain.lockedElementIds,
-      copilotProposals: state.project.domain.copilotProposals,
-      registerCopilotProposal: state.registerCopilotProposal,
-      applyCopilotProposal: state.applyCopilotProposal,
-      dismissCopilotProposal: state.dismissCopilotProposal,
-      recordDesignDecision: state.recordDesignDecision
-    }))
-  );
+  } = useReviewSlice((state) => ({
+    lockedElementIds: state.lockedElementIds,
+    copilotProposals: state.copilotProposals,
+    registerCopilotProposal: state.registerCopilotProposal,
+    applyCopilotProposal: state.applyCopilotProposal,
+    dismissCopilotProposal: state.dismissCopilotProposal,
+    recordDesignDecision: state.recordDesignDecision
+  }));
 
   const pendingProposal = useMemo(() => {
     if (!pendingProposalId) {

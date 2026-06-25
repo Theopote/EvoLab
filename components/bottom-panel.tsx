@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { ScoreBreakdownPanel } from "@/components/score/ScoreBreakdownPanel";
 import { ScoringConfigPanel } from "@/components/score/ScoringConfigPanel";
 import { groupComplianceItems } from "@/lib/compliance-groups";
-import { useEvoProject } from "@/lib/project-store";
+import { useProjectActions } from "@/lib/project-store";
 import type { ComplianceItem, QuantityResult } from "@/lib/quantity-engine";
 import type { PlanVersion, ProjectData } from "@/lib/project-types";
 import { scoringInputFromDomain } from "@/lib/rules/resolve-version-scoring";
@@ -39,8 +39,7 @@ export function BottomPanel({
 }: BottomPanelProps) {
   const [activeTab, setActiveTab] = useState<BottomPanelTab>("tasks");
   const [scoresSubTab, setScoresSubTab] = useState<ScoresSubTab>("breakdown");
-  const updateScoringConfig = useEvoProject((state) => state.updateScoringConfig);
-  const resetScoringConfig = useEvoProject((state) => state.resetScoringConfig);
+  const { updateScoringConfig, resetScoringConfig } = useProjectActions();
   const warningCount = complianceItems.filter((item) => item.status === "warning").length;
   const complianceGroups = useMemo(
     () => groupComplianceItems(complianceItems, activeVersion),
