@@ -186,6 +186,7 @@ export const WorkspaceMainViewport = memo(function WorkspaceMainViewport() {
   if (activeTab === "Compare" || compareModeOpen) {
     return (
       <CompareWorkspace
+        projectName={project.name}
         versions={project.versions}
         activeVersionId={project.activeVersionId}
         compareVersionIds={compareVersionIds}

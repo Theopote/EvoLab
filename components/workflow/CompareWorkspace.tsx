@@ -8,6 +8,7 @@ import type { ProjectDomain, ProgramModel, StoredCopilotProposal } from "@/lib/b
 import type { PlanVersion } from "@/lib/project-types";
 
 interface CompareWorkspaceProps {
+  projectName: string;
   versions: PlanVersion[];
   activeVersionId: string;
   compareVersionIds: string[];
@@ -27,6 +28,7 @@ interface CompareWorkspaceProps {
 }
 
 export function CompareWorkspace({
+  projectName,
   versions,
   activeVersionId,
   compareVersionIds,
@@ -78,12 +80,14 @@ export function CompareWorkspace({
         <div className="flex items-start gap-3 rounded border border-warning/30 bg-warning/5 p-3 text-xs text-warning">
           <Pin className="mt-0.5 h-4 w-4 shrink-0" />
           <p>
-            Pin at least two versions to enable lens comparison, geometry diff, and recommendations. You can still use
+            Pin at least two versions to enable lens comparison, geometry diff, recommendations, and report export. You can still use
             the grid below to compare all generated schemes.
           </p>
         </div>
       ) : (
         <CompareLensPanel
+          projectName={projectName}
+          activeVersionId={activeVersionId}
           versions={versions}
           compareVersionIds={compareVersionIds}
           compareLevelId={compareLevelId}

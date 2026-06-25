@@ -1,4 +1,5 @@
 import { calculateQuantities } from "@/lib/quantity-engine";
+import { resolveCompareVersions } from "@/lib/compare/resolve-compare-versions";
 import type { PresentationSlide } from "@/lib/presentation/types";
 import type { PlanVersion, ProjectData } from "@/lib/project-types";
 import { getProgramGoals } from "@/lib/project-domain";
@@ -17,45 +18,12 @@ function scoreVersion(version: PlanVersion, project: ProjectData) {
   );
 }
 
-function resolveCompareVersions(
-  project: ProjectData,
-  activeVersion: PlanVersion,
-  compareVersionIds?: string[]
-) {
-  const selected =
-    compareVersionIds && compareVersionIds.length >= 2
-      ? compareVersionIds
-          .map((id) => project.versions.find((version) => version.id === id))
-          .filter((version): version is PlanVersion => Boolean(version))
-      : [];
-
-  if (selected.length >= 2) {
-    return selected;
-  }
-
-  const sorted = [...project.versions].sort(
-    (left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()
-  );
-
-  if (sorted.length < 2) {
-    return [];
-  }
-
-  const activeIndex = sorted.findIndex((version) => version.id === activeVersion.id);
-  if (activeIndex >= 0) {
-    const neighbors = sorted.slice(Math.max(0, activeIndex - 1), activeIndex + 2);
-    return neighbors.length >= 2 ? neighbors : sorted.slice(0, 3);
-  }
-
-  return sorted.slice(0, Math.min(3, sorted.length));
-}
-
 export function buildCompareSlide(
   project: ProjectData,
   activeVersion: PlanVersion,
   compareVersionIds?: string[]
 ): PresentationSlide | null {
-  const versions = resolveCompareVersions(project, activeVersion, compareVersionIds);
+  const versions = resolveCompareVersions(project.versions, activeVersion.id, compareVersionIds);
 
   if (versions.length < 2) {
     return null;

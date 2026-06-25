@@ -1,5 +1,6 @@
 "use client";
 
+import { Download, FileText, Loader2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { DiagramCanvas } from "@/components/diagrams/DiagramCanvas";
 import { CompareOverlayPlan } from "@/components/comparison/CompareOverlayPlan";
@@ -7,8 +8,11 @@ import { CompareRecommendationBar } from "@/components/comparison/CompareRecomme
 import { SchemeGeometryDiff } from "@/components/comparison/SchemeGeometryDiff";
 import { FloorPlan } from "@/components/floor-plan";
 import { MepCanvas } from "@/components/mep/MepCanvas";
+import { buildCompareReport } from "@/lib/compare/build-compare-report";
 import { compareLensDefinitions, analysisLayersForCompareLens, mepLayersForCompareLens, usesAnalysisEngine } from "@/lib/compare/lens-config";
+import { downloadCompareReportPdfViaApi } from "@/lib/compare/export-compare-client";
 import { roomsForCompareLevel, summarizeRoomChangesAtLevel } from "@/lib/compare/geometry-diff";
+import { downloadCompareReportHtml } from "@/lib/compare/render-compare-html";
 import type { CompareLensId } from "@/lib/compare/types";
 import { listComparableLevels } from "@/lib/multi-floor";
 import { calculateQuantities } from "@/lib/quantity-engine";
@@ -16,6 +20,8 @@ import type { ProjectDomain, ProgramModel } from "@/lib/building-domain";
 import type { PlanVersion } from "@/lib/project-types";
 
 interface CompareLensPanelProps {
+  projectName: string;
+  activeVersionId: string;
   versions: PlanVersion[];
   compareVersionIds: string[];
   compareLevelId?: string;
@@ -27,6 +33,8 @@ interface CompareLensPanelProps {
 }
 
 export function CompareLensPanel({
+  projectName,
+  activeVersionId,
   versions,
   compareVersionIds,
   compareLevelId,
@@ -37,6 +45,8 @@ export function CompareLensPanel({
   onSelectVersion
 }: CompareLensPanelProps) {
   const [lens, setLens] = useState<CompareLensId>("plan");
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [exportNotice, setExportNotice] = useState<string | null>(null);
 
   const compared = compareVersionIds
     .map((id) => versions.find((version) => version.id === id))
@@ -74,6 +84,67 @@ export function CompareLensPanel({
     };
   }, [diffPair, resolvedLevelId]);
 
+  const compareReportInput = useMemo(
+    () => ({
+      projectName,
+      projectType,
+      domain,
+      program,
+      activeVersionId,
+      versions,
+      compareVersionIds,
+      compareLevelId: resolvedLevelId
+    }),
+    [
+      activeVersionId,
+      compareVersionIds,
+      domain,
+      program,
+      projectName,
+      projectType,
+      resolvedLevelId,
+      versions
+    ]
+  );
+
+  function buildReport() {
+    return buildCompareReport(compareReportInput);
+  }
+
+  function exportHtmlReport() {
+    setExportNotice(null);
+    const report = buildReport();
+
+    if (!report) {
+      setExportNotice("Pin at least two schemes to export a compare report.");
+      return;
+    }
+
+    downloadCompareReportHtml(report);
+    setExportNotice("Compare report HTML downloaded.");
+  }
+
+  async function exportPdfReport() {
+    setExportNotice(null);
+    const report = buildReport();
+
+    if (!report) {
+      setExportNotice("Pin at least two schemes to export a compare report.");
+      return;
+    }
+
+    setIsExportingPdf(true);
+
+    try {
+      await downloadCompareReportPdfViaApi(report);
+      setExportNotice("Compare report PDF downloaded via server export API.");
+    } catch (error) {
+      setExportNotice(error instanceof Error ? error.message : "Compare PDF export failed.");
+    } finally {
+      setIsExportingPdf(false);
+    }
+  }
+
   if (compared.length < 2) {
     return null;
   }
@@ -101,6 +172,23 @@ export function CompareLensPanel({
               ))}
             </select>
           ) : null}
+          <button
+            className="flex h-8 items-center gap-2 rounded border border-line px-3 text-xs text-slate-100 hover:border-accent/50"
+            type="button"
+            onClick={exportHtmlReport}
+          >
+            <Download className="h-3.5 w-3.5" />
+            Export HTML
+          </button>
+          <button
+            className="flex h-8 items-center gap-2 rounded border border-line px-3 text-xs text-slate-100 hover:border-accent/50"
+            type="button"
+            disabled={isExportingPdf}
+            onClick={() => void exportPdfReport()}
+          >
+            {isExportingPdf ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
+            Export PDF
+          </button>
           <div className="flex flex-wrap gap-1 rounded border border-line p-0.5">
             {compareLensDefinitions.map((item) => {
               const disabled = item.requiresPair && compared.length < 2;
@@ -126,6 +214,8 @@ export function CompareLensPanel({
           </div>
         </div>
       </div>
+
+      {exportNotice ? <div className="rounded border border-warning/40 bg-warning/10 p-2 text-xs text-warning">{exportNotice}</div> : null}
 
       {diffPair ? (
         <CompareRecommendationBar

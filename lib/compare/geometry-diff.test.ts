@@ -12,18 +12,26 @@ describe("compare geometry diff", () => {
     expect(countGeometryDiffChanges(summary)).toBe(0);
   });
 
-  it("detects renamed rooms as modified at level scope", () => {
+  it("detects geometry changes between versions", () => {
     const project = createDemoProjectData("office");
     const base = project.versions[0]!;
-    const levelId = base.levels[0]?.id;
+    const targetRoom = base.rooms[0]!;
+
     const preview = {
       ...base,
-      rooms: base.rooms.map((room, index) => (index === 0 ? { ...room, name: "Renamed room" } : room))
+      rooms: base.rooms.map((room) =>
+        room.id === targetRoom.id
+          ? {
+              ...room,
+              polygon: room.polygon.map(([x, y]) => [x + 0.5, y] as [number, number])
+            }
+          : room
+      )
     };
 
-    const summary = summarizeRoomChangesAtLevel(base, preview, levelId);
+    const summary = summarizeRoomChangesAtLevel(base, preview);
 
-    expect(summary.modified.length).toBeGreaterThan(0);
+    expect(summary.modified).toContain(targetRoom.id);
     expect(countGeometryDiffChanges(summary)).toBeGreaterThan(0);
   });
 });
