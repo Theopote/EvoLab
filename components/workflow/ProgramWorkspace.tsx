@@ -2,8 +2,10 @@
 
 import { BriefForm } from "@/components/plan-editor/BriefForm";
 import { PlanResultGrid } from "@/components/plan-editor/PlanResultGrid";
+import { TypologyPackPanel } from "@/components/program/TypologyPackPanel";
 import { ProgramCompliancePanel } from "@/components/quantity/ProgramCompliancePanel";
 import type { ProgramModel } from "@/lib/building-domain";
+import { useProjectActions } from "@/lib/project-store";
 import type { DesignBrief, PlanVersion, Point } from "@/lib/project-types";
 import type { ZoningConstraints } from "@/lib/site-types";
 
@@ -34,11 +36,14 @@ export function ProgramWorkspace({
   onGenerated,
   onSelectVersion
 }: ProgramWorkspaceProps) {
+  const { setProjectTypology } = useProjectActions();
+
   return (
     <section className="grid min-h-full grid-rows-[minmax(0,1fr)_minmax(280px,0.75fr)] gap-4">
       <div className="grid min-h-0 grid-cols-[minmax(280px,0.85fr)_minmax(0,1.15fr)] gap-4">
         <div className="space-y-4 overflow-auto">
-          <BriefForm value={brief} onChange={onBriefChange} />
+          <TypologyPackPanel variant="embedded" showBriefPreview={false} />
+          <BriefForm value={brief} onChange={onBriefChange} onTypologyChange={setProjectTypology} />
           <ProgramSpacesPanel program={program} />
         </div>
         <ProgramCompliancePanel program={program} activeVersion={activeVersion} />

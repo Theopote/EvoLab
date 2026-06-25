@@ -48,6 +48,7 @@ export const createProjectSlice: StateCreator<EvoProjectStore, [], [], ProjectSl
     set(
       produce<EvoProjectStore>((state) => {
         state.brief = brief;
+        state.project.projectType = brief.projectType;
         refreshDomainDraft(state);
       })
     ),

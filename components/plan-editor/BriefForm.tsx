@@ -1,11 +1,26 @@
 "use client";
 
 import { Wand2 } from "lucide-react";
+import { listTypologyPacks } from "@/lib/typologies";
+import { resolveTypologyPackId } from "@/lib/typology/resolve";
+import { TYPOLOGY_PACK_BY_ID } from "@/lib/typology/packs";
+import type { TypologyPackId } from "@/lib/typology/types";
 import type { DesignBrief } from "@/lib/project-types";
+
+const CUSTOM_BUILDING_TYPES = ["retail", "exhibition"] as const;
 
 interface BriefFormProps {
   value: DesignBrief;
   onChange: (value: DesignBrief) => void;
+  onTypologyChange?: (packId: TypologyPackId) => void;
+}
+
+function isTypologyPackId(value: string): value is TypologyPackId {
+  return value in TYPOLOGY_PACK_BY_ID;
+}
+
+function isCustomBuildingType(projectType: string) {
+  return CUSTOM_BUILDING_TYPES.includes(projectType as (typeof CUSTOM_BUILDING_TYPES)[number]);
 }
 
 const chips = [
@@ -22,9 +37,28 @@ const chips = [
   "centralized equipment"
 ];
 
-export function BriefForm({ value, onChange }: BriefFormProps) {
+export function BriefForm({ value, onChange, onTypologyChange }: BriefFormProps) {
+  const typologyOptions = listTypologyPacks();
+  const buildingTypeValue = isCustomBuildingType(value.projectType)
+    ? value.projectType
+    : resolveTypologyPackId(value.projectType);
+
   function update<K extends keyof DesignBrief>(key: K, nextValue: DesignBrief[K]) {
     onChange({ ...value, [key]: nextValue });
+  }
+
+  function handleBuildingTypeChange(nextType: string) {
+    if (isCustomBuildingType(nextType)) {
+      update("projectType", nextType);
+      return;
+    }
+
+    if (onTypologyChange && isTypologyPackId(nextType)) {
+      onTypologyChange(nextType);
+      return;
+    }
+
+    update("projectType", nextType);
   }
 
   function addChip(chip: string) {
@@ -44,15 +78,16 @@ export function BriefForm({ value, onChange }: BriefFormProps) {
           Building type
           <select
             className="h-9 rounded border border-line bg-[#0b1118] px-2 text-sm text-slate-100 outline-none focus:border-accent/70"
-            value={value.projectType}
-            onChange={(event) => update("projectType", event.target.value)}
+            value={buildingTypeValue}
+            onChange={(event) => handleBuildingTypeChange(event.target.value)}
           >
-            <option value="healthcare">Healthcare</option>
-            <option value="housing">Housing</option>
-            <option value="office">Office</option>
-            <option value="education">Education</option>
-            <option value="retail">Retail</option>
-            <option value="exhibition">Exhibition</option>
+            {typologyOptions.map((pack) => (
+              <option key={pack.id} value={pack.id}>
+                {pack.label}
+              </option>
+            ))}
+            <option value="retail">Retail (custom)</option>
+            <option value="exhibition">Exhibition (custom)</option>
           </select>
         </label>
 
