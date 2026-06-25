@@ -7,9 +7,11 @@ import { openingCenterFromDragPoint } from "@/lib/opening-wall-utils";
 import {
   createWallDragSession,
   previewWallDrag,
+  wallDragCommitInput,
   wallDragOffsetFromPointer,
   type WallDragSession
 } from "@/components/floor-plan/wall-drag-utils";
+import type { WallDragCommitInput } from "@/lib/store/types";
 import {
   applyNodeDrag,
   deriveWallGraph,
@@ -50,7 +52,9 @@ function ControlPoints({
   gridEnabled,
   onPreviewRooms,
   onCommitRooms,
-  onCancelPreview
+  onCancelPreview,
+  onWallDragPreview,
+  onWallDragCommit
 }: {
   polygon: Point[];
   roomId: string;
@@ -62,6 +66,8 @@ function ControlPoints({
   onPreviewRooms?: (rooms: Room[], dragHint?: string | null) => void;
   onCommitRooms?: (rooms: Room[]) => void;
   onCancelPreview?: () => void;
+  onWallDragPreview?: (input: WallDragCommitInput) => void;
+  onWallDragCommit?: (input: WallDragCommitInput) => void;
 }) {
   const sessionRef = useRef<GeometryDragSession | null>(null);
   const graph = useMemo(() => deriveWallGraph(allRooms), [allRooms]);
@@ -141,6 +147,8 @@ function ControlPoints({
             onCancelPreview={onCancelPreview}
             onCommitRooms={onCommitRooms}
             onPreviewRooms={onPreviewRooms}
+            onWallDragCommit={onWallDragCommit}
+            onWallDragPreview={onWallDragPreview}
           />
         );
       })}
@@ -213,7 +221,9 @@ function EdgeMidpointHandle({
   gridEnabled,
   onPreviewRooms,
   onCommitRooms,
-  onCancelPreview
+  onCancelPreview,
+  onWallDragPreview,
+  onWallDragCommit
 }: {
   center: Point;
   edge: ReturnType<typeof deriveWallGraph>["edges"][number];
@@ -225,6 +235,8 @@ function EdgeMidpointHandle({
   onPreviewRooms?: (rooms: Room[], dragHint?: string | null) => void;
   onCommitRooms?: (rooms: Room[]) => void;
   onCancelPreview?: () => void;
+  onWallDragPreview?: (input: WallDragCommitInput) => void;
+  onWallDragCommit?: (input: WallDragCommitInput) => void;
 }) {
   const sessionRef = useRef<WallDragSession | null>(null);
   const wall = {
@@ -259,7 +271,7 @@ function EdgeMidpointHandle({
       strokeWidth="0.16"
       style={{ cursor: enabled ? "grab" : "default" }}
       onPointerDown={(event) => {
-        if (!enabled || !onPreviewRooms || !onCommitRooms) {
+        if (!enabled || (!onPreviewRooms && !onWallDragPreview) || (!onCommitRooms && !onWallDragCommit)) {
           return;
         }
 
@@ -270,7 +282,11 @@ function EdgeMidpointHandle({
         }
 
         sessionRef.current = session;
-        onPreviewRooms(allRooms, "Drag wall edge · release to commit");
+        if (onWallDragPreview) {
+          onWallDragPreview(wallDragCommitInput(session, 0));
+        } else {
+          onPreviewRooms?.(allRooms, "Drag wall edge · release to commit");
+        }
         event.currentTarget.setPointerCapture(event.pointerId);
         event.stopPropagation();
       }}
@@ -287,7 +303,11 @@ function EdgeMidpointHandle({
           return;
         }
 
-        onPreviewRooms?.(previewWallDrag(session, offset), "Drag wall edge · release to commit");
+        if (onWallDragPreview) {
+          onWallDragPreview(wallDragCommitInput(session, offset));
+        } else {
+          onPreviewRooms?.(previewWallDrag(session, offset), "Drag wall edge · release to commit");
+        }
       }}
       onPointerUp={(event) => {
         const session = sessionRef.current;
@@ -299,7 +319,11 @@ function EdgeMidpointHandle({
         const offset = readOffset(event);
 
         if (offset !== null) {
-          onCommitRooms?.(previewWallDrag(session, offset));
+          if (onWallDragCommit) {
+            onWallDragCommit(wallDragCommitInput(session, offset));
+          } else {
+            onCommitRooms?.(previewWallDrag(session, offset));
+          }
         } else {
           onCancelPreview?.();
         }
@@ -324,7 +348,9 @@ function WallDragHandle({
   gridEnabled,
   onPreviewRooms,
   onCommitRooms,
-  onCancelPreview
+  onCancelPreview,
+  onWallDragPreview,
+  onWallDragCommit
 }: {
   wall: Wall;
   allRooms: Room[];
@@ -335,6 +361,8 @@ function WallDragHandle({
   onPreviewRooms?: (rooms: Room[], dragHint?: string | null) => void;
   onCommitRooms?: (rooms: Room[]) => void;
   onCancelPreview?: () => void;
+  onWallDragPreview?: (input: WallDragCommitInput) => void;
+  onWallDragCommit?: (input: WallDragCommitInput) => void;
 }) {
   const sessionRef = useRef<WallDragSession | null>(null);
   const center = midpoint(wall.start, wall.end);
@@ -360,7 +388,7 @@ function WallDragHandle({
       strokeWidth="0.18"
       style={{ cursor: enabled ? "grab" : "default" }}
       onPointerDown={(event) => {
-        if (!enabled || !onPreviewRooms || !onCommitRooms) {
+        if (!enabled || (!onPreviewRooms && !onWallDragPreview) || (!onCommitRooms && !onWallDragCommit)) {
           return;
         }
 
@@ -371,7 +399,11 @@ function WallDragHandle({
         }
 
         sessionRef.current = session;
-        onPreviewRooms(allRooms, "Drag wall · release to commit");
+        if (onWallDragPreview) {
+          onWallDragPreview(wallDragCommitInput(session, 0));
+        } else {
+          onPreviewRooms(allRooms, "Drag wall · release to commit");
+        }
         event.currentTarget.setPointerCapture(event.pointerId);
         event.stopPropagation();
       }}
@@ -388,7 +420,11 @@ function WallDragHandle({
           return;
         }
 
-        onPreviewRooms?.(previewWallDrag(session, offset), "Drag wall · release to commit");
+        if (onWallDragPreview) {
+          onWallDragPreview(wallDragCommitInput(session, offset));
+        } else {
+          onPreviewRooms?.(previewWallDrag(session, offset), "Drag wall · release to commit");
+        }
       }}
       onPointerUp={(event) => {
         const session = sessionRef.current;
@@ -400,7 +436,11 @@ function WallDragHandle({
         const offset = readOffset(event);
 
         if (offset !== null) {
-          onCommitRooms?.(previewWallDrag(session, offset));
+          if (onWallDragCommit) {
+            onWallDragCommit(wallDragCommitInput(session, offset));
+          } else {
+            onCommitRooms?.(previewWallDrag(session, offset));
+          }
         } else {
           onCancelPreview?.();
         }
@@ -500,6 +540,8 @@ interface SelectionLayerProps {
   onRoomsGeometryPreview?: (rooms: Room[], dragHint?: string | null) => void;
   onRoomsGeometryCommit?: (rooms: Room[]) => void;
   onRoomsGeometryCancel?: () => void;
+  onWallDragPreview?: (input: WallDragCommitInput) => void;
+  onWallDragCommit?: (input: WallDragCommitInput) => void;
   onOpeningCenterChange?: (openingId: string, center: Point) => void;
 }
 
@@ -519,6 +561,8 @@ export function SelectionLayer({
   onRoomsGeometryPreview,
   onRoomsGeometryCommit,
   onRoomsGeometryCancel,
+  onWallDragPreview,
+  onWallDragCommit,
   onOpeningCenterChange
 }: SelectionLayerProps) {
   const selectedRoom = rooms.find((room) => room.id === selectedRoomId);
@@ -555,6 +599,8 @@ export function SelectionLayer({
             onCommitRooms={onRoomsGeometryCommit}
             onCancelPreview={onRoomsGeometryCancel}
             onPreviewRooms={onRoomsGeometryPreview}
+            onWallDragCommit={onWallDragCommit}
+            onWallDragPreview={onWallDragPreview}
           />
         </>
       ) : null}
@@ -580,6 +626,8 @@ export function SelectionLayer({
             onCommitRooms={onRoomsGeometryCommit}
             onCancelPreview={onRoomsGeometryCancel}
             onPreviewRooms={onRoomsGeometryPreview}
+            onWallDragCommit={onWallDragCommit}
+            onWallDragPreview={onWallDragPreview}
           />
         </>
       ) : null}
