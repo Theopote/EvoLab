@@ -1,4 +1,4 @@
-import { insetPolygon, offsetPolygon } from "@/lib/polygon-offset";
+import { insetPolygon, offsetPolygon } from "@/lib/geometry/operations/offset";
 
 export type { Geometry, Polygon } from "martinez-polygon-clipping";
 
