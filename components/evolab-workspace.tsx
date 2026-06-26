@@ -16,8 +16,8 @@ export function EvoLabWorkspace() {
   return (
     <main className="flex min-h-screen flex-col bg-canvas text-slate-100">
       <WorkspaceTopChrome />
-      <section className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_auto_218px] overflow-hidden">
-        <div className="grid min-h-0 grid-cols-[260px_minmax(0,1fr)_300px] overflow-hidden">
+      <section className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_auto_auto] overflow-hidden">
+        <div className="grid min-h-0 grid-cols-[260px_minmax(0,1fr)_minmax(48px,300px)] overflow-hidden">
           <WorkspaceLeftSidebar onOpenReportEditor={() => setReportEditorOpen(true)} />
           <WorkspaceViewportFrame>
             <WorkspaceMainViewport />

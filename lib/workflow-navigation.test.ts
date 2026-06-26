@@ -96,7 +96,7 @@ describe("workflow-navigation", () => {
     expect(recommendedNextStep(emptyProject)).toBe("import");
     expect(recommendedNextStepDetail(emptyProject)).toMatchObject({
       phase: "import",
-      label: "Import"
+      label: "资料"
     });
   });
 });

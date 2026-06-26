@@ -34,7 +34,7 @@ export function TraceToCadTool() {
         return;
       }
 
-      const enrichedVersion: PlanVersion = {
+      const enrichedVersion = {
         ...reviewState.draftVersion,
         metadata: {
           ...reviewState.draftVersion.metadata,
