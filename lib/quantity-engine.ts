@@ -10,6 +10,13 @@ import {
 import type { FunctionZone, OpeningElement, PlanVersion, Point, Room, RoomType, Wall, CopilotActionId } from "@/lib/project-types";
 import { resolveLevelOutline, resolveLevelRooms } from "@/lib/level-rooms";
 import { resolvePlanScope, type PlanScopeKind } from "@/lib/plan-scope";
+import {
+  resolveMeasurementRuleSet,
+  type MeasurementStandardId,
+  type QuantityClassification
+} from "@/lib/quantity/measurement-standards";
+import { computeWallAreaWithOpeningDeductions } from "@/lib/quantity/opening-deductions";
+import { estimateStructuralQuantities, type StructuralQuantitySummary } from "@/lib/quantity/structural-quantities";
 import { resolveRulePack } from "@/lib/rules/rule-pack";
 import type { RulePack } from "@/lib/rules/types";
 
@@ -19,6 +26,7 @@ export interface QuantityRow {
   value: number;
   unit: string;
   basis: string;
+  classification?: QuantityClassification;
 }
 
 export interface QuantityResult {
@@ -31,11 +39,15 @@ export interface QuantityResult {
     externalWallLength: number;
     internalWallLength: number;
     wallArea: number;
+    wallAreaGross?: number;
+    wallAreaNet?: number;
+    openingDeductionArea?: number;
     doorCount: number;
     windowCount: number;
     slabArea: number;
     roofArea: number;
     curtainWallOrWindowArea: number;
+    structural?: StructuralQuantitySummary;
   };
 }
 
@@ -45,6 +57,7 @@ export interface QuantityOptions {
   levelId?: string;
   standardFloorGroupId?: string;
   scope?: QuantityScope;
+  measurementStandard?: MeasurementStandardId;
 }
 
 export interface ComplianceItem {
@@ -131,6 +144,10 @@ function roomOpenings(room: Room, openings: OpeningElement[], type: OpeningEleme
   return openings.filter((opening) => opening.type === type && opening.roomIds?.includes(room.id));
 }
 
+function classifyRow(rowId: string, standardId: MeasurementStandardId) {
+  return resolveMeasurementRuleSet(standardId).classify(rowId);
+}
+
 function buildQuantityResult(
   rooms: Room[],
   walls: Wall[],
@@ -139,7 +156,9 @@ function buildQuantityResult(
   slabAreaBasis: string,
   roofAreaBasis: string,
   slabAreaOverride?: number,
-  roofAreaOverride?: number
+  roofAreaOverride?: number,
+  measurementStandard: MeasurementStandardId = "gb50300",
+  structural?: StructuralQuantitySummary
 ): QuantityResult {
   const grossArea = rooms.reduce((total, room) => total + room.areaSqm, 0);
   const netUsableArea = rooms
@@ -159,9 +178,18 @@ function buildQuantityResult(
     : Math.max(0, (roomPerimeterTotal - externalWallLength) / 2);
   const averageWallHeight =
     rooms.reduce((total, room) => total + room.ceilingHeight, 0) / Math.max(1, rooms.length);
-  const wallArea = walls.length
-    ? walls.reduce((total, wall) => total + wallLength(wall) * wall.height, 0)
-    : (externalWallLength + internalWallLength) * averageWallHeight;
+  const wallBreakdown = walls.length
+    ? computeWallAreaWithOpeningDeductions(walls, openings)
+    : {
+        grossWallArea: (externalWallLength + internalWallLength) * averageWallHeight,
+        openingDeductionArea: openings.reduce((total, opening) => total + opening.width * opening.height, 0),
+        netWallArea: 0,
+        openingsByWall: {}
+      };
+  if (!walls.length) {
+    wallBreakdown.netWallArea = Math.max(0, wallBreakdown.grossWallArea - wallBreakdown.openingDeductionArea);
+  }
+  const wallArea = wallBreakdown.netWallArea;
   const doorCount = openings.length
     ? openings.filter((opening) => opening.type === "door").length
     : rooms.reduce((total, room) => total + room.doors.length, 0);
@@ -199,7 +227,14 @@ function buildQuantityResult(
   }, {});
 
   const rows: QuantityRow[] = [
-    { id: "gross-area", label: "Gross building area", value: grossArea, unit: "sqm", basis: "Sum of Room.areaSqm" },
+    {
+      id: "gross-area",
+      label: "Gross building area",
+      value: grossArea,
+      unit: "sqm",
+      basis: "Sum of Room.areaSqm",
+      classification: classifyRow("gross-area", measurementStandard)
+    },
     {
       id: "net-area",
       label: "Net usable area",
@@ -224,11 +259,30 @@ function buildQuantityResult(
         : "(Sum room perimeters - outline perimeter) / 2"
     },
     {
-      id: "wall-area",
-      label: walls.length ? "Wall area" : "Wall area estimate",
+      id: "wall-area-gross",
+      label: walls.length ? "Wall area (gross)" : "Wall area estimate (gross)",
+      value: wallBreakdown.grossWallArea,
+      unit: "sqm",
+      basis: walls.length ? "Sum of wall length × wall height" : "(External + internal wall length) × average ceiling height",
+      classification: classifyRow("wall-area-gross", measurementStandard)
+    },
+    {
+      id: "opening-deduction",
+      label: "Opening deductions",
+      value: wallBreakdown.openingDeductionArea,
+      unit: "sqm",
+      basis: openings.length
+        ? "Sum of OpeningElement width × height on assigned walls"
+        : "Estimated from room door/window schedules",
+      classification: classifyRow("opening-deduction", measurementStandard)
+    },
+    {
+      id: "wall-area-net",
+      label: walls.length ? "Wall area (net)" : "Wall area estimate (net)",
       value: wallArea,
       unit: "sqm",
-      basis: walls.length ? "Sum of wall length * wall height" : "(External + internal wall length) * average ceiling height"
+      basis: "Gross wall area minus opening deductions",
+      classification: classifyRow("wall-area-net", measurementStandard)
     },
     {
       id: "doors",
@@ -252,7 +306,43 @@ function buildQuantityResult(
       value: curtainWallOrWindowArea,
       unit: "sqm",
       basis: openings.length ? "Window OpeningElement width * height" : "Window width * 1.8m typical height"
-    }
+    },
+    ...(structural
+      ? [
+          {
+            id: "concrete-volume",
+            label: "Structural concrete volume",
+            value: structural.totalConcreteM3,
+            unit: "m³",
+            basis: "Columns + beams + slabs + stairs + shear walls",
+            classification: classifyRow("concrete-volume", measurementStandard)
+          },
+          {
+            id: "rebar-weight",
+            label: "Rebar weight estimate",
+            value: structural.rebarWeightKg,
+            unit: "kg",
+            basis: `${structural.totalConcreteM3} m³ × 85 kg/m³ indicative ratio`,
+            classification: classifyRow("rebar-weight", measurementStandard)
+          },
+          {
+            id: "slab-concrete",
+            label: "Slab concrete",
+            value: structural.slabConcreteM3,
+            unit: "m³",
+            basis: `${structural.slabAreaSqm} sqm × 150mm typical thickness`,
+            classification: classifyRow("slab-concrete", measurementStandard)
+          },
+          {
+            id: "stair-concrete",
+            label: "Stair concrete",
+            value: structural.stairConcreteM3,
+            unit: "m³",
+            basis: `${structural.stairCount} stair core(s) × 12 m³ allowance`,
+            classification: classifyRow("stair-concrete", measurementStandard)
+          }
+        ]
+      : [])
   ].map((row) => ({ ...row, value: round(row.value) }));
 
   return {
@@ -265,11 +355,15 @@ function buildQuantityResult(
       externalWallLength: round(externalWallLength),
       internalWallLength: round(internalWallLength),
       wallArea: round(wallArea),
+      wallAreaGross: round(wallBreakdown.grossWallArea),
+      wallAreaNet: round(wallArea),
+      openingDeductionArea: round(wallBreakdown.openingDeductionArea),
       doorCount,
       windowCount,
       slabArea: round(slabArea),
       roofArea: round(roofArea),
-      curtainWallOrWindowArea: round(curtainWallOrWindowArea)
+      curtainWallOrWindowArea: round(curtainWallOrWindowArea),
+      structural
     }
   };
 }
@@ -288,6 +382,8 @@ export function calculateQuantities(
   const outlineArea = polygonArea(outline);
   const topLevel = version.levels[version.levels.length - 1];
   const groups = version.standardFloorGroups;
+  const measurementStandard = options.measurementStandard ?? "gb50300";
+  const structural = scope === "building" ? estimateStructuralQuantities(version) : undefined;
 
   if (scope === "building") {
     const perLevelSlab = version.levels.reduce((total, level) => {
@@ -308,7 +404,9 @@ export function calculateQuantities(
       "Sum of per-level slab areas",
       "Top level outline area",
       perLevelSlab || outlineArea * Math.max(1, version.levels.length),
-      polygonArea(roofOutline) || roofGross || outlineArea
+      polygonArea(roofOutline) || roofGross || outlineArea,
+      measurementStandard,
+      structural
     );
   }
 
@@ -318,7 +416,11 @@ export function calculateQuantities(
     openings,
     outline,
     "Level outline polygon area",
-    scope === "floor_group" ? "Assume roof equals standard-floor-group outline" : "Assume roof equals level outline area"
+    scope === "floor_group" ? "Assume roof equals standard-floor-group outline" : "Assume roof equals level outline area",
+    undefined,
+    undefined,
+    measurementStandard,
+    structural
   );
 }
 
