@@ -1,4 +1,13 @@
 import type { ProjectDomain } from "@/lib/building-domain";
+import type {
+  MepLayout,
+  MepRoute,
+  MepShaft,
+  MepStrategy,
+  MepSystemType
+} from "@/lib/schemas/mep-schema";
+
+export type { MepLayout, MepRoute, MepShaft, MepStrategy, MepSystemType };
 
 export interface ProjectData {
   projectId: string;
@@ -385,42 +394,6 @@ export interface VersionScores {
   riskCount: number;
   breakdown?: ScoreBreakdown;
 }
-
-export interface MepLayout {
-  shafts: MepShaft[];
-  routes: MepRoute[];
-  strategy?: MepStrategy;
-}
-
-export interface MepStrategy {
-  systemConcept: string;
-  shaftLogic: string;
-  routingLogic: string;
-  assumptions: string[];
-}
-
-export interface MepShaft {
-  id: string;
-  position: Point;
-  systems: MepSystemType[];
-  levelIds?: string[];
-}
-
-export interface MepRoute {
-  id: string;
-  system: MepSystemType;
-  path: Point[];
-  connectsRoomIds: string[];
-  levelId?: string;
-}
-
-export type MepSystemType =
-  | "hvac"
-  | "plumbing_supply"
-  | "plumbing_drain"
-  | "electrical"
-  | "elv"
-  | "fire";
 
 export type MepLayerId = MepSystemType | "shafts" | "equipment_rooms";
 

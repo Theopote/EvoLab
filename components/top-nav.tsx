@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Cloud, GitCompareArrows, Home, Share2, Sparkles, Wrench } from "lucide-react";
+import { WorkspaceEditHistoryControls } from "@/components/workspace/WorkspaceEditHistoryControls";
 import { pendingChangeSets } from "@/lib/project-domain";
 import { topNavPhaseDefinitions, type WorkflowPhase, type WorkflowPhaseId } from "@/lib/workflow-phases";
 import type { ProjectData } from "@/lib/project-types";
@@ -45,6 +46,7 @@ export function TopNav({ project, workflowPhase, onPhaseChange, onOpenReviews }:
       </nav>
 
       <div className="ml-auto flex items-center gap-2 text-sm">
+        <WorkspaceEditHistoryControls />
         <Link
           className="hidden rounded border border-line px-2 py-1 text-xs text-muted transition hover:border-accent/50 hover:text-accent md:inline-flex"
           href="/tools"

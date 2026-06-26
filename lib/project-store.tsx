@@ -16,6 +16,8 @@ export {
   usePresentationActions,
   usePresentationSlice,
   usePresentationState,
+  useHistoryActions,
+  useHistoryState,
   useProjectActions,
   useProjectSlice,
   useProjectState,

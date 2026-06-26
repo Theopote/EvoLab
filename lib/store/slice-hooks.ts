@@ -9,6 +9,8 @@ import {
   pickPresentationActions,
   pickPresentationSlice,
   pickPresentationState,
+  pickHistoryActions,
+  pickHistoryState,
   pickProjectActions,
   pickProjectSlice,
   pickProjectState,
@@ -89,6 +91,9 @@ export const useExportActions = createActionsHook<ExportSliceActions>(pickExport
 export const usePresentationSlice = createSliceHook<PresentationSlice>(pickPresentationSlice);
 export const usePresentationState = createSliceHook(pickPresentationState);
 export const usePresentationActions = createActionsHook<PresentationSliceActions>(pickPresentationActions);
+
+export const useHistoryState = createSliceHook(pickHistoryState);
+export const useHistoryActions = createActionsHook(pickHistoryActions);
 
 /** Root workspace shell: intentionally broad, but scoped to workspace fields only. */
 export const useWorkspaceSlice = createSliceHook(pickWorkspaceSlice);

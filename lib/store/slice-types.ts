@@ -85,6 +85,13 @@ export type GeometrySliceActions = Pick<
   | "updateOpening"
 >;
 
+export type HistorySliceActions = Pick<
+  EvoProjectStore,
+  "undoProjectEdit" | "redoProjectEdit" | "hydrateWorkspaceSnapshot" | "clearEditHistory"
+>;
+
+export type HistorySliceState = Pick<EvoProjectStore, "undoStack" | "redoStack">;
+
 export type ExportSliceActions = Pick<
   EvoProjectStore,
   "openModelForVersion" | "refineVersion" | "returnToPlanGeneration"

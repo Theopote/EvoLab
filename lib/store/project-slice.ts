@@ -1,5 +1,6 @@
 import { produce } from "immer";
-import { normalizePlanVersion, normalizeProjectVersions } from "@/lib/architecture-model";
+import { normalizePlanVersion } from "@/lib/architecture-model";
+import { validateAndNormalizeProjectVersions } from "@/lib/schemas/store-boundary";
 import { createDefaultScoringConfig, normalizeScoringConfig } from "@/lib/rules/scoring-config";
 import {
   isBriefContextPhase,
@@ -92,6 +93,8 @@ export const createProjectSlice: StateCreator<EvoProjectStore, [], [], ProjectSl
         state.brief = briefFromTypologyPack(typologyId);
         state.workflowPhase = "scheme";
         state.activeTab = "Plan";
+        state.undoStack = [];
+        state.redoStack = [];
         clearSelectionDraft(state);
         bumpGeometryRevision(state);
         refreshDerivedDraft(state);
@@ -317,11 +320,13 @@ export const createProjectSlice: StateCreator<EvoProjectStore, [], [], ProjectSl
   replaceVersions: (versions, projectType = get().brief.projectType) =>
     set(
       produce<EvoProjectStore>((state) => {
-        const normalizedVersions = normalizeProjectVersions(versions);
+        const normalizedVersions = validateAndNormalizeProjectVersions(versions, "replaceVersions");
 
         state.project.projectType = projectType;
         state.project.versions = normalizedVersions;
         state.project.activeVersionId = normalizedVersions[0]?.id ?? state.project.activeVersionId;
+        state.undoStack = [];
+        state.redoStack = [];
         clearSelectionDraft(state);
         bumpGeometryRevision(state);
         refreshDerivedDraft(state);
@@ -331,7 +336,7 @@ export const createProjectSlice: StateCreator<EvoProjectStore, [], [], ProjectSl
     set(
       produce<EvoProjectStore>((state) => {
         const parentVersionId = state.project.activeVersionId || state.project.versions[0]?.id;
-        const normalizedVersions = normalizeProjectVersions(versions).map((version) => ({
+        const normalizedVersions = validateAndNormalizeProjectVersions(versions, "appendGeneratedVersions").map((version) => ({
           ...version,
           parentVersionId: version.parentVersionId ?? parentVersionId
         }));

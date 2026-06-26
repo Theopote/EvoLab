@@ -271,6 +271,21 @@ export function pickPresentationSlice(state: EvoProjectStore): PresentationSlice
   };
 }
 
+export function pickHistoryState(state: EvoProjectStore) {
+  return {
+    canUndo: state.undoStack.length > 0,
+    canRedo: state.redoStack.length > 0
+  };
+}
+
+export function pickHistoryActions(state: EvoProjectStore) {
+  return {
+    undoProjectEdit: state.undoProjectEdit,
+    redoProjectEdit: state.redoProjectEdit,
+    clearEditHistory: state.clearEditHistory
+  };
+}
+
 export function pickWorkspaceSlice(state: EvoProjectStore) {
   return {
     ...pickProjectSlice(state),

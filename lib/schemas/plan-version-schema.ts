@@ -175,3 +175,6 @@ export type TopologyRoom = z.infer<typeof TopologyRoomSchema>;
 export type AnalyzePlanToolInput = z.infer<typeof AnalyzePlanToolInputSchema>;
 export type ModifyPlanToolInput = z.infer<typeof ModifyPlanToolInputSchema>;
 export type RefinePlanGeometryToolInput = z.infer<typeof RefinePlanGeometryToolInputSchema>;
+export type Point = z.infer<typeof PointSchema>;
+export type RoomDraft = z.infer<typeof RoomSchema>;
+export type PlanVersionDraftValidated = z.infer<typeof PlanVersionDraftSchema>;

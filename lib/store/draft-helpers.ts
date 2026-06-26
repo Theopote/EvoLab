@@ -24,6 +24,7 @@ import { rescoreVersions, scoringInputFromDomain } from "@/lib/rules/resolve-ver
 import { isOutlineStale } from "@/lib/outline-sync";
 import type { PlanVersion, ProjectData } from "@/lib/project-types";
 import type { EvoProjectStore } from "@/lib/store/types";
+import { pushUserEditUndoSnapshot } from "@/lib/store/workspace-history";
 import {
   getPendingGeometryChangeBurst,
   setPendingGeometryChangeBurst
@@ -155,6 +156,10 @@ export function recordGeometryVersionChangeSet(
 ) {
   const now = Date.now();
   const pendingBurst = getPendingGeometryChangeBurst();
+
+  if (!shouldMergeGeometryChange(pendingBurst, targetVersion.id, now)) {
+    pushUserEditUndoSnapshot(state);
+  }
 
   if (shouldMergeGeometryChange(pendingBurst, targetVersion.id, now) && pendingBurst) {
     const merged = mergeGeometryChangeSet(
@@ -312,6 +317,10 @@ export function commitNormalizedVersionDraft(
   changeSource: "ai" | "user" | "import" | "system" = "user"
 ) {
   const previousVersion = state.project.versions.find((item) => item.id === normalizedVersion.id);
+
+  if (changeSource === "user" && previousVersion) {
+    pushUserEditUndoSnapshot(state);
+  }
 
   state.project.versions = state.project.versions.some((item) => item.id === normalizedVersion.id)
     ? state.project.versions.map((item) => (item.id === normalizedVersion.id ? normalizedVersion : item))

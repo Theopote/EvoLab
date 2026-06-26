@@ -73,6 +73,8 @@ export function createInitialState(): EvoProjectStoreData {
     relayoutError: null,
     compareLevelId: activeLevel?.id,
     selectedChangeSetId: initialProjectData.domain.changeSets[0]?.id,
-    presentationSessions: {}
+    presentationSessions: {},
+    undoStack: [],
+    redoStack: []
   };
 }

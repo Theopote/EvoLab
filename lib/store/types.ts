@@ -26,6 +26,7 @@ import type { PlanScopeKind } from "@/lib/plan-scope";
 import type { PresentationSessionMap } from "@/lib/presentation/session-types";
 import type { PresentationDeck, PresentationTemplateId } from "@/lib/presentation/types";
 import type { WorkflowPhase, WorkflowPhaseId } from "@/lib/workflow-phases";
+import type { WorkspaceHistorySnapshot, WorkspacePersistedSnapshot } from "@/lib/store/workspace-history";
 
 export type SelectionType = "none" | "room" | "wall" | "opening";
 
@@ -81,6 +82,8 @@ export interface EvoProjectStore {
   compareLevelId?: string;
   selectedChangeSetId?: string;
   presentationSessions: PresentationSessionMap;
+  undoStack: WorkspaceHistorySnapshot[];
+  redoStack: WorkspaceHistorySnapshot[];
   setActiveTab: (tab: WorkspaceTab) => void;
   setOutline: (outline: Point[]) => void;
   setOutlineClosed: (closed: boolean) => void;
@@ -203,6 +206,10 @@ export interface EvoProjectStore {
   ) => void;
   removePresentationSlide: (versionId: string, slideId: string) => void;
   movePresentationSlide: (versionId: string, fromIndex: number, toIndex: number) => void;
+  undoProjectEdit: () => void;
+  redoProjectEdit: () => void;
+  hydrateWorkspaceSnapshot: (snapshot: WorkspacePersistedSnapshot) => void;
+  clearEditHistory: () => void;
 }
 
 export type EvoProjectStoreData = Omit<

@@ -5,6 +5,10 @@ import { useSearchParams } from "next/navigation";
 import { recordProjectAccess } from "@/lib/project-registry";
 import { useProjectActions, useProjectState } from "@/lib/project-store";
 import type { TypologyPackId } from "@/lib/typology/types";
+import {
+  useWorkspaceEditHistoryShortcuts,
+  useWorkspacePersistence
+} from "@/components/workspace/useWorkspacePersistence";
 
 const templateIds = new Set<TypologyPackId>(["healthcare", "office", "residential", "school"]);
 
@@ -12,13 +16,17 @@ export function WorkspaceBootstrap() {
   const searchParams = useSearchParams();
   const project = useProjectState((state) => state.project);
   const { loadDemoProject, setWorkflowPhase, setActiveTab } = useProjectActions();
+  const template = searchParams.get("template");
+  const skipRestore = Boolean(template && templateIds.has(template as TypologyPackId));
+
+  useWorkspacePersistence({ skipRestore });
+  useWorkspaceEditHistoryShortcuts();
 
   useEffect(() => {
     recordProjectAccess(project);
   }, [project.projectId, project.projectName, project.projectType, project.versions.length]);
 
   useEffect(() => {
-    const template = searchParams.get("template");
     if (template && templateIds.has(template as TypologyPackId)) {
       loadDemoProject(template as TypologyPackId);
       return;
@@ -28,7 +36,7 @@ export function WorkspaceBootstrap() {
       setWorkflowPhase("import");
       setActiveTab("Import");
     }
-  }, [loadDemoProject, searchParams, setActiveTab, setWorkflowPhase]);
+  }, [loadDemoProject, searchParams, setActiveTab, setWorkflowPhase, template]);
 
   return null;
 }
