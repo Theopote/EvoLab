@@ -52,3 +52,26 @@ export function recordProjectAccess(project: Pick<ProjectData, "projectId" | "pr
 export function listRecentProjects(limit = 5) {
   return readProjectRegistry().slice(0, limit);
 }
+
+export function mergeProjectSummaries(
+  remote: ProjectRegistryEntry[],
+  local: ProjectRegistryEntry[],
+  limit = 5
+): ProjectRegistryEntry[] {
+  const byId = new Map<string, ProjectRegistryEntry>();
+
+  for (const entry of remote) {
+    byId.set(entry.projectId, entry);
+  }
+
+  for (const entry of local) {
+    const existing = byId.get(entry.projectId);
+    if (!existing || entry.lastAccessedAt.localeCompare(existing.lastAccessedAt) > 0) {
+      byId.set(entry.projectId, entry);
+    }
+  }
+
+  return Array.from(byId.values())
+    .sort((left, right) => right.lastAccessedAt.localeCompare(left.lastAccessedAt))
+    .slice(0, limit);
+}

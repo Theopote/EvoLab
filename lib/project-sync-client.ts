@@ -1,4 +1,9 @@
 import type { WorkspacePersistedSnapshot } from "@/lib/store/workspace-history";
+import {
+  mergeProjectSummaries,
+  readProjectRegistry,
+  type ProjectRegistryEntry
+} from "@/lib/project-registry";
 
 export async function fetchProjectSnapshot(projectId: string): Promise<WorkspacePersistedSnapshot | null> {
   try {
@@ -37,15 +42,7 @@ export async function saveProjectSnapshot(snapshot: WorkspacePersistedSnapshot):
   }
 }
 
-export async function listRemoteProjects(): Promise<
-  Array<{
-    projectId: string;
-    projectName: string;
-    projectType: string;
-    versionCount: number;
-    lastAccessedAt: string;
-  }>
-> {
+export async function listRemoteProjects(): Promise<ProjectRegistryEntry[]> {
   try {
     const response = await fetch("/api/projects", { cache: "no-store" });
 
@@ -54,17 +51,17 @@ export async function listRemoteProjects(): Promise<
     }
 
     const payload = (await response.json()) as {
-      projects?: Array<{
-        projectId: string;
-        projectName: string;
-        projectType: string;
-        versionCount: number;
-        lastAccessedAt: string;
-      }>;
+      projects?: ProjectRegistryEntry[];
     };
 
     return payload.projects ?? [];
   } catch {
     return [];
   }
+}
+
+export async function listLauncherProjects(limit = 5): Promise<ProjectRegistryEntry[]> {
+  const remote = await listRemoteProjects();
+  const local = readProjectRegistry();
+  return mergeProjectSummaries(remote, local, limit);
 }

@@ -6,7 +6,7 @@ import { AiTimelinePanel } from "@/components/copilot/AiTimelinePanel";
 import { CopilotProposalHistoryPanel } from "@/components/copilot/CopilotProposalHistoryPanel";
 import { PlanChangeProposalPanel } from "@/components/copilot/PlanChangeProposalPanel";
 import { useComplianceFixAction } from "@/components/copilot/useComplianceFixAction";
-import type { ModifyPlanResponse } from "@/lib/copilot-modify-types";
+import { requestModifyPlan } from "@/lib/copilot-modify-client";
 import { useReviewActions, useReviewState } from "@/lib/project-store";
 import type {
   CopilotAction,
@@ -58,6 +58,7 @@ export function CopilotConsole({
   const [expanded, setExpanded] = useState(true);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [streamPreview, setStreamPreview] = useState("");
   const [pinnedFiles, setPinnedFiles] = useState<CopilotPinnedFile[]>([]);
   const [pendingPlan, setPendingPlan] = useState<CopilotPlan | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -283,13 +284,12 @@ export function CopilotConsole({
 
     setInput("");
     setIsSending(true);
+    setStreamPreview("");
     setMessages((current) => [...current, { id: `user-${Date.now()}`, role: "user", content: text }]);
 
     try {
-      const response = await fetch("/api/modify-plan", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const data = await requestModifyPlan(
+        {
           currentVersion: baseVersion,
           userRequest: text,
           lockedElementIds,
@@ -301,14 +301,12 @@ export function CopilotConsole({
               mediaType: file.mediaType!,
               fileName: file.fileName
             }))
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`modify-plan failed with ${response.status}`);
-      }
-
-      const data = (await response.json()) as ModifyPlanResponse;
+        },
+        {
+          onStatus: (message) => setStreamPreview(message),
+          onDelta: (chunk) => setStreamPreview((current) => current + chunk)
+        }
+      );
 
       if (!data.version?.rooms) {
         throw new Error("modify-plan did not return a usable PlanVersion.");
@@ -327,6 +325,7 @@ export function CopilotConsole({
       });
 
       setPinnedFiles([]);
+      setStreamPreview("");
       setMessages((current) => [
         ...current,
         {
@@ -344,6 +343,7 @@ export function CopilotConsole({
         }
       ]);
     } catch (error) {
+      setStreamPreview("");
       setMessages((current) => [
         ...current,
         {
@@ -635,6 +635,16 @@ export function CopilotConsole({
                     </button>
                   </div>
                 ))}
+              </div>
+            ) : null}
+
+            {streamPreview ? (
+              <div className="mb-2 rounded border border-line/80 bg-[#0b1118] px-3 py-2 text-xs leading-5 text-muted">
+                <div className="mb-1 flex items-center gap-2 text-[11px] uppercase tracking-wide text-accent">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Copilot
+                </div>
+                <p className="whitespace-pre-wrap">{streamPreview}</p>
               </div>
             ) : null}
 

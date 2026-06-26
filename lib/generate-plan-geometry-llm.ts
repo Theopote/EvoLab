@@ -1,8 +1,7 @@
 import { requestAnthropicTool } from "@/lib/anthropic-tool";
 import type { GeneratePlanConstraints } from "@/lib/generate-plan-constraints";
 import type { PostProcessOptions } from "@/lib/plan-postprocess";
-import { buildGenerateGeometrySystemPrompt } from "@/lib/prompts/generateGeometryPrompt";
-import { buildGeometryPromptSupplement } from "@/lib/prompts/typologySupplement";
+import { DEFAULT_PROMPT_REFS, resolvePrompt } from "@/lib/prompts/registry";
 import type { GeneratePlanRequest } from "@/lib/schemas/generate-plan-request-schema";
 import {
   GeneratePlanGeometryToolInputSchema,
@@ -22,15 +21,21 @@ export async function requestPlanGeometryFromTopology(
   body: GeneratePlanRequest,
   options?: { correction?: unknown }
 ) {
+  const geometryInput = buildGeometryPhaseInput(topology, constraints, body, options?.correction);
+
   return requestAnthropicTool({
-    system: buildGenerateGeometrySystemPrompt(buildGeometryPromptSupplement(body.projectType)),
-    input: buildGeometryPhaseInput(topology, constraints, body, options?.correction),
+    system: resolvePrompt(DEFAULT_PROMPT_REFS.generatePlanGeometry, { projectType: body.projectType }),
+    input: geometryInput,
     toolName: "generate_plan_geometry",
     toolDescription:
       "Convert a locked room topology graph into metric floor-plan geometry inside the site outline.",
     schema: GeneratePlanGeometryToolInputSchema,
     maxTokens: 8192,
-    maxValidationRetries: 2
+    maxValidationRetries: 2,
+    task: "generate-plan-geometry",
+    route: "/api/generate-plan",
+    promptRef: DEFAULT_PROMPT_REFS.generatePlanGeometry,
+    cacheInput: geometryInput
   });
 }
 

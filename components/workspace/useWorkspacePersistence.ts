@@ -10,7 +10,7 @@ import { readWorkspaceSnapshot, writeWorkspaceSnapshot } from "@/lib/store/works
 const SAVE_DEBOUNCE_MS = 400;
 const SERVER_SYNC_DEBOUNCE_MS = 1500;
 
-export function useWorkspacePersistence(options?: { skipRestore?: boolean }) {
+export function useWorkspacePersistence(options?: { skipRestore?: boolean; preferredProjectId?: string | null }) {
   const hydratedRef = useRef(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const serverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -24,7 +24,7 @@ export function useWorkspacePersistence(options?: { skipRestore?: boolean }) {
     hydratedRef.current = true;
 
     void (async () => {
-      const projectId = useEvoProjectStore.getState().project.projectId;
+      const projectId = options?.preferredProjectId?.trim() || useEvoProjectStore.getState().project.projectId;
       const remoteSnapshot = await fetchProjectSnapshot(projectId);
       const localSnapshot = await readWorkspaceSnapshot(projectId);
       const snapshot = pickNewestSnapshot(remoteSnapshot, localSnapshot);
@@ -36,7 +36,7 @@ export function useWorkspacePersistence(options?: { skipRestore?: boolean }) {
         }
       }
     })();
-  }, [hydrateWorkspaceSnapshot, options?.skipRestore]);
+  }, [hydrateWorkspaceSnapshot, options?.preferredProjectId, options?.skipRestore]);
 
   useEffect(() => {
     const unsubscribe = useEvoProjectStore.subscribe((state, previousState) => {

@@ -5,7 +5,8 @@ import Link from "next/link";
 import { ArrowRight, Boxes, Clock3, Sparkles, Wrench } from "lucide-react";
 import { RecentToolSessionsList } from "@/components/tools/RecentToolSessionsList";
 import { workflowTemplates } from "@/lib/launcher/workflow-templates";
-import { listRecentProjects, type ProjectRegistryEntry } from "@/lib/project-registry";
+import type { ProjectRegistryEntry } from "@/lib/project-registry";
+import { listLauncherProjects } from "@/lib/project-sync-client";
 import { useRecentToolSessions } from "@/lib/tools/tool-session-store";
 
 const entryCards = [
@@ -30,7 +31,7 @@ export function LauncherHome() {
   const recentSessions = useRecentToolSessions(4);
 
   useEffect(() => {
-    setRecentProjects(listRecentProjects(5));
+    void listLauncherProjects(5).then(setRecentProjects);
   }, []);
 
   return (
@@ -91,7 +92,7 @@ export function LauncherHome() {
                 {recentProjects.map((project) => (
                   <Link
                     className="flex items-center justify-between rounded border border-line bg-panel/70 px-4 py-3 transition hover:border-accent/40"
-                    href="/workspace"
+                    href={`/workspace?projectId=${encodeURIComponent(project.projectId)}`}
                     key={project.projectId}
                   >
                     <div>

@@ -1,5 +1,10 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { listRecentProjects, recordProjectAccess, readProjectRegistry } from "@/lib/project-registry";
+import {
+  listRecentProjects,
+  mergeProjectSummaries,
+  recordProjectAccess,
+  readProjectRegistry
+} from "@/lib/project-registry";
 
 describe("project registry", () => {
   beforeEach(() => {
@@ -31,5 +36,47 @@ describe("project registry", () => {
   it("returns empty list when storage is empty", () => {
     expect(readProjectRegistry()).toEqual([]);
     expect(listRecentProjects()).toEqual([]);
+  });
+
+  it("merges remote and local summaries by recency", () => {
+    const merged = mergeProjectSummaries(
+      [
+        {
+          projectId: "remote-only",
+          projectName: "Remote",
+          projectType: "office",
+          versionCount: 2,
+          lastAccessedAt: "2026-06-27T10:00:00.000Z"
+        },
+        {
+          projectId: "shared",
+          projectName: "Remote Shared",
+          projectType: "office",
+          versionCount: 3,
+          lastAccessedAt: "2026-06-27T08:00:00.000Z"
+        }
+      ],
+      [
+        {
+          projectId: "local-only",
+          projectName: "Local",
+          projectType: "healthcare",
+          versionCount: 1,
+          lastAccessedAt: "2026-06-27T09:00:00.000Z"
+        },
+        {
+          projectId: "shared",
+          projectName: "Local Shared",
+          projectType: "office",
+          versionCount: 4,
+          lastAccessedAt: "2026-06-27T12:00:00.000Z"
+        }
+      ],
+      5
+    );
+
+    expect(merged.map((entry) => entry.projectId)).toEqual(["shared", "remote-only", "local-only"]);
+    expect(merged[0]?.projectName).toBe("Local Shared");
+    expect(merged[0]?.versionCount).toBe(4);
   });
 });

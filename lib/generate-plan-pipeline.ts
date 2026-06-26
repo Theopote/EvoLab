@@ -7,8 +7,7 @@ import {
 } from "@/lib/generate-plan-constraints";
 import { postProcessPlanVersion, type PostProcessOptions } from "@/lib/plan-postprocess";
 import { validatePlanVersion, type PlanValidationIssue } from "@/lib/plan-validation";
-import { buildRefineGeometrySystemPrompt } from "@/lib/prompts/refinePlanGeometryPrompt";
-import { buildGenerateTopologySystemPrompt } from "@/lib/prompts/generateTopologyPrompt";
+import { DEFAULT_PROMPT_REFS, resolvePrompt } from "@/lib/prompts/registry";
 import {
   buildGeometryPromptSupplement,
   buildTopologyPromptSupplement
@@ -165,15 +164,21 @@ async function requestTopologyPlan(
     versionCount?: number;
   }
 ) {
+  const topologyInputData = topologyInput(body, constraints, program, options);
+
   return requestAnthropicTool({
-    system: buildGenerateTopologySystemPrompt(buildTopologyPromptSupplement(body.projectType)),
-    input: topologyInput(body, constraints, program, options),
+    system: resolvePrompt(DEFAULT_PROMPT_REFS.generatePlanTopology, { projectType: body.projectType }),
+    input: topologyInputData,
     toolName: "generate_plan_topology",
     toolDescription:
       "Return EvoLab architectural room topology, target areas, and adjacency graph without final geometry.",
     schema: GeneratePlanTopologyToolInputSchema,
     maxTokens: 8192,
-    maxValidationRetries: 2
+    maxValidationRetries: 2,
+    task: "generate-plan-topology",
+    route: "/api/generate-plan",
+    promptRef: DEFAULT_PROMPT_REFS.generatePlanTopology,
+    cacheInput: topologyInputData
   });
 }
 
@@ -220,30 +225,36 @@ async function requestGeometryRefinement(
   envelopeIssues: string[],
   correction?: unknown
 ) {
-  return requestAnthropicTool({
-    system: buildRefineGeometrySystemPrompt(buildGeometryPromptSupplement(projectType)),
-    input: {
-      version: toDraft(version),
-      topology: {
-        strategy: topology.strategy,
-        rooms: topology.rooms.map((room) => ({
-          id: room.id,
-          name: room.name,
-          type: room.type
-        })),
-        edges: topology.edges
-      },
-      buildableEnvelope: constraints.envelope,
-      validationIssues: summarizeValidationIssues(validationIssues),
-      envelopeIssues,
-      correction
+  const refineInput = {
+    version: toDraft(version),
+    topology: {
+      strategy: topology.strategy,
+      rooms: topology.rooms.map((room) => ({
+        id: room.id,
+        name: room.name,
+        type: room.type
+      })),
+      edges: topology.edges
     },
+    buildableEnvelope: constraints.envelope,
+    validationIssues: summarizeValidationIssues(validationIssues),
+    envelopeIssues,
+    correction
+  };
+
+  return requestAnthropicTool({
+    system: resolvePrompt(DEFAULT_PROMPT_REFS.generatePlanRefine, { projectType }),
+    input: refineInput,
     toolName: "refine_plan_geometry",
     toolDescription:
       "Micro-adjust LLM-generated room polygons to fix spatial validation issues while preserving room program.",
     schema: RefinePlanGeometryToolInputSchema,
     maxTokens: 8192,
-    maxValidationRetries: 2
+    maxValidationRetries: 2,
+    task: "generate-plan-refine",
+    route: "/api/generate-plan",
+    promptRef: DEFAULT_PROMPT_REFS.generatePlanRefine,
+    cacheInput: refineInput
   });
 }
 

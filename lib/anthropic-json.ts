@@ -1,11 +1,16 @@
 import Anthropic from "@anthropic-ai/sdk";
-
-const MODEL = "claude-sonnet-4-20250514";
+import type { Message } from "@anthropic-ai/sdk/resources/messages";
+import { isLlmAvailable, isOfflineLlmMode } from "@/lib/ai/offline-mode";
+import { resolveLlmProvider, resolveModelForTask } from "@/lib/ai/model-routing";
+import { logLlmUsage } from "@/lib/ai/token-usage";
+import type { LlmTask } from "@/lib/ai/llm-tasks";
 
 export function hasAnthropicKey() {
-  if (process.env.NEXT_PUBLIC_MOCK_MODE === "true") return false;
-  const key = process.env.ANTHROPIC_API_KEY;
-  return Boolean(key && key !== "your_key_here");
+  return isLlmAvailable();
+}
+
+export function isOfflineMode() {
+  return isOfflineLlmMode();
 }
 
 function extractJsonText(text: string) {
@@ -30,25 +35,50 @@ function extractJsonText(text: string) {
   return trimmed;
 }
 
+async function createAnthropicClient() {
+  if (!isLlmAvailable()) {
+    throw new Error("LLM is not available (offline mode or missing API key).");
+  }
+
+  if (resolveLlmProvider() !== "anthropic") {
+    throw new Error(`Provider ${resolveLlmProvider()} is not implemented yet. Set EVOLAB_LLM_PROVIDER=anthropic.`);
+  }
+
+  return new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY
+  });
+}
+
+async function logMessageUsage(message: Message, task: LlmTask, route?: string) {
+  await logLlmUsage({
+    provider: "anthropic",
+    model: message.model,
+    task,
+    route,
+    inputTokens: message.usage?.input_tokens ?? 0,
+    outputTokens: message.usage?.output_tokens ?? 0,
+    cacheHit: false
+  });
+}
+
 export async function requestAnthropicJson<T>({
   system,
   input,
-  maxTokens = 4096
+  maxTokens = 4096,
+  task = "default",
+  route
 }: {
   system: string;
   input: unknown;
   maxTokens?: number;
+  task?: LlmTask;
+  route?: string;
 }): Promise<T> {
-  if (!hasAnthropicKey()) {
-    throw new Error("ANTHROPIC_API_KEY is not configured.");
-  }
-
-  const client = new Anthropic({
-    apiKey: process.env.ANTHROPIC_API_KEY
-  });
+  const client = await createAnthropicClient();
+  const model = resolveModelForTask(task);
 
   const message = await client.messages.create({
-    model: MODEL,
+    model,
     max_tokens: maxTokens,
     system,
     messages: [
@@ -58,6 +88,8 @@ export async function requestAnthropicJson<T>({
       }
     ]
   });
+
+  await logMessageUsage(message, task, route);
 
   const text = message.content
     .filter((block) => block.type === "text")
@@ -70,31 +102,53 @@ export async function requestAnthropicJson<T>({
 export async function requestAnthropicText({
   system,
   prompt,
-  maxTokens = 4096
+  maxTokens = 4096,
+  task = "default",
+  route,
+  onStreamDelta
 }: {
   system: string;
   prompt: string;
   maxTokens?: number;
+  task?: LlmTask;
+  route?: string;
+  onStreamDelta?: (text: string) => void;
 }): Promise<string> {
-  if (!hasAnthropicKey()) {
-    throw new Error("ANTHROPIC_API_KEY is not configured.");
-  }
-
-  const client = new Anthropic({
-    apiKey: process.env.ANTHROPIC_API_KEY
-  });
-
-  const message = await client.messages.create({
-    model: MODEL,
+  const client = await createAnthropicClient();
+  const model = resolveModelForTask(task);
+  const request = {
+    model,
     max_tokens: maxTokens,
     system,
     messages: [
       {
-        role: "user",
+        role: "user" as const,
         content: prompt
       }
     ]
-  });
+  };
+
+  let message: Message;
+
+  if (onStreamDelta) {
+    const stream = client.messages.stream(request);
+
+    for await (const event of stream) {
+      if (
+        event.type === "content_block_delta" &&
+        event.delta.type === "text_delta" &&
+        event.delta.text
+      ) {
+        onStreamDelta(event.delta.text);
+      }
+    }
+
+    message = await stream.finalMessage();
+  } else {
+    message = await client.messages.create(request);
+  }
+
+  await logMessageUsage(message, task, route);
 
   return message.content
     .filter((block) => block.type === "text")
