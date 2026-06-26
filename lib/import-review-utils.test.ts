@@ -3,8 +3,11 @@ import { initialProjectData } from "@/lib/evolab-data";
 import {
   applyImportReviewRooms,
   createTracedImportRoom,
+  recalculateImportReviewAreas,
   removeImportReviewRoom,
-  resolveImportReviewRooms
+  resolveImportReviewRooms,
+  updateImportReviewRoom,
+  validateImportReviewDraft
 } from "@/lib/import-review-utils";
 
 const baseVersion = initialProjectData.versions[0];
@@ -52,5 +55,43 @@ describe("import review utils", () => {
     const nextVersion = removeImportReviewRoom(baseVersion, targetId!);
 
     expect(resolveImportReviewRooms(nextVersion).some((room) => room.id === targetId)).toBe(false);
+  });
+
+  it("updates room metadata and recalculates areas", () => {
+    const rooms = resolveImportReviewRooms(baseVersion);
+    const targetId = rooms[0]!.id;
+
+    const renamed = updateImportReviewRoom(baseVersion, targetId, { name: "Lobby", zone: "public" });
+    expect(resolveImportReviewRooms(renamed)[0]?.name).toBe("Lobby");
+
+    const recalculated = recalculateImportReviewAreas(renamed);
+    expect(resolveImportReviewRooms(recalculated)[0]?.areaSqm).toBeGreaterThan(0);
+  });
+
+  it("flags overlapping rooms in import review validation", () => {
+    const roomA = createTracedImportRoom(
+      [
+        [0, 0],
+        [4, 0],
+        [4, 4],
+        [0, 4]
+      ],
+      "level-01",
+      1
+    );
+    const roomB = createTracedImportRoom(
+      [
+        [2, 2],
+        [6, 2],
+        [6, 6],
+        [2, 6]
+      ],
+      "level-01",
+      2
+    );
+    const version = applyImportReviewRooms(baseVersion, [roomA, roomB]);
+    const issues = validateImportReviewDraft(version);
+
+    expect(issues.some((issue) => issue.id === "room-overlap")).toBe(true);
   });
 });

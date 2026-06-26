@@ -1,17 +1,22 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { PencilLine, RotateCcw, Ruler, Trash2, Wand2 } from "lucide-react";
+import { AlertTriangle, Calculator, PencilLine, RotateCcw, Ruler, Trash2, Wand2 } from "lucide-react";
 import { ImportReviewCanvas, type ImportReviewMode } from "@/components/workflow/import/ImportReviewCanvas";
 import {
   applyImportReviewRooms,
   createTracedImportRoom,
+  importReviewRoomTypes,
+  importReviewZones,
+  recalculateImportReviewAreas,
   removeImportReviewRoom,
-  resolveImportReviewRooms
+  resolveImportReviewRooms,
+  updateImportReviewRoom,
+  validateImportReviewDraft
 } from "@/lib/import-review-utils";
 import { buildVersionWallPreviewDataUrl } from "@/lib/import-reference-preview";
 import { applyScaleCalibration } from "@/lib/plan-import/scale-calibration";
-import type { PlanVersion, Point } from "@/lib/project-types";
+import type { FunctionZone, PlanVersion, Point, RoomType } from "@/lib/project-types";
 import type { PlanImportSource } from "@/lib/plan-import/types";
 
 interface TraceReviewEditorProps {
@@ -39,6 +44,9 @@ export function TraceReviewEditor({
   const [scalePickActive, setScalePickActive] = useState(false);
 
   const rooms = resolveImportReviewRooms(draftVersion);
+  const selectedRoom = rooms.find((room) => room.id === selectedRoomId);
+  const validationIssues = useMemo(() => validateImportReviewDraft(draftVersion), [draftVersion]);
+
   const effectiveReferencePreviewUrl = useMemo(() => {
     if (sourceType === "dxf") {
       return buildVersionWallPreviewDataUrl(draftVersion);
@@ -74,6 +82,18 @@ export function TraceReviewEditor({
     onDraftVersionChange(applyScaleCalibration(draftVersion, scalePoints[0]!, scalePoints[1]!, distance));
     setScalePoints([]);
     setScalePickActive(false);
+  }
+
+  function handleRoomPatch(patch: Partial<{ name: string; type: RoomType; zone: FunctionZone }>) {
+    if (!selectedRoomId) {
+      return;
+    }
+
+    onDraftVersionChange(updateImportReviewRoom(draftVersion, selectedRoomId, patch));
+  }
+
+  function handleRecalculateAreas() {
+    onDraftVersionChange(recalculateImportReviewAreas(draftVersion));
   }
 
   return (
@@ -137,26 +157,143 @@ export function TraceReviewEditor({
         </p>
       ) : null}
 
-      <ImportReviewCanvas
-        className="min-h-[360px] flex-1"
-        mode={mode}
-        referenceImage={
-          effectiveReferencePreviewUrl
-            ? {
-                opacity: referenceOpacity,
-                previewUrl: effectiveReferencePreviewUrl
-              }
-            : undefined
-        }
-        scaleCalibrationActive={scaleCalibrationActive}
-        scaleCalibrationPoints={scalePoints}
-        selectedRoomId={selectedRoomId}
-        version={draftVersion}
-        onScalePointAdd={handleScalePointAdd}
-        onSelectRoom={setSelectedRoomId}
-        onTracePolygon={handleTracePolygon}
-        onVersionChange={onDraftVersionChange}
-      />
+      <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(0,1fr)_260px]">
+        <ImportReviewCanvas
+          className="min-h-[360px]"
+          mode={mode}
+          referenceImage={
+            effectiveReferencePreviewUrl
+              ? {
+                  opacity: referenceOpacity,
+                  previewUrl: effectiveReferencePreviewUrl
+                }
+              : undefined
+          }
+          scaleCalibrationActive={scaleCalibrationActive}
+          scaleCalibrationPoints={scalePoints}
+          selectedRoomId={selectedRoomId}
+          version={draftVersion}
+          onScalePointAdd={handleScalePointAdd}
+          onSelectRoom={setSelectedRoomId}
+          onTracePolygon={handleTracePolygon}
+          onVersionChange={onDraftVersionChange}
+        />
+
+        <aside className="flex min-h-0 flex-col gap-3 overflow-hidden rounded border border-line bg-panel/50 p-3 text-xs">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">房间列表</h3>
+            <button
+              className="inline-flex items-center gap-1 rounded border border-line px-2 py-1 text-[10px] text-muted hover:border-accent/50 hover:text-accent"
+              type="button"
+              onClick={handleRecalculateAreas}
+            >
+              <Calculator className="h-3 w-3" />
+              重算面积
+            </button>
+          </div>
+
+          <ul className="max-h-40 space-y-1 overflow-auto">
+            {rooms.map((room) => {
+              const roomIssues = validationIssues.filter((issue) => issue.roomIds?.includes(room.id));
+              const isSelected = room.id === selectedRoomId;
+
+              return (
+                <li key={room.id}>
+                  <button
+                    className={`flex w-full items-start justify-between gap-2 rounded px-2 py-1.5 text-left transition ${
+                      isSelected ? "bg-accent/15 text-accent ring-1 ring-accent/30" : "hover:bg-canvas/60"
+                    }`}
+                    type="button"
+                    onClick={() => setSelectedRoomId(room.id)}
+                  >
+                    <span className="min-w-0 truncate">
+                      {room.name}
+                      {roomIssues.length ? (
+                        <AlertTriangle className="ml-1 inline h-3 w-3 text-amber-300" />
+                      ) : null}
+                    </span>
+                    <span className={`shrink-0 ${isSelected ? "text-accent/80" : "text-muted"}`}>
+                      {room.areaSqm} ㎡
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+
+          {selectedRoom ? (
+            <section className="space-y-2 border-t border-line pt-3">
+              <h4 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">房间属性</h4>
+              <label className="block">
+                <span className="text-muted">名称</span>
+                <input
+                  className="mt-1 w-full rounded border border-line bg-canvas px-2 py-1.5 text-slate-100"
+                  value={selectedRoom.name}
+                  onChange={(event) => handleRoomPatch({ name: event.target.value })}
+                />
+              </label>
+              <label className="block">
+                <span className="text-muted">类型</span>
+                <select
+                  className="mt-1 w-full rounded border border-line bg-canvas px-2 py-1.5 text-slate-100"
+                  value={selectedRoom.type}
+                  onChange={(event) => handleRoomPatch({ type: event.target.value as RoomType })}
+                >
+                  {importReviewRoomTypes.map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-muted">功能分区</span>
+                <select
+                  className="mt-1 w-full rounded border border-line bg-canvas px-2 py-1.5 text-slate-100"
+                  value={selectedRoom.zone}
+                  onChange={(event) => handleRoomPatch({ zone: event.target.value as FunctionZone })}
+                >
+                  {importReviewZones.map((zone) => (
+                    <option key={zone} value={zone}>
+                      {zone}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </section>
+          ) : (
+            <p className="border-t border-line pt-3 text-muted">选择房间后可编辑名称、类型与功能分区。</p>
+          )}
+
+          <section className="min-h-0 flex-1 border-t border-line pt-3">
+            <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">
+              几何检查 ({validationIssues.length})
+            </h4>
+            {validationIssues.length ? (
+              <ul className="max-h-32 space-y-1 overflow-auto">
+                {validationIssues.map((issue, index) => (
+                  <li
+                    className={`rounded px-2 py-1 ${
+                      issue.severity === "error" ? "bg-danger/10 text-danger" : "bg-amber-500/10 text-amber-200"
+                    }`}
+                    key={`${issue.id}-${index}`}
+                  >
+                    <button
+                      className="w-full text-left"
+                      type="button"
+                      onClick={() => issue.roomIds?.[0] && setSelectedRoomId(issue.roomIds[0])}
+                    >
+                      {issue.message}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-success">未发现未闭合、重叠或面积异常问题。</p>
+            )}
+          </section>
+        </aside>
+      </div>
 
       <div className="flex flex-wrap items-center gap-2 border-t border-line pt-3 text-xs">
         <button

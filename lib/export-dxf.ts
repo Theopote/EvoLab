@@ -12,6 +12,7 @@ export const DXF_EXPORT_LAYERS = {
   ROOM_TEXT: "EVOLAB-ROOM-TEXT",
   COLUMN: "EVOLAB-COLUMN",
   CORE: "EVOLAB-CORE",
+  SHAFT: "EVOLAB-SHAFT",
   GRID: "EVOLAB-GRID",
   FLOOR: "EVOLAB-FLOOR"
 } as const;
@@ -225,6 +226,18 @@ function appendVerticalElementEntities(
       if (isPolygon(polygon) && polygon.length >= 3) {
         entities.push(polylineEntity(DXF_EXPORT_LAYERS.CORE, polygon, true));
         usedLayers.add(DXF_EXPORT_LAYERS.CORE);
+      }
+      continue;
+    }
+
+    if (element.kind === "mep_shaft") {
+      const point = element.position;
+      if (isPoint(point)) {
+        entities.push(circleEntity(DXF_EXPORT_LAYERS.SHAFT, point, 0.25));
+        usedLayers.add(DXF_EXPORT_LAYERS.SHAFT);
+      } else if (isPolygon(point) && point.length >= 3) {
+        entities.push(polylineEntity(DXF_EXPORT_LAYERS.SHAFT, point, true));
+        usedLayers.add(DXF_EXPORT_LAYERS.SHAFT);
       }
     }
   }

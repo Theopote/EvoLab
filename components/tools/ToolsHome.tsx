@@ -8,9 +8,11 @@ import {
   useToolSessionStore
 } from "@/lib/tools/tool-session-store";
 import {
+  getAvailableTools,
   toolCategoryLabels,
   toolDefinitions,
-  type ToolCategory
+  type ToolCategory,
+  type ToolDefinition
 } from "@/lib/tools/tool-definitions";
 
 const categoryOrder: ToolCategory[] = [
@@ -24,14 +26,43 @@ const categoryOrder: ToolCategory[] = [
   "mep"
 ];
 
+function ToolCard({ tool }: { tool: ToolDefinition }) {
+  const Icon = tool.icon;
+  const isAvailable = tool.status === "available";
+
+  return (
+    <Link
+      className={`rounded border p-4 transition ${
+        isAvailable
+          ? "border-line bg-panel/80 hover:border-accent/40 hover:bg-panel"
+          : "border-line/60 bg-panel/40 opacity-80 hover:border-line"
+      }`}
+      href={isAvailable ? `/tools/${tool.id}` : "#"}
+      key={tool.id}
+      onClick={isAvailable ? undefined : (event) => event.preventDefault()}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <Icon className="h-5 w-5 shrink-0 text-accent" />
+        {!isAvailable ? (
+          <span className="rounded border border-line px-2 py-0.5 text-[10px] text-muted">即将推出</span>
+        ) : null}
+      </div>
+      <h3 className="mt-3 text-sm font-semibold text-white">{tool.nameZh}</h3>
+      <p className="mt-1 text-xs leading-5 text-muted">{tool.descriptionZh}</p>
+    </Link>
+  );
+}
+
 export function ToolsHome() {
   const recentSessions = useToolSessionStore(selectRecentToolSessions(4));
+  const availableTools = getAvailableTools();
+  const comingSoonTools = toolDefinitions.filter((tool) => tool.status === "coming-soon");
 
-  const grouped = categoryOrder
+  const groupedComingSoon = categoryOrder
     .map((category) => ({
       category,
       label: toolCategoryLabels[category],
-      tools: toolDefinitions.filter((tool) => tool.category === category)
+      tools: comingSoonTools.filter((tool) => tool.category === category)
     }))
     .filter((group) => group.tools.length > 0);
 
@@ -64,7 +95,7 @@ export function ToolsHome() {
 
       <div className="mx-auto max-w-6xl px-6 py-8">
         <section className="mb-10">
-          <h2 className="mb-4 text-sm font-semibold text-white">继续上次工具任务</h2>
+          <h2 className="mb-4 text-sm font-semibold text-white">继续上次</h2>
           <RecentToolSessionsList
             emptyMessage="在工具中保存结果后，可从这里快速恢复上次任务。"
             sessions={recentSessions}
@@ -72,39 +103,28 @@ export function ToolsHome() {
           />
         </section>
 
-        {grouped.map((group) => (
-          <section className="mb-10" key={group.category}>
-            <h2 className="mb-4 text-xs font-semibold uppercase tracking-[0.14em] text-muted">{group.label}</h2>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {group.tools.map((tool) => {
-                const Icon = tool.icon;
-                const isAvailable = tool.status === "available";
+        <section className="mb-10">
+          <h2 className="mb-4 text-sm font-semibold text-white">可用工具</h2>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {availableTools.map((tool) => (
+              <ToolCard key={tool.id} tool={tool} />
+            ))}
+          </div>
+        </section>
 
-                return (
-                  <Link
-                    className={`rounded border p-4 transition ${
-                      isAvailable
-                        ? "border-line bg-panel/80 hover:border-accent/40 hover:bg-panel"
-                        : "border-line/60 bg-panel/40 opacity-80 hover:border-line"
-                    }`}
-                    href={isAvailable ? `/tools/${tool.id}` : "#"}
-                    key={tool.id}
-                    onClick={isAvailable ? undefined : (event) => event.preventDefault()}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <Icon className="h-5 w-5 shrink-0 text-accent" />
-                      {!isAvailable ? (
-                        <span className="rounded border border-line px-2 py-0.5 text-[10px] text-muted">即将推出</span>
-                      ) : null}
-                    </div>
-                    <h3 className="mt-3 text-sm font-semibold text-white">{tool.nameZh}</h3>
-                    <p className="mt-1 text-xs leading-5 text-muted">{tool.descriptionZh}</p>
-                  </Link>
-                );
-              })}
+        <section className="mb-10">
+          <h2 className="mb-4 text-sm font-semibold text-white">即将推出</h2>
+          {groupedComingSoon.map((group) => (
+            <div className="mb-8" key={group.category}>
+              <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-muted">{group.label}</h3>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {group.tools.map((tool) => (
+                  <ToolCard key={tool.id} tool={tool} />
+                ))}
+              </div>
             </div>
-          </section>
-        ))}
+          ))}
+        </section>
       </div>
     </main>
   );

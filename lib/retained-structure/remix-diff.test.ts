@@ -50,6 +50,7 @@ describe("buildRemixDiffReport", () => {
     expect(report.rationale.length).toBeGreaterThanOrEqual(3);
     expect(report.rationale.some((line) => line.includes("住宅"))).toBe(true);
     expect(report.zoneSummary.length).toBe(5);
+    expect(report.circulationSummary.length).toBeGreaterThan(0);
     expect(report.summary.relayoutedCount).toBeGreaterThan(0);
   });
 

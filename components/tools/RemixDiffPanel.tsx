@@ -44,6 +44,17 @@ export function RemixDiffPanel({
       </div>
 
       <section className="rounded border border-line bg-panel/70 p-3">
+        <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">重划摘要</h3>
+        <ul className="space-y-1.5 text-slate-200">
+          <li>保留结构：{report.summary.preservedStructureCount} 个</li>
+          <li>未动程序房间：{report.summary.unchangedProgramCount} 个</li>
+          <li>新增房间：{report.summary.addedCount} 个</li>
+          <li>面积变化：{formatAreaDelta(report.summary.programAreaDelta)}</li>
+          <li>流线变化：{report.circulationSummary}</li>
+        </ul>
+      </section>
+
+      <section className="rounded border border-line bg-panel/70 p-3">
         <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">重划说明</h3>
         <ul className="space-y-1.5 text-slate-200">
           {report.rationale.map((line, index) => (

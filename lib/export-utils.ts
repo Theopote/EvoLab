@@ -138,6 +138,21 @@ export function exportIfcHandoffJson(version: PlanVersion) {
   downloadTextFile(`${version.id}-ifc-handoff.json`, JSON.stringify(createIfcExportPayload(version), null, 2), "application/json");
 }
 
-export function exportDxfDocument(version: PlanVersion) {
-  downloadTextFile(`${version.id}.dxf`, createDxfExportDocument(version), "application/dxf");
+export function buildDxfExportFileName(sourceFileName?: string, date = new Date()): string {
+  const stem = sourceFileName
+    ? sourceFileName
+        .replace(/\.[^.]+$/, "")
+        .replace(/[^\w.-]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+    : "evolab-export";
+  const stamp = date.toISOString().slice(0, 10);
+  return `${stem || "evolab-export"}-${stamp}.dxf`;
+}
+
+export function exportDxfDocument(version: PlanVersion, options?: { sourceFileName?: string }) {
+  downloadTextFile(
+    buildDxfExportFileName(options?.sourceFileName),
+    createDxfExportDocument(version),
+    "application/dxf"
+  );
 }

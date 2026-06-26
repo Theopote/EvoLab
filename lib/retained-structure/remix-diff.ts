@@ -57,6 +57,7 @@ export interface RemixDiffSummary {
 
 export interface RemixDiffReport {
   summary: RemixDiffSummary;
+  circulationSummary: string;
   preserved: RemixRoomDiffEntry[];
   unchanged: RemixRoomDiffEntry[];
   changed: RemixRoomDiffEntry[];
@@ -330,6 +331,35 @@ function buildRisks(
   return risks.slice(0, 8);
 }
 
+function buildCirculationSummary(
+  before: Room[],
+  after: Room[],
+  zoneSummary: RemixZoneSummary[],
+  parameters: RetainedStructureRemixParameters
+): string {
+  const circulation = zoneSummary.find((zone) => zone.zone === "circulation");
+  const beforeCorridors = before.filter((room) => room.type === "corridor").length;
+  const afterCorridors = after.filter((room) => room.type === "corridor").length;
+
+  if (!circulation) {
+    return `采用${REMIX_CORRIDOR_STRATEGY_LABELS[parameters.corridorStrategy]}，走廊数量 ${beforeCorridors} → ${afterCorridors}。`;
+  }
+
+  const shareDelta = circulation.afterShare - circulation.beforeShare;
+  const shareText =
+    shareDelta === 0
+      ? "交通占比不变"
+      : shareDelta > 0
+        ? `交通占比上升 ${Math.abs(shareDelta).toFixed(1)}%`
+        : `交通占比下降 ${Math.abs(shareDelta).toFixed(1)}%`;
+
+  if (parameters.corridorStrategy === "open" && afterCorridors === 0) {
+    return `开放式布局，取消独立走廊；${shareText}（${circulation.beforeShare}% → ${circulation.afterShare}%）。`;
+  }
+
+  return `${REMIX_CORRIDOR_STRATEGY_LABELS[parameters.corridorStrategy]}，走廊 ${beforeCorridors} → ${afterCorridors} 段；${shareText}（${circulation.beforeShare}% → ${circulation.afterShare}%）。`;
+}
+
 export function buildRemixDiffReport(
   before: PlanVersion,
   after: PlanVersion,
@@ -382,11 +412,13 @@ export function buildRemixDiffReport(
   };
 
   const zoneSummary = buildZoneSummary(beforeProgram, afterProgram);
+  const circulationSummary = buildCirculationSummary(beforeProgram, afterProgram, zoneSummary, parameters);
   const rationale = buildRationale(parameters, summary);
   const risks = buildRisks(before, after, changed, added, removed, zoneSummary, parameters);
 
   return {
     summary,
+    circulationSummary,
     preserved,
     unchanged,
     changed,

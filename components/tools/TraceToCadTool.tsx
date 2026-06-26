@@ -213,7 +213,7 @@ export function TraceToCadTool() {
 
     setDxfExportPending(true);
     try {
-      exportDxfDocument(reviewState.draftVersion);
+      exportDxfDocument(reviewState.draftVersion, { sourceFileName: reviewState.fileName });
     } finally {
       window.setTimeout(() => setDxfExportPending(false), 400);
     }
