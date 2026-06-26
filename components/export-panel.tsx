@@ -1,5 +1,6 @@
 "use client";
 
+import { readApiBlob } from "@/lib/api-client";
 import { Download, FileArchive, FileCode2, FileJson, FileSpreadsheet, FileText } from "lucide-react";
 import { useState } from "react";
 import { buildComplianceReport, type ComplianceItem, type QuantityResult } from "@/lib/quantity-engine";
@@ -62,12 +63,7 @@ export function ExportPanel({ project, activeVersion, quantities, complianceItem
         body: JSON.stringify({ version: activeVersion })
       });
 
-      if (!response.ok) {
-        const data = (await response.json().catch(() => ({}))) as { error?: string };
-        throw new Error(data.error ?? `export-plan-pdf failed with ${response.status}`);
-      }
-
-      const blob = await response.blob();
+      const blob = await readApiBlob(response);
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;

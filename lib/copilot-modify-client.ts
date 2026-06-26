@@ -1,3 +1,4 @@
+import { readApiResponse } from "@/lib/api-client";
 import type { ModifyPlanResponse } from "@/lib/copilot-modify-types";
 
 interface ModifyPlanRequestBody {
@@ -50,18 +51,18 @@ export async function requestModifyPlan(
     })
   });
 
-  if (!response.ok) {
-    throw new Error(`modify-plan failed with ${response.status}`);
+  if (!response.ok && !options?.onDelta && !options?.onStatus) {
+    await readApiResponse<ModifyPlanResponse>(response);
   }
 
   if (!options?.onDelta && !options?.onStatus) {
-    return (await response.json()) as ModifyPlanResponse;
+    return readApiResponse<ModifyPlanResponse>(response);
   }
 
   const reader = response.body?.getReader();
 
   if (!reader) {
-    return (await response.json()) as ModifyPlanResponse;
+    return readApiResponse<ModifyPlanResponse>(response);
   }
 
   const decoder = new TextDecoder();

@@ -1,5 +1,6 @@
 import { resolvePresentationTemplate } from "@/lib/presentation/templates";
 import type { PresentationDeck } from "@/lib/presentation/types";
+import { readApiBlob } from "@/lib/api-client";
 
 function escapeHtml(value: string) {
   return value
@@ -234,11 +235,7 @@ export async function downloadPresentationViaApi(deck: PresentationDeck) {
     body: JSON.stringify({ deck })
   });
 
-  if (!response.ok) {
-    throw new Error(`export-presentation failed with ${response.status}`);
-  }
-
-  const blob = await response.blob();
+  const blob = await readApiBlob(response);
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;

@@ -1,5 +1,6 @@
 "use client";
 
+import { readApiResponse } from "@/lib/api-client";
 import { Check, GitCompare, GitCompareArrows, Loader2, RefreshCcw } from "lucide-react";
 import { useState } from "react";
 import { FloorPlan } from "@/components/floor-plan";
@@ -69,16 +70,12 @@ export function PlanResultGrid({
         })
       });
 
-      if (!response.ok) {
-        throw new Error(`Generate plan failed with ${response.status}`);
-      }
-
-      const data = (await response.json()) as {
+      const data = await readApiResponse<{
         versions?: PlanVersion[];
         pipeline?: { warnings?: string[]; envelopeApplied?: boolean };
         warning?: string;
         fallback?: boolean;
-      };
+      }>(response);
 
       if (!data.versions?.length) {
         throw new Error("No plan versions returned.");
