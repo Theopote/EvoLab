@@ -90,4 +90,14 @@ describe("tool session storage", () => {
     const migratedPayload = JSON.parse(String((window.localStorage.setItem as ReturnType<typeof vi.fn>).mock.calls[0]?.[1]));
     expect(JSON.stringify(migratedPayload)).not.toContain("data:image");
   });
+
+  it("does not rewrite localStorage when payload is already lightweight", () => {
+    const sessions = createSessionMap();
+    const stored = { "session-1": toStoredSession(sessions["session-1"]!) };
+    window.localStorage.getItem = vi.fn(() => JSON.stringify(stored));
+
+    readToolSessions();
+
+    expect(window.localStorage.setItem).not.toHaveBeenCalled();
+  });
 });

@@ -1,27 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Sparkles } from "lucide-react";
+import { RecentToolSessionsList } from "@/components/tools/RecentToolSessionsList";
 import {
-  getToolDefinition,
+  selectRecentToolSessions,
+  useToolSessionStore
+} from "@/lib/tools/tool-session-store";
+import {
   toolCategoryLabels,
   toolDefinitions,
   type ToolCategory
 } from "@/lib/tools/tool-definitions";
-import { useToolSessionStore } from "@/lib/tools/tool-session-store";
-import type { ToolSessionStatus } from "@/lib/tools/tool-session-types";
-
-function sessionStatusLabel(status: ToolSessionStatus) {
-  switch (status) {
-    case "ready":
-      return "可继续";
-    case "promoted":
-      return "已加入项目";
-    default:
-      return "草稿";
-  }
-}
 
 const categoryOrder: ToolCategory[] = [
   "import",
@@ -35,12 +25,7 @@ const categoryOrder: ToolCategory[] = [
 ];
 
 export function ToolsHome() {
-  const listRecentSessions = useToolSessionStore((state) => state.listRecentSessions);
-  const [recentSessions, setRecentSessions] = useState(() => listRecentSessions(4));
-
-  useEffect(() => {
-    setRecentSessions(listRecentSessions(4));
-  }, [listRecentSessions]);
+  const recentSessions = useToolSessionStore(selectRecentToolSessions(4));
 
   const grouped = categoryOrder
     .map((category) => ({
@@ -80,33 +65,11 @@ export function ToolsHome() {
       <div className="mx-auto max-w-6xl px-6 py-8">
         <section className="mb-10">
           <h2 className="mb-4 text-sm font-semibold text-white">继续上次工具任务</h2>
-          {recentSessions.length > 0 ? (
-            <div className="space-y-2">
-              {recentSessions.map((session) => {
-                const tool = getToolDefinition(session.toolId);
-
-                return (
-                  <Link
-                    className="block rounded border border-line bg-panel/70 px-4 py-3 transition hover:border-accent/40"
-                    href={`/tools/${session.toolId}?session=${session.id}`}
-                    key={session.id}
-                  >
-                    <div className="text-sm">
-                      <span className="text-slate-100">{session.title}</span>
-                      <span className="text-muted"> · </span>
-                      <span className="text-muted">{tool?.nameZh ?? session.toolId}</span>
-                      <span className="text-muted"> · </span>
-                      <span className="text-accent">{sessionStatusLabel(session.status)}</span>
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
-          ) : (
-            <p className="rounded border border-dashed border-line px-4 py-6 text-sm text-muted">
-              在工具中保存结果后，可从这里快速恢复上次任务。
-            </p>
-          )}
+          <RecentToolSessionsList
+            emptyMessage="在工具中保存结果后，可从这里快速恢复上次任务。"
+            sessions={recentSessions}
+            variant="inline"
+          />
         </section>
 
         {grouped.map((group) => (

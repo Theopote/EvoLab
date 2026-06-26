@@ -4,6 +4,10 @@ import { create } from "zustand";
 import type { PlanVersion } from "@/lib/project-types";
 import { getToolDefinition } from "@/lib/tools/tool-definitions";
 import {
+  hydrateSessionsFromDetailCache,
+  persistSessionDetailCache
+} from "@/lib/tools/tool-session-detail-cache";
+import {
   createToolSessionId,
   readToolSessions,
   writeToolSessions
@@ -48,6 +52,10 @@ interface ToolSessionState {
 
 function persistSessions(sessions: ToolSessionMap) {
   writeToolSessions(sessions);
+
+  for (const session of Object.values(sessions)) {
+    void persistSessionDetailCache(session);
+  }
 }
 
 function toSummary(session: ToolSessionDetail): ToolSessionSummary {
@@ -58,6 +66,14 @@ function toSummary(session: ToolSessionDetail): ToolSessionSummary {
     status: session.status,
     updatedAt: session.updatedAt
   };
+}
+
+export function selectRecentToolSessions(limit = 6) {
+  return (state: ToolSessionState): ToolSessionSummary[] =>
+    Object.values(state.sessions)
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+      .slice(0, limit)
+      .map(toSummary);
 }
 
 export const useToolSessionStore = create<ToolSessionState>((set, get) => ({
@@ -117,11 +133,7 @@ export const useToolSessionStore = create<ToolSessionState>((set, get) => ({
 
   getSession: (sessionId) => get().sessions[sessionId],
 
-  listRecentSessions: (limit = 6) =>
-    Object.values(get().sessions)
-      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
-      .slice(0, limit)
-      .map(toSummary),
+  listRecentSessions: (limit = 6) => selectRecentToolSessions(limit)(get()),
 
   appendOutput: (sessionId, output) => {
     const current = get().sessions[sessionId];
@@ -136,6 +148,21 @@ export const useToolSessionStore = create<ToolSessionState>((set, get) => ({
     });
   }
 }));
+
+if (typeof window !== "undefined") {
+  void hydrateSessionsFromDetailCache(useToolSessionStore.getState().sessions).then((sessions) => {
+    if (Object.keys(sessions).length === 0) {
+      return;
+    }
+
+    useToolSessionStore.setState((state) => ({
+      sessions: {
+        ...state.sessions,
+        ...sessions
+      }
+    }));
+  });
+}
 
 export function saveTraceToCadSession(input: {
   sessionId: string;

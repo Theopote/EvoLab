@@ -3,10 +3,10 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Boxes, Clock3, Sparkles, Wrench } from "lucide-react";
+import { RecentToolSessionsList } from "@/components/tools/RecentToolSessionsList";
 import { workflowTemplates } from "@/lib/launcher/workflow-templates";
 import { listRecentProjects, type ProjectRegistryEntry } from "@/lib/project-registry";
-import { getToolDefinition } from "@/lib/tools/tool-definitions";
-import { useToolSessionStore } from "@/lib/tools/tool-session-store";
+import { selectRecentToolSessions, useToolSessionStore } from "@/lib/tools/tool-session-store";
 
 const entryCards = [
   {
@@ -27,13 +27,11 @@ const entryCards = [
 
 export function LauncherHome() {
   const [recentProjects, setRecentProjects] = useState<ProjectRegistryEntry[]>([]);
-  const listRecentSessions = useToolSessionStore((state) => state.listRecentSessions);
-  const [recentSessions, setRecentSessions] = useState(() => listRecentSessions(4));
+  const recentSessions = useToolSessionStore(selectRecentToolSessions(4));
 
   useEffect(() => {
     setRecentProjects(listRecentProjects(5));
-    setRecentSessions(listRecentSessions(4));
-  }, [listRecentSessions]);
+  }, []);
 
   return (
     <main className="flex min-h-screen flex-col bg-canvas text-slate-100">
@@ -117,31 +115,7 @@ export function LauncherHome() {
 
           <section>
             <h3 className="mb-3 text-sm font-semibold text-white">最近工具会话</h3>
-            {recentSessions.length > 0 ? (
-              <div className="space-y-2">
-                {recentSessions.map((session) => {
-                  const tool = getToolDefinition(session.toolId);
-
-                  return (
-                    <Link
-                      className="flex items-center justify-between rounded border border-line bg-panel/70 px-4 py-3 transition hover:border-accent/40"
-                      href={`/tools/${session.toolId}?session=${session.id}`}
-                      key={session.id}
-                    >
-                      <div>
-                        <div className="text-sm text-slate-100">{session.title}</div>
-                        <div className="mt-1 text-xs text-muted">{tool?.nameZh ?? session.toolId}</div>
-                      </div>
-                      <span className="text-[11px] text-muted">{session.status === "ready" ? "可继续" : session.status}</span>
-                    </Link>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className="rounded border border-dashed border-line px-4 py-6 text-sm text-muted">
-                在工具箱中保存结果后，可从这里快速恢复。
-              </p>
-            )}
+            <RecentToolSessionsList sessions={recentSessions} />
           </section>
         </div>
 
