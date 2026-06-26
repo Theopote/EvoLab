@@ -210,14 +210,15 @@ describe("export smoke tests", () => {
     expect(exportedStart).toEqual([0.5, 0.5]);
   });
 
-  it("writes authoritative walls to dxf layers named after wall ids", () => {
+  it("writes authoritative walls to semantic dxf layers", () => {
     const version = createAuthoritativeWallFirstVersion();
     const dxf = createDxfExportDocument(version);
 
-    expect(dxf).toContain("EVOLAB-WALL-cad-wall-north");
-    expect(dxf).toContain("EVOLAB-WALL-cad-wall-south");
-    expect(dxf).toContain("EVOLAB-OPENING-cad-door-1");
-    expect((dxf.match(/^LINE$/gm) ?? []).length).toBe(4);
+    expect(dxf).toContain("EVOLAB-WALL-EXTERNAL");
+    expect(dxf).toContain("EVOLAB-OPENING-DOOR");
+    expect(dxf).toContain("EVOLAB-ROOM-BOUNDARY");
+    expect(dxf).not.toContain("EVOLAB-WALL-cad-wall-north");
+    expect((dxf.match(/^LINE$/gm) ?? []).length).toBeGreaterThanOrEqual(5);
   });
 
   it("writes no wall entities to dxf when Level.walls is not authoritative", () => {

@@ -295,7 +295,7 @@ export function simulateAuthoritativeExport(): GeometrySimulationReport {
   const steps = [
     step("authoritative-gate", geometry.authoritative, "Level.walls passes authoritative gate"),
     step("ifc-walls", ifc.storeys[0]!.walls.some((wall) => wall.id.startsWith("cad-wall-")), "IFC exports stored wall ids"),
-    step("dxf-walls", dxf.includes("EVOLAB-WALL-cad-wall-north"), "DXF emits authoritative wall layers"),
+    step("dxf-walls", dxf.includes("EVOLAB-WALL-EXTERNAL"), "DXF emits semantic wall layers"),
     step("topology-shared-edge", Boolean(shared), "Topology graph finds shared interior edge", {
       edgeId: shared?.id ?? "none"
     })
