@@ -33,6 +33,22 @@ export const workflowTemplates: WorkflowTemplate[] = [
     badge: "示例"
   },
   {
+    id: "school",
+    title: "学校建筑",
+    description: "教育 typology 示例，含教室簇、公共区与流线分析。",
+    typologyId: "school",
+    href: "/workspace?template=school",
+    badge: "示例"
+  },
+  {
+    id: "residential",
+    title: "住宅建筑",
+    description: "住宅 typology 示例，含单元组合与日照/流线基线。",
+    typologyId: "residential",
+    href: "/workspace?template=residential",
+    badge: "示例"
+  },
+  {
     id: "retrofit",
     title: "老旧改造",
     description: "从扫描图转 CAD 开始，保留结构后重划空间，再生成汇报。",

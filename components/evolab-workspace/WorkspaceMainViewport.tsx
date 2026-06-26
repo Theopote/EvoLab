@@ -289,7 +289,7 @@ export const WorkspaceMainViewport = memo(function WorkspaceMainViewport() {
             <div>
               <h1 className="text-base font-semibold text-white">3D Building Model</h1>
               <p className="mt-1 text-xs text-muted">
-                Generated from activeVersion.rooms. Orbit, pan and zoom are enabled.
+                Generated from activeVersion.rooms. Right-drag pan, scroll zoom, left-drag orbit.
               </p>
             </div>
             <span className="rounded border border-accent/40 px-2 py-1 text-xs text-accent">

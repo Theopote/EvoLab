@@ -1,6 +1,7 @@
 "use client";
 
-import { Bvh, Grid, OrbitControls } from "@react-three/drei";
+import { Bvh, Grid } from "@react-three/drei";
+import { CadViewControls } from "@/components/viewer-3d/CadViewControls";
 import { Canvas } from "@react-three/fiber";
 import { BuildingModel } from "@/components/viewer-3d/BuildingModel";
 import { SceneEnvironment } from "@/components/viewer-3d/SceneEnvironment";
@@ -13,7 +14,10 @@ export function Scene() {
   const view3d = useInteractionStore((state) => state.view3d);
 
   return (
-    <div className="h-full min-h-[560px] overflow-hidden rounded border border-line bg-[#081018]">
+    <div
+      className="h-full min-h-[560px] overflow-hidden rounded border border-line bg-[#081018]"
+      onContextMenu={(event) => event.preventDefault()}
+    >
       {hasVersion ? (
         <Canvas
           frameloop={view3d.frameloop}
@@ -48,7 +52,7 @@ export function Scene() {
             sectionSize={16}
           />
           <SceneEnvironment />
-          <OrbitControls makeDefault enableDamping target={[0, 0, 0]} />
+          <CadViewControls />
         </Canvas>
       ) : (
         <div className="grid h-full min-h-[560px] place-items-center text-sm text-muted">

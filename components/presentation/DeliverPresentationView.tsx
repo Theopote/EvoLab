@@ -107,7 +107,9 @@ export function DeliverPresentationView({
         />
       ) : null}
 
-      {section === "render" ? <RenderBriefPanel activeVersion={activeVersion} /> : null}
+      {section === "render" ? (
+        <RenderBriefPanel activeVersion={activeVersion} projectType={projectType} />
+      ) : null}
     </section>
   );
 }
