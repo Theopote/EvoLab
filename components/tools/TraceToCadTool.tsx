@@ -13,6 +13,7 @@ import type { PlanVersion } from "@/lib/project-types";
 import type { PlanImportSource } from "@/lib/plan-import/types";
 import { saveTraceToCadSession, useToolSessionStore } from "@/lib/tools/tool-session-store";
 import type { ToolSession } from "@/lib/tools/tool-session-types";
+import { getPlanVersionOutput } from "@/lib/tools/tool-session-utils";
 import { useInteractionStore } from "@/lib/interaction-store";
 import { useImportSessionStore } from "@/lib/import-session-store";
 
@@ -47,7 +48,7 @@ export function TraceToCadTool() {
     const requestedSessionId = searchParams.get("session");
     const existing = requestedSessionId ? getSession(requestedSessionId) : undefined;
 
-    if (existing?.outputs?.planVersion && existing.analysisMeta) {
+    if (existing?.outputs?.length && existing.analysisMeta && getPlanVersionOutput(existing)) {
       setSessionId(existing.id);
       setActiveSessionId(existing.id);
       setReviewState(reviewStateFromSession(existing));
@@ -70,11 +71,9 @@ export function TraceToCadTool() {
         sessionId,
         title: `${state.fileName} · 扫描转 CAD`,
         inputFiles: [{ fileName: state.fileName, sourceType: state.sourceType }],
-        outputs: {
-          kind: "plan-version",
-          planVersion: state.draftVersion,
-          referencePreviewUrl: state.referencePreviewUrl
-        },
+        draftPlanVersion: state.draftVersion,
+        recognizedPlanVersion: state.recognizedVersion,
+        referencePreviewUrl: state.referencePreviewUrl,
         analysisMeta: {
           confidence: state.analysis.confidence,
           importPath: state.analysis.importPath,
@@ -395,13 +394,14 @@ function RecognitionSnapshotPreview({
 }
 
 function reviewStateFromSession(session: ToolSession): TraceReviewState | undefined {
-  if (!session.outputs?.planVersion || !session.analysisMeta) {
+  const planOutput = getPlanVersionOutput(session);
+  if (!planOutput || !session.analysisMeta) {
     return undefined;
   }
 
   const sourceType = session.analysisMeta.sourceType as PlanImportSource;
   const analysis: AnalyzePlanClientResult = {
-    version: session.outputs.planVersion,
+    version: planOutput.planVersion,
     confidence: session.analysisMeta.confidence,
     importPath: session.analysisMeta.importPath,
     sourceType,
@@ -410,12 +410,12 @@ function reviewStateFromSession(session: ToolSession): TraceReviewState | undefi
   };
 
   return {
-    draftVersion: session.outputs.planVersion,
-    recognizedVersion: session.outputs.planVersion,
+    draftVersion: planOutput.planVersion,
+    recognizedVersion: planOutput.recognizedPlanVersion ?? planOutput.planVersion,
     analysis,
     fileName: session.inputFiles?.[0]?.fileName ?? "restored-drawing",
     sourceType,
-    referencePreviewUrl: session.outputs.referencePreviewUrl
+    referencePreviewUrl: planOutput.referencePreviewUrl
   };
 }
 

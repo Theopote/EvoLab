@@ -17,6 +17,7 @@ import {
   useToolSessionStore
 } from "@/lib/tools/tool-session-store";
 import type { ToolSession } from "@/lib/tools/tool-session-types";
+import { getPlanVersionOutput } from "@/lib/tools/tool-session-utils";
 
 type SourceKind = "project" | "demo" | "trace-session";
 
@@ -107,7 +108,7 @@ export function RetainedStructureRemixTool() {
     const requestedSessionId = searchParams.get("session");
     const existing = requestedSessionId ? getSession(requestedSessionId) : undefined;
 
-    if (existing?.outputs?.planVersion) {
+    if (existing?.outputs?.length && getPlanVersionOutput(existing)) {
       setSessionId(existing.id);
       setActiveSessionId(existing.id);
       setState(restoredStateFromSession(existing));
@@ -305,7 +306,12 @@ export function RetainedStructureRemixTool() {
                   type="button"
                   onClick={() => {
                     const full = getSession(session.id);
-                    const version = full?.outputs?.planVersion;
+                    if (!full) {
+                      return;
+                    }
+
+                    const planOutput = getPlanVersionOutput(full);
+                    const version = planOutput?.sourcePlanVersion ?? planOutput?.planVersion;
                     if (!version) {
                       return;
                     }
@@ -500,20 +506,21 @@ export function RetainedStructureRemixTool() {
 }
 
 function restoredStateFromSession(session: ToolSession): RemixToolState | undefined {
-  if (!session.outputs?.planVersion) {
+  const planOutput = getPlanVersionOutput(session);
+  if (!planOutput) {
     return undefined;
   }
 
   const sourceKind = (session.parameters?.sourceKind as SourceKind | undefined) ?? "demo";
-  const sourceVersion = session.outputs.sourcePlanVersion ?? session.outputs.planVersion;
+  const sourceVersion = planOutput.sourcePlanVersion ?? planOutput.planVersion;
 
   return {
     sourceKind,
     sourceLabel: session.inputFiles?.[0]?.fileName ?? session.title,
     sourceVersion,
-    remixedVersion: session.outputs.sourcePlanVersion ? session.outputs.planVersion : undefined,
+    remixedVersion: planOutput.sourcePlanVersion ? planOutput.planVersion : undefined,
     preserveColumns: session.parameters?.preserveColumns !== false,
     preserveCores: session.parameters?.preserveCores !== false,
-    previewMode: session.outputs.sourcePlanVersion ? "after" : "before"
+    previewMode: planOutput.sourcePlanVersion ? "after" : "before"
   };
 }

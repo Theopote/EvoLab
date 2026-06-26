@@ -11,6 +11,7 @@ import {
   ScanLine,
   Sofa
 } from "lucide-react";
+import type { WorkspaceTab } from "@/lib/project-types";
 
 export type ToolCategory =
   | "import"
@@ -34,7 +35,7 @@ export interface ToolDefinition {
   icon: LucideIcon;
   status: ToolStatus;
   /** Optional workspace tab to open when launching from toolbox into project context */
-  workspaceTab?: string;
+  workspaceTab?: WorkspaceTab;
 }
 
 export const toolCategoryLabels: Record<ToolCategory, string> = {
