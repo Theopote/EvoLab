@@ -1,24 +1,25 @@
 import { NextResponse } from "next/server";
 import { generatePresentationPptxBuffer } from "@/lib/presentation/render-pptx";
-import type { PresentationDeck } from "@/lib/presentation/types";
+import { PresentationDeckSchema } from "@/lib/schemas/presentation-schema";
 
 export const runtime = "nodejs";
 
-interface ExportPresentationPptxRequest {
-  deck?: PresentationDeck;
-}
-
 export async function POST(request: Request) {
-  const body = (await request.json().catch(() => ({}))) as ExportPresentationPptxRequest;
+  const body = await request.json().catch(() => ({}));
+  const parsed = PresentationDeckSchema.safeParse(body.deck ?? body);
 
-  if (!body.deck?.slides?.length) {
-    return NextResponse.json({ error: "deck with slides is required." }, { status: 400 });
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Invalid presentation deck.", details: parsed.error.message },
+      { status: 400 }
+    );
   }
 
-  const fileName = `${body.deck.projectName.replace(/\s+/g, "-").toLowerCase()}-presentation.pptx`;
+  const deck = parsed.data;
+  const fileName = `${deck.projectName.replace(/\s+/g, "-").toLowerCase()}-presentation.pptx`;
 
   try {
-    const buffer = await generatePresentationPptxBuffer(body.deck);
+    const buffer = await generatePresentationPptxBuffer(deck);
 
     return new NextResponse(new Uint8Array(buffer), {
       headers: {

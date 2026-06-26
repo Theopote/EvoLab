@@ -3,6 +3,7 @@
 import { Camera, Download, FileText, Layers, Loader2, Presentation, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { PresentationCaptureCanvas } from "@/components/presentation/PresentationCaptureCanvas";
+import { PresentationSlideEditor } from "@/components/presentation/PresentationSlideEditor";
 import { attachModelCaptures } from "@/lib/presentation/merge-captures";
 import { MODEL_SLIDE_ID, extractModelCaptures } from "@/lib/presentation/model-slide";
 import { downloadPresentationHtml, downloadPresentationViaApi, renderPresentationHtml } from "@/lib/presentation/render-html";
@@ -41,7 +42,11 @@ export function PresentationWorkspace() {
     savePresentationSession,
     clearPresentationSession,
     setPresentationActiveSlide,
-    setPresentationTemplateId
+    setPresentationTemplateId,
+    updatePresentationSlide,
+    updatePresentationDeckMeta,
+    removePresentationSlide,
+    movePresentationSlide
   } = usePresentationActions();
 
   const versionId = activeVersion?.id;
@@ -93,13 +98,33 @@ export function PresentationWorkspace() {
     });
   }
 
+  function ensurePersistedDeck(): boolean {
+    if (!versionId || !localDeck) {
+      return false;
+    }
+
+    if (!session?.deck) {
+      persistDeck(localDeck);
+    }
+
+    return true;
+  }
+
+  function beginEditingDeck() {
+    if (!ensurePersistedDeck()) {
+      return;
+    }
+
+    setNotice("已进入可编辑模式，修改将自动保存到本机会话。");
+  }
+
   function resetDeckFromModel() {
     if (!versionId) {
       return;
     }
 
     clearPresentationSession(versionId);
-    setNotice("Reset deck to current model outline.");
+    setNotice("已重置为当前模型大纲。");
   }
 
   useEffect(() => {
@@ -359,10 +384,10 @@ export function PresentationWorkspace() {
       <section className="rounded border border-line bg-panel/90 p-3">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-base font-semibold text-white">Automated Presentation</h2>
+            <h2 className="text-base font-semibold text-white">汇报演示 · 可编辑 PPTX</h2>
             <p className="mt-1 text-xs text-muted">
-              Storyboard, evolution narrative, diagrams, cost ROM, 3D captures, and AI per-slide copy.
-              {hasPersistedDeck ? " Saved for this scheme in session storage." : ""}
+              生成故事线后可在右侧编辑每页文案，再导出 PPTX 在 PowerPoint 中继续润色。
+              {hasPersistedDeck ? " 已保存本机编辑会话。" : " 点击「开始编辑」或生成故事线以保存可编辑副本。"}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -398,13 +423,21 @@ export function PresentationWorkspace() {
           </div>
           <div className="flex flex-wrap gap-2">
             <button
+              className="flex h-9 items-center gap-2 rounded border border-line px-3 text-xs text-slate-100 hover:border-accent/50 disabled:opacity-40"
+              type="button"
+              onClick={beginEditingDeck}
+              disabled={!localDeck || hasPersistedDeck}
+            >
+              开始编辑
+            </button>
+            <button
               className="flex h-9 items-center gap-2 rounded border border-accent/40 bg-accent/10 px-3 text-xs text-accent hover:border-accent/60"
               type="button"
               onClick={buildFullDeck}
               disabled={isGenerating || captureStatus === "capturing"}
             >
               {isBuildingFullDeck ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Layers className="h-3.5 w-3.5" />}
-              Build full deck
+              生成完整汇报
             </button>
             <button
               className="flex h-9 items-center gap-2 rounded border border-line px-3 text-xs text-slate-100 hover:border-accent/50"
@@ -413,7 +446,7 @@ export function PresentationWorkspace() {
               disabled={isGenerating}
             >
               {isGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-              Generate storyboard
+              生成故事线
             </button>
             <button
               className="flex h-9 items-center gap-2 rounded border border-line px-3 text-xs text-slate-100 hover:border-accent/50"
@@ -426,7 +459,7 @@ export function PresentationWorkspace() {
               ) : (
                 <Camera className="h-3.5 w-3.5" />
               )}
-              Capture 3D views
+              截取 3D 视图
             </button>
             <button
               className="flex h-9 items-center gap-2 rounded border border-line px-3 text-xs text-slate-100 hover:border-accent/50"
@@ -435,7 +468,7 @@ export function PresentationWorkspace() {
               disabled={!currentDeck}
             >
               <Download className="h-3.5 w-3.5" />
-              Export HTML
+              导出 HTML
             </button>
             <button
               className="flex h-9 items-center gap-2 rounded border border-line px-3 text-xs text-slate-100 hover:border-accent/50"
@@ -444,16 +477,16 @@ export function PresentationWorkspace() {
               disabled={!currentDeck || isExportingServerHtml}
             >
               {isExportingServerHtml ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-              Server HTML
+              服务端 HTML
             </button>
             <button
-              className="flex h-9 items-center gap-2 rounded border border-line px-3 text-xs text-slate-100 hover:border-accent/50"
+              className="flex h-9 items-center gap-2 rounded border border-accent/40 bg-accent/10 px-3 text-xs text-accent hover:border-accent/60"
               type="button"
               onClick={exportPptx}
               disabled={!currentDeck || isExportingPptx}
             >
               {isExportingPptx ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-              Export PPTX
+              导出 PPTX
             </button>
             <button
               className="flex h-9 items-center gap-2 rounded border border-line px-3 text-xs text-slate-100 hover:border-accent/50"
@@ -461,7 +494,7 @@ export function PresentationWorkspace() {
               onClick={resetDeckFromModel}
               disabled={!hasPersistedDeck}
             >
-              Reset deck
+              重置大纲
             </button>
             <button
               className="flex h-9 items-center gap-2 rounded border border-line px-3 text-xs text-slate-100 hover:border-accent/50"
@@ -470,7 +503,7 @@ export function PresentationWorkspace() {
               disabled={!currentDeck || isExportingPdf}
             >
               {isExportingPdf ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
-              Export PDF
+              导出 PDF
             </button>
             <button
               className="flex h-9 items-center gap-2 rounded border border-line px-3 text-xs text-slate-100 hover:border-accent/50"
@@ -479,7 +512,7 @@ export function PresentationWorkspace() {
               disabled={!currentDeck}
             >
               <FileText className="h-3.5 w-3.5" />
-              Print
+              打印
             </button>
           </div>
         </div>
@@ -487,11 +520,11 @@ export function PresentationWorkspace() {
         {notice ? <div className="mb-3 rounded border border-warning/40 bg-warning/10 p-2 text-xs text-warning">{notice}</div> : null}
         {currentDeck?.storyArc?.length ? (
           <div className="mb-3 rounded border border-line bg-[#0b1118] p-2 text-xs text-slate-300">
-            <span className="text-muted">Story arc:</span> {currentDeck.storyArc.join(" → ")}
+            <span className="text-muted">故事线：</span> {currentDeck.storyArc.join(" → ")}
           </div>
         ) : null}
 
-        <div className="grid gap-3 lg:grid-cols-[220px_minmax(0,1fr)]">
+        <div className="grid gap-3 xl:grid-cols-[220px_minmax(0,1fr)_280px]">
           <aside className="space-y-2">
             {currentDeck?.slides.map((item, index) => (
               <button
@@ -587,6 +620,48 @@ export function PresentationWorkspace() {
               </>
             ) : null}
           </article>
+
+          {slide && currentDeck ? (
+            <PresentationSlideEditor
+              deck={currentDeck}
+              slide={slide}
+              slideCount={currentDeck.slides.length}
+              slideIndex={activeSlide}
+              onMoveSlide={(direction) => {
+                if (!versionId || !ensurePersistedDeck()) {
+                  return;
+                }
+
+                const target = direction === "up" ? activeSlide - 1 : activeSlide + 1;
+                movePresentationSlide(versionId, activeSlide, target);
+              }}
+              onRemoveSlide={() => {
+                if (!versionId || !ensurePersistedDeck()) {
+                  return;
+                }
+
+                removePresentationSlide(versionId, slide.id);
+              }}
+              onUpdateDeckMeta={(patch) => {
+                if (!versionId || !ensurePersistedDeck()) {
+                  return;
+                }
+
+                updatePresentationDeckMeta(versionId, patch);
+              }}
+              onUpdateSlide={(patch) => {
+                if (!versionId || !ensurePersistedDeck()) {
+                  return;
+                }
+
+                updatePresentationSlide(versionId, slide.id, patch);
+              }}
+            />
+          ) : (
+            <aside className="rounded border border-dashed border-line bg-panel/40 p-4 text-xs text-muted">
+              选择幻灯片以编辑标题、要点与故事线。
+            </aside>
+          )}
         </div>
       </section>
       <style>{`

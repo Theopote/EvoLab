@@ -192,6 +192,17 @@ export interface EvoProjectStore {
   clearPresentationSession: (versionId: string) => void;
   setPresentationActiveSlide: (versionId: string, activeSlideIndex: number) => void;
   setPresentationTemplateId: (versionId: string, templateId: PresentationTemplateId) => void;
+  updatePresentationSlide: (
+    versionId: string,
+    slideId: string,
+    patch: import("@/lib/presentation/deck-mutations").PresentationSlidePatch
+  ) => void;
+  updatePresentationDeckMeta: (
+    versionId: string,
+    patch: import("@/lib/presentation/deck-mutations").PresentationDeckMetaPatch
+  ) => void;
+  removePresentationSlide: (versionId: string, slideId: string) => void;
+  movePresentationSlide: (versionId: string, fromIndex: number, toIndex: number) => void;
 }
 
 export type EvoProjectStoreData = Omit<

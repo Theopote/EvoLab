@@ -96,6 +96,10 @@ export type PresentationSliceActions = Pick<
   | "clearPresentationSession"
   | "setPresentationActiveSlide"
   | "setPresentationTemplateId"
+  | "updatePresentationSlide"
+  | "updatePresentationDeckMeta"
+  | "removePresentationSlide"
+  | "movePresentationSlide"
 >;
 
 export type PresentationSliceState = Pick<EvoProjectStore, "presentationSessions">;

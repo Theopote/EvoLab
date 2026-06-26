@@ -2,8 +2,9 @@
 
 import { useMemo } from "react";
 import { buildPresentationDeck } from "@/lib/presentation/storyboard";
+import { getPresentationSession } from "@/lib/store/presentation-slice";
 import { usePresentationUiStore } from "@/lib/presentation-ui-store";
-import { useProjectState, useSiteState } from "@/lib/project-store";
+import { usePresentationState, useProjectState, useSiteState } from "@/lib/project-store";
 
 interface ReportOutlineSidebarProps {
   onOpenPresentation: () => void;
@@ -31,10 +32,16 @@ export function ReportOutlineSidebar({
     outline: state.outline
   }));
   const requestFocusSlide = usePresentationUiStore((state) => state.requestFocusSlide);
+  const { presentationSessions } = usePresentationState();
 
   const slides = useMemo(() => {
     if (!activeVersion) {
       return [];
+    }
+
+    const session = getPresentationSession(presentationSessions, activeVersion.id);
+    if (session?.deck?.slides?.length) {
+      return session.deck.slides;
     }
 
     return buildPresentationDeck({
@@ -47,7 +54,17 @@ export function ReportOutlineSidebar({
       outline,
       compareVersionIds
     }).slides;
-  }, [activeVersion, brief, buildableEnvelope, compareVersionIds, environmentSurrogate, outline, project, siteContext]);
+  }, [
+    activeVersion,
+    brief,
+    buildableEnvelope,
+    compareVersionIds,
+    environmentSurrogate,
+    outline,
+    presentationSessions,
+    project,
+    siteContext
+  ]);
 
   if (!activeVersion) {
     return (
@@ -60,14 +77,14 @@ export function ReportOutlineSidebar({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Report Outline</h2>
+        <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">汇报大纲</h2>
         <div className="flex items-center gap-2">
           <button className="text-[11px] text-accent hover:underline" type="button" onClick={openPresentation}>
-            Open presentation
+            打开汇报
           </button>
           {onOpenReportEditor ? (
             <button className="text-[11px] text-accent hover:underline" type="button" onClick={onOpenReportEditor}>
-              Edit report
+              编辑报告
             </button>
           ) : null}
         </div>

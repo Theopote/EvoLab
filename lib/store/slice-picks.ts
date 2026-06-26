@@ -256,7 +256,11 @@ export function pickPresentationActions(state: EvoProjectStore): PresentationSli
     savePresentationSession: state.savePresentationSession,
     clearPresentationSession: state.clearPresentationSession,
     setPresentationActiveSlide: state.setPresentationActiveSlide,
-    setPresentationTemplateId: state.setPresentationTemplateId
+    setPresentationTemplateId: state.setPresentationTemplateId,
+    updatePresentationSlide: state.updatePresentationSlide,
+    updatePresentationDeckMeta: state.updatePresentationDeckMeta,
+    removePresentationSlide: state.removePresentationSlide,
+    movePresentationSlide: state.movePresentationSlide
   };
 }
 
