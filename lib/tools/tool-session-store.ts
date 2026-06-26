@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { create } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import type { PresentationDeck } from "@/lib/presentation/types";
@@ -74,12 +75,16 @@ function toSummary(session: ToolSessionDetail): ToolSessionSummary {
   };
 }
 
+function recentToolSessionSummaries(sessions: ToolSessionMap, limit: number): ToolSessionSummary[] {
+  return Object.values(sessions)
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+    .slice(0, limit)
+    .map(toSummary);
+}
+
 export function selectRecentToolSessions(limit = 6) {
   return (state: ToolSessionState): ToolSessionSummary[] =>
-    Object.values(state.sessions)
-      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
-      .slice(0, limit)
-      .map(toSummary);
+    recentToolSessionSummaries(state.sessions, limit);
 }
 
 export const useToolSessionStore = create<ToolSessionState>((set, get) => ({
@@ -170,7 +175,8 @@ export function useToolSessionActions() {
 }
 
 export function useRecentToolSessions(limit = 6) {
-  return useToolSessionStore(useShallow(selectRecentToolSessions(limit)));
+  const sessions = useToolSessionStore((state) => state.sessions);
+  return useMemo(() => recentToolSessionSummaries(sessions, limit), [limit, sessions]);
 }
 
 if (typeof window !== "undefined") {
