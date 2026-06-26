@@ -22,12 +22,12 @@ interface BottomPanelProps {
 }
 
 const tabs: { id: BottomPanelTab; label: string }[] = [
-  { id: "tasks", label: "AI Tasks" },
-  { id: "versions", label: "Versions" },
-  { id: "scores", label: "Scores" },
-  { id: "quantities", label: "Quantities" },
-  { id: "warnings", label: "Warnings" },
-  { id: "sheets", label: "Presentation" }
+  { id: "tasks", label: "AI 任务" },
+  { id: "versions", label: "版本" },
+  { id: "scores", label: "评分" },
+  { id: "quantities", label: "工程量" },
+  { id: "warnings", label: "风险" },
+  { id: "sheets", label: "汇报" }
 ];
 
 export function BottomPanel({
@@ -51,29 +51,29 @@ export function BottomPanel({
   const taskRows = useMemo(
     () => [
       {
-        label: "Plan options generated",
+        label: "已生成方案",
         done: project.versions.length > 0,
-        detail: `${project.versions.length} version${project.versions.length === 1 ? "" : "s"}`
+        detail: `${project.versions.length} 个版本`
       },
       {
-        label: "Analysis overlays available",
+        label: "分析图层可用",
         done: Boolean(activeVersion),
-        detail: activeVersion ? "Data-driven layers ready" : "Waiting for active version"
+        detail: activeVersion ? "数据图层已就绪" : "等待激活方案"
       },
       {
-        label: "3D massing generated",
+        label: "体块模型已生成",
         done: Boolean(activeVersion?.rooms.length),
-        detail: activeVersion ? `${activeVersion.rooms.length} rooms converted` : "No version"
+        detail: activeVersion ? `${activeVersion.rooms.length} 个房间已转换` : "暂无方案"
       },
       {
-        label: "MEP risers proposed",
+        label: "机电建议已生成",
         done: Boolean(activeVersion?.mep),
-        detail: activeVersion?.mep ? `${activeVersion.mep.routes.length} routes` : "Rule preview only"
+        detail: activeVersion?.mep ? `${activeVersion.mep.routes.length} 条路由` : "仅规则预览"
       },
       {
-        label: "Quantity takeoff calculated",
+        label: "工程量已计算",
         done: Boolean(quantities),
-        detail: quantities ? `${quantities.summary.grossArea} sqm gross` : "No quantities"
+        detail: quantities ? `${quantities.summary.grossArea} ㎡ 总量` : "暂无工程量"
       }
     ],
     [activeVersion, project.versions.length, quantities]
@@ -121,9 +121,9 @@ export function BottomPanel({
               ))}
             </div>
             <div className="flex items-center gap-3 text-xs text-muted">
-              <span>{activeVersion?.label ?? "No active version"}</span>
+              <span>{activeVersion?.label ?? "无活动版本"}</span>
               <span className={warningCount > 0 ? "text-warning" : "text-success"}>
-                {warningCount} warnings
+                {warningCount} 条警告
               </span>
             </div>
           </div>
@@ -140,7 +140,7 @@ export function BottomPanel({
                     <AlertTriangle className="h-4 w-4 text-warning" />
                   )}
                   <span className="rounded border border-line px-2 py-0.5 text-[11px] text-muted">
-                    {task.done ? "Done" : "Open"}
+                    {task.done ? "已完成" : "待处理"}
                   </span>
                 </div>
                 <div className="text-sm text-slate-100">{task.label}</div>
@@ -185,8 +185,8 @@ export function BottomPanel({
           <div className="space-y-3">
             <div className="flex items-center gap-1">
               {[
-                { id: "breakdown" as const, label: "Breakdown" },
-                { id: "configure" as const, label: "Rules & weights" }
+                { id: "breakdown" as const, label: "评分明细" },
+                { id: "configure" as const, label: "规则与权重" }
               ].map((tab) => (
                 <button
                   className={`h-7 rounded px-3 text-xs ${
@@ -212,7 +212,7 @@ export function BottomPanel({
                 />
               ) : (
                 <div className="rounded border border-line bg-panel/70 p-3 text-sm text-muted">
-                  Select an active version to inspect score evidence.
+                  请先激活方案以查看评分依据。
                 </div>
               )
             ) : (
@@ -230,12 +230,12 @@ export function BottomPanel({
           <div className="grid gap-2 lg:grid-cols-6">
             {quantities ? (
               [
-                ["Gross area", `${quantities.summary.grossArea} sqm`, Ruler],
-                ["Net area", `${quantities.summary.netUsableArea} sqm`, Ruler],
-                ["Wall area", `${quantities.summary.wallArea} sqm`, Layers3],
-                ["Doors", `${quantities.summary.doorCount} pcs`, ScrollText],
-                ["Windows", `${quantities.summary.windowCount} pcs`, ScrollText],
-                ["Roof", `${quantities.summary.roofArea} sqm`, FileStack]
+                ["总面积", `${quantities.summary.grossArea} ㎡`, Ruler],
+                ["净面积", `${quantities.summary.netUsableArea} ㎡`, Ruler],
+                ["墙体面积", `${quantities.summary.wallArea} ㎡`, Layers3],
+                ["门", `${quantities.summary.doorCount} 扇`, ScrollText],
+                ["窗", `${quantities.summary.windowCount} 扇`, ScrollText],
+                ["屋面", `${quantities.summary.roofArea} ㎡`, FileStack]
               ].map(([label, value, Icon]) => (
                 <div className="rounded border border-line bg-panel/70 p-3" key={String(label)}>
                   <Icon className="mb-2 h-4 w-4 text-accent" />
@@ -245,7 +245,7 @@ export function BottomPanel({
               ))
             ) : (
               <div className="rounded border border-line bg-panel/70 p-3 text-sm text-muted">
-                No quantity result.
+                暂无工程量结果。
               </div>
             )}
           </div>
@@ -258,7 +258,7 @@ export function BottomPanel({
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">{group.label}</h3>
                   <span className="text-[11px] text-muted">
-                    {group.warningCount > 0 ? `${group.warningCount} warning(s)` : `${group.successCount} passed`}
+                    {group.warningCount > 0 ? `${group.warningCount} 条警告` : `${group.successCount} 项通过`}
                   </span>
                 </div>
                 <div className="grid gap-2 lg:grid-cols-3">
@@ -284,17 +284,17 @@ export function BottomPanel({
         {activeTab === "sheets" ? (
           <div className="grid gap-2 lg:grid-cols-5">
             {[
-              ["A-101", "Floor plan", Boolean(activeVersion)],
-              ["A-201", "Analysis diagram", Boolean(activeVersion)],
-              ["M-101", "Concept MEP", Boolean(activeVersion?.mep)],
-              ["Q-101", "Quantity takeoff", Boolean(quantities)],
-              ["V-001", "Version compare", project.versions.length > 1]
+              ["A-101", "平面图", Boolean(activeVersion)],
+              ["A-201", "分析图", Boolean(activeVersion)],
+              ["M-101", "机电概念", Boolean(activeVersion?.mep)],
+              ["Q-101", "工程量", Boolean(quantities)],
+              ["V-001", "版本对比", project.versions.length > 1]
             ].map(([code, label, ready]) => (
               <div className="rounded border border-line bg-panel/70 p-3" key={String(code)}>
                 <div className="mb-2 flex items-center justify-between">
                   <span className="text-sm font-medium text-slate-100">{code as string}</span>
                   <span className={ready ? "text-xs text-success" : "text-xs text-muted"}>
-                    {ready ? "Ready" : "Pending"}
+                    {ready ? "就绪" : "待生成"}
                   </span>
                 </div>
                 <div className="text-xs text-muted">{label as string}</div>

@@ -49,8 +49,7 @@ const contextTools: ContextToolDefinition[] = [
     title: "绘制用地轮廓",
     icon: DraftingCompass,
     tool: "outline",
-    phases: ["import", "site", "program", "scheme"],
-    targetTab: "Plan"
+    phases: ["import", "site", "program", "scheme"]
   },
   {
     label: "追踪",
@@ -114,6 +113,14 @@ const contextTools: ContextToolDefinition[] = [
   }
 ];
 
+function resolveContextToolTargetTab(tool: ContextToolDefinition, phase: WorkflowPhase): WorkspaceTab | undefined {
+  if (tool.tool === "outline") {
+    return phase === "scheme" ? "Plan" : "Site";
+  }
+
+  return tool.targetTab;
+}
+
 export function ContextToolRail({ phase, activeTab, onTabChange, onImportTab }: ContextToolRailProps) {
   const activeTool = useInteractionStore((state) => state.activeTool);
   const setActiveTool = useInteractionStore((state) => state.setActiveTool);
@@ -130,8 +137,8 @@ export function ContextToolRail({ phase, activeTab, onTabChange, onImportTab }: 
       <div className="grid grid-cols-5 gap-2">
         {visibleTools.map((tool) => {
           const Icon = tool.icon;
-          const isActive =
-            activeTool === tool.tool || (tool.targetTab !== undefined && activeTab === tool.targetTab);
+          const targetTab = resolveContextToolTargetTab(tool, phase);
+          const isActive = activeTool === tool.tool || (targetTab !== undefined && activeTab === targetTab);
 
           return (
             <button
@@ -158,8 +165,8 @@ export function ContextToolRail({ phase, activeTab, onTabChange, onImportTab }: 
                   requestUploadPicker();
                 }
 
-                if (tool.targetTab) {
-                  onTabChange(tool.targetTab);
+                if (targetTab) {
+                  onTabChange(targetTab);
                 }
               }}
             >
