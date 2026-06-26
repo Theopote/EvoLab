@@ -1,9 +1,9 @@
-import { NextResponse } from "next/server";
 import {
   deleteProjectSnapshot,
   readProjectSnapshot,
   writeProjectSnapshot
 } from "@/lib/server/project-files";
+import { apiError, apiOk } from "@/lib/server/api-response";
 import type { WorkspacePersistedSnapshot } from "@/lib/store/workspace-history";
 
 interface RouteContext {
@@ -14,32 +14,34 @@ export async function GET(_request: Request, context: RouteContext) {
   const snapshot = await readProjectSnapshot(context.params.projectId);
 
   if (!snapshot) {
-    return NextResponse.json({ error: "Project not found." }, { status: 404 });
+    return apiError("Project not found.", 404, "NOT_FOUND");
   }
 
-  return NextResponse.json(snapshot);
+  return apiOk(snapshot);
 }
 
 export async function PUT(request: Request, context: RouteContext) {
   const body = (await request.json().catch(() => null)) as WorkspacePersistedSnapshot | null;
 
   if (!body?.project?.versions?.length) {
-    return NextResponse.json({ error: "Invalid project snapshot payload." }, { status: 400 });
+    return apiError("Invalid project snapshot payload.", 400, "INVALID_PAYLOAD");
   }
 
   if (body.projectId !== context.params.projectId) {
-    return NextResponse.json({ error: "Project id mismatch." }, { status: 400 });
+    return apiError("Project id mismatch.", 400, "PROJECT_ID_MISMATCH");
   }
+
+  const savedAt = new Date().toISOString();
 
   await writeProjectSnapshot({
     ...body,
-    savedAt: new Date().toISOString()
+    savedAt
   });
 
-  return NextResponse.json({ ok: true, projectId: body.projectId, savedAt: body.savedAt });
+  return apiOk({ projectId: body.projectId, savedAt });
 }
 
 export async function DELETE(_request: Request, context: RouteContext) {
   await deleteProjectSnapshot(context.params.projectId);
-  return NextResponse.json({ ok: true });
+  return apiOk({ projectId: context.params.projectId });
 }

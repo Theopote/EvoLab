@@ -1,0 +1,19 @@
+{
+  "outline": [
+    [0, 0],
+    [72, 0],
+    [72, 42],
+    [0, 42]
+  ],
+  "projectType": "healthcare",
+  "floors": 4,
+  "brief": "Outpatient clinic with retained circulation spine.",
+  "designBrief": {
+    "projectType": "healthcare",
+    "description": "Compact outpatient clinic",
+    "floors": 4,
+    "targetArea": 12000,
+    "corePreference": "central",
+    "orientationPreference": "south"
+  }
+}

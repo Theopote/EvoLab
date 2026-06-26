@@ -4,6 +4,7 @@ import {
   readProjectRegistry,
   type ProjectRegistryEntry
 } from "@/lib/project-registry";
+import { readApiResponse, readOptionalApiResponse } from "@/lib/api-client";
 
 export async function fetchProjectSnapshot(projectId: string): Promise<WorkspacePersistedSnapshot | null> {
   try {
@@ -12,15 +13,7 @@ export async function fetchProjectSnapshot(projectId: string): Promise<Workspace
       cache: "no-store"
     });
 
-    if (response.status === 404) {
-      return null;
-    }
-
-    if (!response.ok) {
-      return null;
-    }
-
-    return (await response.json()) as WorkspacePersistedSnapshot;
+    return await readOptionalApiResponse<WorkspacePersistedSnapshot>(response);
   } catch {
     return null;
   }
@@ -36,7 +29,12 @@ export async function saveProjectSnapshot(snapshot: WorkspacePersistedSnapshot):
       body: JSON.stringify(snapshot)
     });
 
-    return response.ok;
+    if (!response.ok) {
+      return false;
+    }
+
+    await readApiResponse<{ projectId: string; savedAt: string }>(response);
+    return true;
   } catch {
     return false;
   }
@@ -50,10 +48,7 @@ export async function listRemoteProjects(): Promise<ProjectRegistryEntry[]> {
       return [];
     }
 
-    const payload = (await response.json()) as {
-      projects?: ProjectRegistryEntry[];
-    };
-
+    const payload = await readApiResponse<{ projects: ProjectRegistryEntry[] }>(response);
     return payload.projects ?? [];
   } catch {
     return [];
