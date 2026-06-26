@@ -11,11 +11,12 @@ import { SelectionLayer } from "@/components/floor-plan/layers/SelectionLayer";
 import { WallLayer } from "@/components/floor-plan/layers/WallLayer";
 import { getViewBox } from "@/components/floor-plan/floor-plan-utils";
 import { ImportTraceLayer } from "@/components/workflow/import/ImportTraceLayer";
+import { ScaleCalibrationLayer } from "@/components/workflow/import/ScaleCalibrationLayer";
 import { normalizePlanVersion } from "@/lib/architecture-model";
 import { corridorComplianceRoomIds } from "@/lib/drag-compliance";
 import { applyImportReviewRooms } from "@/lib/import-review-utils";
 import { getResolvedLevel } from "@/lib/level-rooms";
-import type { PlanVersion, Room } from "@/lib/project-types";
+import type { PlanVersion, Point, Room } from "@/lib/project-types";
 import { createSetbackBoundary } from "@/lib/polygon-offset";
 import type { GridSnapStep } from "@/lib/plan-snap";
 
@@ -30,6 +31,9 @@ interface ImportReviewCanvasProps {
     opacity: number;
   };
   className?: string;
+  scaleCalibrationActive?: boolean;
+  scaleCalibrationPoints?: Point[];
+  onScalePointAdd?: (point: Point) => void;
   onSelectRoom: (roomId?: string) => void;
   onVersionChange: (version: PlanVersion) => void;
   onTracePolygon: (polygon: Room["polygon"]) => void;
@@ -45,6 +49,9 @@ export function ImportReviewCanvas({
   selectedRoomId,
   referenceImage,
   className,
+  scaleCalibrationActive = false,
+  scaleCalibrationPoints = [],
+  onScalePointAdd,
   onSelectRoom,
   onVersionChange,
   onTracePolygon
@@ -130,8 +137,8 @@ export function ImportReviewCanvas({
   const visibleVersion = { ...version, rooms };
   const setback = createSetbackBoundary(version.outline, 3);
   const selectedRoom = selectedRoomId ? rooms.find((room) => room.id === selectedRoomId) : undefined;
-  const geometryEditEnabled = mode === "vertices" && Boolean(selectedRoom);
-  const traceEnabled = mode === "trace";
+  const geometryEditEnabled = mode === "vertices" && Boolean(selectedRoom) && !scaleCalibrationActive;
+  const traceEnabled = mode === "trace" && !scaleCalibrationActive;
   const padding = 8;
   const overlayWidth = version.overallBounds.width + padding * 2;
   const overlayHeight = version.overallBounds.height + padding * 2;
@@ -183,11 +190,21 @@ export function ImportReviewCanvas({
             svgRef={svgRef}
             onCompletePolygon={onTracePolygon}
           />
+          <ScaleCalibrationLayer
+            enabled={scaleCalibrationActive}
+            overlayHeight={overlayHeight}
+            overlayWidth={overlayWidth}
+            points={scaleCalibrationPoints}
+            svgRef={svgRef}
+            onPointAdd={(point) => onScalePointAdd?.(point)}
+          />
         </svg>
         <div className="absolute bottom-3 left-3 rounded border border-line bg-[#081018]/90 px-2 py-1 text-xs text-muted">
-          {mode === "vertices"
-            ? "Select a room, then drag vertices or edge midpoints."
-            : "Click to place trace points. Double-click to close the room polygon."}
+          {scaleCalibrationActive
+            ? `比例尺标定：点击两个端点（${scaleCalibrationPoints.length}/2）`
+            : mode === "vertices"
+              ? "选择房间后拖动顶点或边中点。"
+              : "单击放置追踪点，双击闭合房间多边形。"}
           {dragHint ? ` / ${dragHint}` : previewRooms ? " / Preview only — release to commit" : ""}
         </div>
         <div className="absolute left-3 top-3 flex items-center gap-2">

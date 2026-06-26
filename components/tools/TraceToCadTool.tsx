@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FileJson, FileOutput, Loader2, PlusCircle, Save } from "lucide-react";
 import { ImportWizard, type ImportWizardResult } from "@/components/workflow/import/ImportWizard";
+import { TraceReviewEditor } from "@/components/tools/TraceReviewEditor";
 import { ToolPageShell } from "@/components/tools/ToolPageShell";
 import type { AnalyzePlanClientResult } from "@/lib/plan-import/analyze-plan-client";
-import { createPlanSvg, downloadTextFile, exportVersionJson } from "@/lib/export-utils";
+import { createPlanSvg, downloadTextFile, exportDxfDocument, exportVersionJson } from "@/lib/export-utils";
 import { useProjectActions, useProjectState } from "@/lib/project-store";
 import type { PlanVersion } from "@/lib/project-types";
 import type { PlanImportSource } from "@/lib/plan-import/types";
@@ -16,6 +17,7 @@ import { useInteractionStore } from "@/lib/interaction-store";
 
 interface TraceReviewState {
   draftVersion: PlanVersion;
+  recognizedVersion: PlanVersion;
   analysis: AnalyzePlanClientResult;
   fileName: string;
   sourceType: PlanImportSource;
@@ -89,6 +91,21 @@ export function TraceToCadTool() {
       if (state) {
         persistSession(state);
       }
+    },
+    [persistSession]
+  );
+
+  const handleDraftVersionChange = useCallback(
+    (draftVersion: PlanVersion) => {
+      setReviewState((current) => {
+        if (!current) {
+          return current;
+        }
+
+        const next = { ...current, draftVersion };
+        persistSession(next);
+        return next;
+      });
     },
     [persistSession]
   );
@@ -167,9 +184,17 @@ export function TraceToCadTool() {
   }, [reviewState]);
 
   const handleExportDxf = useCallback(() => {
+    if (!reviewState?.draftVersion) {
+      return;
+    }
+
     setDxfExportPending(true);
-    window.setTimeout(() => setDxfExportPending(false), 1200);
-  }, []);
+    try {
+      exportDxfDocument(reviewState.draftVersion);
+    } finally {
+      window.setTimeout(() => setDxfExportPending(false), 400);
+    }
+  }, [reviewState]);
 
   const hasResult = Boolean(reviewState?.draftVersion);
 
@@ -194,7 +219,14 @@ export function TraceToCadTool() {
       }
       previewPanel={
         hasResult && reviewState ? (
-          <PlanSvgPreview version={reviewState.draftVersion} />
+          <TraceReviewEditor
+            draftVersion={reviewState.draftVersion}
+            fileName={reviewState.fileName}
+            recognizedVersion={reviewState.recognizedVersion}
+            referencePreviewUrl={reviewState.referencePreviewUrl}
+            sourceType={reviewState.sourceType}
+            onDraftVersionChange={handleDraftVersionChange}
+          />
         ) : (
           <div className="grid h-full min-h-[280px] place-items-center rounded border border-dashed border-line bg-panel/40 p-8 text-center">
             <p className="text-sm text-muted">上传并识别后，此处显示平面预览与追踪叠加</p>
@@ -235,12 +267,12 @@ export function TraceToCadTool() {
               <button
                 className="inline-flex items-center gap-1.5 rounded border border-line px-3 py-2 text-xs text-muted transition hover:border-accent/50 hover:text-slate-100 disabled:opacity-40"
                 disabled={!hasResult || dxfExportPending}
-                title="DXF 导出接口预留"
+                title="导出 DXF"
                 type="button"
                 onClick={handleExportDxf}
               >
                 {dxfExportPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileOutput className="h-3.5 w-3.5" />}
-                导出 DXF（即将推出）
+                导出 DXF
               </button>
               <button
                 className="inline-flex items-center gap-1.5 rounded border border-line px-3 py-2 text-xs text-slate-100 transition hover:border-accent/50 disabled:opacity-40"
@@ -296,6 +328,7 @@ function reviewStateFromSession(session: ToolSession): TraceReviewState | undefi
 
   return {
     draftVersion: session.outputs.planVersion,
+    recognizedVersion: session.outputs.planVersion,
     analysis,
     fileName: session.inputFiles?.[0]?.fileName ?? "restored-drawing",
     sourceType,
@@ -325,6 +358,7 @@ function TraceToCadInput({
 
         onReviewStateChange({
           draftVersion: state.draftVersion,
+          recognizedVersion: state.recognizedVersion ?? state.draftVersion,
           analysis: state.analysis,
           fileName: state.file.fileName,
           sourceType: state.analysis.sourceType,
@@ -373,16 +407,5 @@ function TraceResultPanel({ analysis, version }: { analysis: AnalyzePlanClientRe
         </div>
       ) : null}
     </div>
-  );
-}
-
-function PlanSvgPreview({ version }: { version: PlanVersion }) {
-  const svgMarkup = useMemo(() => createPlanSvg(version), [version]);
-
-  return (
-    <div
-      className="cad-grid flex min-h-[320px] h-full items-center justify-center overflow-auto rounded border border-line bg-[#081018] p-4 [&>svg]:max-h-full [&>svg]:max-w-full"
-      dangerouslySetInnerHTML={{ __html: svgMarkup }}
-    />
   );
 }

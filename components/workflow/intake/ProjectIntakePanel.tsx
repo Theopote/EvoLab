@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
+import { IntakeMaterialUploader } from "@/components/workflow/intake/IntakeMaterialUploader";
 import { useProjectActions, useProjectState } from "@/lib/project-store";
 import type { ProjectIntakeRecord } from "@/lib/intake/project-intake-types";
 
@@ -16,12 +18,14 @@ const listSections: Array<{ field: IntakeListField; title: string; placeholder: 
 export function ProjectIntakePanel() {
   const intake = useProjectState((state) => state.project.domain.intake);
   const { updateProjectIntake } = useProjectActions();
+  const [synthesisNotice, setSynthesisNotice] = useState<string | undefined>();
   const record = intake ?? {
     summary: "",
     constraints: [],
     risks: [],
     opportunities: [],
-    openQuestions: []
+    openQuestions: [],
+    sourceFiles: []
   };
 
   function updateList(field: IntakeListField, index: number, value: string) {
@@ -46,6 +50,14 @@ export function ProjectIntakePanel() {
           整理前期资料摘要、限制、风险与设计机会，作为任务书与方案生成的输入底座。
         </p>
       </header>
+
+      <IntakeMaterialUploader
+        onSynthesized={(fallback) => {
+          setSynthesisNotice(fallback ? "已使用 Mock 降级摘要，可继续手工编辑。" : "AI 摘要已写入资料库。");
+        }}
+      />
+
+      {synthesisNotice ? <p className="mb-4 text-xs text-success">{synthesisNotice}</p> : null}
 
       <label className="block space-y-2">
         <span className="text-xs font-medium text-slate-200">资料摘要</span>
