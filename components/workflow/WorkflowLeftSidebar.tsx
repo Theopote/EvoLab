@@ -1,12 +1,11 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { ToolPalette } from "@/components/tool-palette";
+import { ContextToolRail } from "@/components/context-tool-rail";
 import type { WorkflowPhase } from "@/lib/workflow-phases";
 import type { PlanVersion, WorkspaceTab } from "@/lib/project-types";
 import { ReportOutlineSidebar } from "@/components/workflow/ReportOutlineSidebar";
 import { VersionTreeSidebar } from "@/components/workflow/VersionTreeSidebar";
-import { WorkflowQuickTools } from "@/components/workflow/WorkflowQuickTools";
 
 interface WorkflowLeftSidebarProps {
   phase: WorkflowPhase;
@@ -52,7 +51,12 @@ export function WorkflowLeftSidebar({
 
   return (
     <aside className="flex min-h-0 flex-col gap-4 overflow-auto border-r border-line bg-[#0a0f15] p-3">
-      <ToolPalette activeTab={activeTab} onImportTab={onImportTab} onTabChange={onTabChange} />
+      <ContextToolRail
+        activeTab={activeTab}
+        phase={phase}
+        onImportTab={onImportTab}
+        onTabChange={onTabChange}
+      />
       <VersionTreeSidebar
         versions={versions}
         activeVersionId={activeVersionId}
@@ -61,7 +65,6 @@ export function WorkflowLeftSidebar({
         onToggleCompare={onToggleCompare}
       />
       {phasePanel}
-      <WorkflowQuickTools phase={phase} />
     </aside>
   );
 }

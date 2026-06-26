@@ -44,32 +44,32 @@ export interface WorkflowPhaseDefinition {
 export const workflowPhaseDefinitions: WorkflowPhaseDefinition[] = [
   {
     id: "import",
-    label: "Import",
-    description: "Upload CAD, PDF, or raster drawings to seed the project",
+    label: "资料",
+    description: "上传 CAD、PDF 或扫描图导入项目",
     defaultTab: "Import"
   },
   {
     id: "site",
-    label: "Site",
-    description: "Site outline, GIS context, zoning envelope, buildable area",
+    label: "场地",
+    description: "用地轮廓、GIS 上下文、退线包络与可建范围",
     defaultTab: "Site"
   },
   {
     id: "program",
-    label: "Program",
-    description: "Functional brief, space program, code context, scoring goals",
+    label: "任务书",
+    description: "功能任务书、面积程序、规范上下文与评分目标",
     defaultTab: "Program"
   },
   {
     id: "scheme",
-    label: "Scheme",
-    description: "Bubble diagram, plan editing, compare, massing, facade, structure",
+    label: "方案",
+    description: "气泡图、平面编辑、对比、体块、立面与结构",
     defaultTab: "Plan"
   },
   {
     id: "analyze",
-    label: "Analyze",
-    description: "Circulation, daylight, egress overlays and MEP systems",
+    label: "分析",
+    description: "流线、采光、疏散叠加层、机电系统与工程量",
     defaultTab: "Analysis"
   },
   {
@@ -80,11 +80,14 @@ export const workflowPhaseDefinitions: WorkflowPhaseDefinition[] = [
   },
   {
     id: "deliver",
-    label: "Deliver",
-    description: "Presentation decks, renders, and export packages",
+    label: "交付",
+    description: "汇报演示、效果图与导出包",
     defaultTab: "Presentation"
   }
 ];
+
+/** Primary workflow phases shown in the top navigation (quantify merged into analyze / bottom panel). */
+export const topNavPhaseDefinitions = workflowPhaseDefinitions.filter((definition) => definition.id !== "quantify");
 
 /** Maps legacy tab ids from Copilot / persisted UI state to canonical workspace tabs. */
 export const legacyTabAlias: Partial<Record<string, WorkspaceTab>> = {
@@ -401,7 +404,7 @@ export function recommendedNextStep(project: ProjectData): WorkflowPhase | null 
   }
 
   if (pendingChangeSets(project.domain).length > 0) {
-    return "quantify";
+    return "analyze";
   }
 
   return null;

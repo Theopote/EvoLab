@@ -35,6 +35,7 @@ export {
   tabForDeliverSubview,
   tabForQuantifySubview,
   tabForSchemeSubview,
+  topNavPhaseDefinitions,
   visiblePhases,
   workflowPhaseDefinitions
 } from "@/lib/workflow-navigation";

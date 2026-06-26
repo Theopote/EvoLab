@@ -9,7 +9,7 @@ import {
   tabForDeliverSubview,
   tabForQuantifySubview,
   tabForSchemeSubview,
-  workflowPhaseDefinitions,
+  topNavPhaseDefinitions,
   type AnalyzeSubview,
   type DeliverSubview,
   type QuantifySubview,
@@ -25,60 +25,55 @@ interface PhaseSubNavProps {
 }
 
 const schemeItems: { id: SchemeSubview; label: string }[] = [
-  { id: "bubble", label: "Bubble" },
-  { id: "plan", label: "Plan" },
-  { id: "compare", label: "Compare" },
-  { id: "massing", label: "Massing" },
-  { id: "facade", label: "Facade" },
-  { id: "structure", label: "Structure" }
+  { id: "bubble", label: "气泡图" },
+  { id: "plan", label: "平面" },
+  { id: "compare", label: "对比" },
+  { id: "massing", label: "体块" },
+  { id: "facade", label: "立面" },
+  { id: "structure", label: "结构" }
 ];
 
-const analyzeItems: { id: AnalyzeSubview; label: string }[] = [
-  { id: "analysis", label: "Analysis" },
-  { id: "systems", label: "MEP Systems" }
-];
-
-const quantifyItems: { id: QuantifySubview; label: string }[] = [
-  { id: "quantity", label: "Quantity" },
-  { id: "review", label: "Review" }
+const analyzeItems: { id: AnalyzeSubview | QuantifySubview; label: string; quantify?: boolean }[] = [
+  { id: "analysis", label: "分析图层" },
+  { id: "systems", label: "机电系统" },
+  { id: "quantity", label: "工程量", quantify: true },
+  { id: "review", label: "变更审阅", quantify: true }
 ];
 
 const deliverItems: { id: DeliverSubview; label: string }[] = [
-  { id: "presentation", label: "Presentation" },
-  { id: "render", label: "Render" },
-  { id: "export", label: "Export" }
+  { id: "presentation", label: "汇报" },
+  { id: "render", label: "效果图" },
+  { id: "export", label: "导出" }
 ];
 
 export function PhaseSubNav({ phase, activeTab, onTabChange }: PhaseSubNavProps) {
+  const displayPhase = phase === "quantify" ? "analyze" : phase;
+
   const items =
-    phase === "scheme"
+    displayPhase === "scheme"
       ? schemeItems
-      : phase === "analyze"
+      : displayPhase === "analyze"
         ? analyzeItems
-        : phase === "quantify"
-          ? quantifyItems
-          : phase === "deliver"
-            ? deliverItems
-            : [];
+        : displayPhase === "deliver"
+          ? deliverItems
+          : [];
 
   if (items.length === 0) {
     return null;
   }
 
   const activeSubview =
-    phase === "scheme"
+    displayPhase === "scheme"
       ? schemeSubviewForTab(activeTab) ?? "plan"
-      : phase === "analyze"
-        ? analyzeSubviewForTab(activeTab) ?? "analysis"
-        : phase === "quantify"
-          ? quantifySubviewForTab(activeTab) ?? "quantity"
-          : deliverSubviewForTab(activeTab) ?? "presentation";
+      : displayPhase === "analyze"
+        ? analyzeSubviewForTab(activeTab) ?? quantifySubviewForTab(activeTab) ?? "analysis"
+        : deliverSubviewForTab(activeTab) ?? "presentation";
+
+  const phaseLabel = topNavPhaseDefinitions.find((item) => item.id === displayPhase)?.label;
 
   return (
     <div className="flex items-center gap-1 border-b border-line bg-[#0a0f15] px-4 py-2">
-      <span className="mr-2 text-[11px] uppercase tracking-[0.14em] text-muted">
-        {workflowPhaseDefinitions.find((item) => item.id === phase)?.label}
-      </span>
+      <span className="mr-2 text-[11px] uppercase tracking-[0.14em] text-muted">{phaseLabel}</span>
       {items.map((item) => (
         <button
           className={`h-8 rounded px-3 text-xs ${
@@ -89,18 +84,18 @@ export function PhaseSubNav({ phase, activeTab, onTabChange }: PhaseSubNavProps)
           key={item.id}
           type="button"
           onClick={() => {
-            if (phase === "scheme") {
+            if (displayPhase === "scheme") {
               onTabChange(tabForSchemeSubview(item.id as SchemeSubview));
               return;
             }
 
-            if (phase === "analyze") {
-              onTabChange(tabForAnalyzeSubview(item.id as AnalyzeSubview));
-              return;
-            }
+            if (displayPhase === "analyze") {
+              if ("quantify" in item && item.quantify) {
+                onTabChange(tabForQuantifySubview(item.id as QuantifySubview));
+                return;
+              }
 
-            if (phase === "quantify") {
-              onTabChange(tabForQuantifySubview(item.id as QuantifySubview));
+              onTabChange(tabForAnalyzeSubview(item.id as AnalyzeSubview));
               return;
             }
 

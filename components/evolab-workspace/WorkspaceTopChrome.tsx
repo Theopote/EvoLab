@@ -20,7 +20,7 @@ export const WorkspaceTopChrome = memo(function WorkspaceTopChrome() {
         workflowPhase={workflowPhase}
         onPhaseChange={setWorkflowPhase}
         onOpenReviews={() => {
-          setWorkflowPhase("quantify");
+          setWorkflowPhase("analyze");
           setActiveTab("Review");
         }}
       />

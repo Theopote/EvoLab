@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FileImage, FileSpreadsheet, FileType2, Loader2, Upload, Wand2 } from "lucide-react";
 import { ImportImageCorrectionPanel } from "@/components/workflow/import/ImportImageCorrectionPanel";
 import { ImportPdfPagePanel } from "@/components/workflow/import/ImportPdfPagePanel";
@@ -58,12 +58,28 @@ export interface ImportWizardResult {
   openTrace: boolean;
 }
 
+export interface ImportWizardReviewState {
+  draftVersion?: PlanVersion;
+  recognizedVersion?: PlanVersion;
+  analysis?: AnalyzePlanClientResult;
+  file?: CopilotPinnedFile;
+  referencePreviewUrl?: string;
+}
+
 interface ImportWizardProps {
   onImportComplete: (result: ImportWizardResult) => void;
   onContinueToTrace: () => void;
+  /** Compact layout for tool shell — hides header, review canvas, and inline actions */
+  embedded?: boolean;
+  onReviewStateChange?: (state: ImportWizardReviewState) => void;
 }
 
-export function ImportWizard({ onImportComplete, onContinueToTrace }: ImportWizardProps) {
+export function ImportWizard({
+  onImportComplete,
+  onContinueToTrace,
+  embedded = false,
+  onReviewStateChange
+}: ImportWizardProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<ImportWizardStep>("home");
   const [selectedKind, setSelectedKind] = useState<ImportKind>("image");
@@ -79,6 +95,16 @@ export function ImportWizard({ onImportComplete, onContinueToTrace }: ImportWiza
   const [isDragging, setIsDragging] = useState(false);
 
   const selectedKindConfig = importKinds.find((kind) => kind.id === selectedKind) ?? importKinds[0];
+
+  useEffect(() => {
+    onReviewStateChange?.({
+      draftVersion,
+      recognizedVersion,
+      analysis,
+      file: pinnedFile,
+      referencePreviewUrl
+    });
+  }, [analysis, draftVersion, onReviewStateChange, pinnedFile, recognizedVersion, referencePreviewUrl]);
 
   async function recognizePinnedFile(file: CopilotPinnedFile, pdfPageNumber?: number) {
     setError(undefined);
@@ -190,14 +216,18 @@ export function ImportWizard({ onImportComplete, onContinueToTrace }: ImportWiza
 
   return (
     <section className="flex min-h-full flex-col">
-      <header className="mb-4">
-        <h1 className="text-lg font-semibold text-white">Import & Trace</h1>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted">
-          Bring existing drawings into EvoLab as editable scheme versions. Correct scans, review recognition, refine
-          geometry, then create a traceable scheme version.
-        </p>
+      {!embedded ? (
+        <header className="mb-4">
+          <h1 className="text-lg font-semibold text-white">Import & Trace</h1>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-muted">
+            Bring existing drawings into EvoLab as editable scheme versions. Correct scans, review recognition, refine
+            geometry, then create a traceable scheme version.
+          </p>
+          <WizardSteps selectedKind={selectedKind} step={step} />
+        </header>
+      ) : (
         <WizardSteps selectedKind={selectedKind} step={step} />
-      </header>
+      )}
 
       <input
         ref={fileInputRef}
@@ -362,59 +392,65 @@ export function ImportWizard({ onImportComplete, onContinueToTrace }: ImportWiza
       ) : null}
 
       {step === "review" && analysis && pinnedFile && draftVersion && recognizedVersion ? (
-        <div className="flex min-h-0 flex-1 flex-col gap-4">
-          <ImportPreviewPanel
-            confidence={analysis.confidence}
-            draftVersion={draftVersion}
-            fallback={analysis.fallback}
-            fileName={pinnedFile.fileName}
-            importPath={analysis.importPath}
-            recognizedVersion={recognizedVersion}
-            referencePreviewUrl={pinnedFile.sourceType === "image" ? pinnedFile.previewUrl : undefined}
-            sourceType={analysis.sourceType}
-            warnings={analysis.warnings}
-            onDraftVersionChange={setDraftVersion}
-          />
+        embedded ? (
+          <div className="mt-3 rounded border border-success/30 bg-success/10 p-3 text-xs text-success">
+            识别完成 — 请在右侧查看参数，底部导出或加入项目。
+          </div>
+        ) : (
+          <div className="flex min-h-0 flex-1 flex-col gap-4">
+            <ImportPreviewPanel
+              confidence={analysis.confidence}
+              draftVersion={draftVersion}
+              fallback={analysis.fallback}
+              fileName={pinnedFile.fileName}
+              importPath={analysis.importPath}
+              recognizedVersion={recognizedVersion}
+              referencePreviewUrl={pinnedFile.sourceType === "image" ? pinnedFile.previewUrl : undefined}
+              sourceType={analysis.sourceType}
+              warnings={analysis.warnings}
+              onDraftVersionChange={setDraftVersion}
+            />
 
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
-            <button
-              className="rounded border border-line px-3 py-2 text-xs text-muted transition hover:text-slate-100"
-              type="button"
-              onClick={() => {
-                setAnalysis(undefined);
-                setRecognizedVersion(undefined);
-                setDraftVersion(undefined);
-                setReferencePreviewUrl(undefined);
-                setStep(
-                  pinnedFile.sourceType === "image"
-                    ? "correct"
-                    : pinnedFile.sourceType === "pdf" && (pdfPageCount ?? 0) > 1
-                      ? "select-page"
-                      : "upload"
-                );
-              }}
-            >
-              Upload another file
-            </button>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
+              <button
+                className="rounded border border-line px-3 py-2 text-xs text-muted transition hover:text-slate-100"
+                type="button"
+                onClick={() => {
+                  setAnalysis(undefined);
+                  setRecognizedVersion(undefined);
+                  setDraftVersion(undefined);
+                  setReferencePreviewUrl(undefined);
+                  setStep(
+                    pinnedFile.sourceType === "image"
+                      ? "correct"
+                      : pinnedFile.sourceType === "pdf" && (pdfPageCount ?? 0) > 1
+                        ? "select-page"
+                        : "upload"
+                  );
+                }}
+              >
+                Upload another file
+              </button>
 
-            <div className="flex flex-wrap gap-2">
-              <button
-                className="rounded border border-line px-3 py-2 text-xs text-slate-100 transition hover:border-accent/50 hover:bg-accent/5"
-                type="button"
-                onClick={() => confirmImport(false)}
-              >
-                Create scheme version
-              </button>
-              <button
-                className="rounded border border-accent/50 bg-accent/10 px-3 py-2 text-xs font-medium text-accent transition hover:bg-accent/20"
-                type="button"
-                onClick={() => confirmImport(true)}
-              >
-                Create & open trace
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  className="rounded border border-line px-3 py-2 text-xs text-slate-100 transition hover:border-accent/50 hover:bg-accent/5"
+                  type="button"
+                  onClick={() => confirmImport(false)}
+                >
+                  Create scheme version
+                </button>
+                <button
+                  className="rounded border border-accent/50 bg-accent/10 px-3 py-2 text-xs font-medium text-accent transition hover:bg-accent/20"
+                  type="button"
+                  onClick={() => confirmImport(true)}
+                >
+                  Create & open trace
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        )
       ) : null}
     </section>
   );

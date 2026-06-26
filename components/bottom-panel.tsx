@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, CheckCircle2, FileStack, Layers3, Ruler, ScrollText } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, FileStack, Layers3, Ruler, ScrollText } from "lucide-react";
 import { useMemo, useState } from "react";
 import { ScoreBreakdownPanel } from "@/components/score/ScoreBreakdownPanel";
 import { ScoringConfigPanel } from "@/components/score/ScoringConfigPanel";
@@ -37,6 +37,7 @@ export function BottomPanel({
   complianceItems,
   onSelectVersion
 }: BottomPanelProps) {
+  const [expanded, setExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState<BottomPanelTab>("tasks");
   const [scoresSubTab, setScoresSubTab] = useState<ScoresSubTab>("breakdown");
   const { updateScoringConfig, resetScoringConfig } = useProjectActions();
@@ -80,32 +81,54 @@ export function BottomPanel({
 
   return (
     <section className="border-t border-line bg-[#0a0f15]">
-      <div className="flex h-9 items-center justify-between border-b border-line px-3">
-        <div className="flex items-center gap-1">
-          {tabs.map((tab) => (
-            <button
-              className={`h-7 rounded px-3 text-xs ${
-                activeTab === tab.id
-                  ? "bg-accent/15 text-accent"
-                  : "text-muted hover:bg-white/[0.04] hover:text-slate-100"
-              }`}
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id)}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-        <div className="flex items-center gap-3 text-xs text-muted">
-          <span>{activeVersion?.label ?? "No active version"}</span>
+      <button
+        className="flex h-9 w-full items-center justify-between border-b border-line px-3 text-left transition hover:bg-white/[0.02]"
+        type="button"
+        onClick={() => setExpanded((value) => !value)}
+      >
+        <div className="flex flex-wrap items-center gap-3 text-xs">
+          <span className="font-medium text-slate-200">{activeVersion?.label ?? "无活动版本"}</span>
+          <span className="text-muted">
+            {project.versions.length} 版本 · {quantities ? `${quantities.summary.grossArea} ㎡` : "— ㎡"}
+          </span>
           <span className={warningCount > 0 ? "text-warning" : "text-success"}>
-            {warningCount} warnings
+            {warningCount} 条警告
           </span>
         </div>
-      </div>
+        <span className="flex items-center gap-1 text-[11px] text-muted">
+          {expanded ? "收起" : "展开指标面板"}
+          {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5 rotate-180" />}
+        </span>
+      </button>
 
-      <div className={`overflow-auto p-3 ${activeTab === "scores" ? "h-[22rem]" : "h-44"}`}>
+      {expanded ? (
+        <>
+          <div className="flex h-9 items-center justify-between border-b border-line px-3">
+            <div className="flex items-center gap-1">
+              {tabs.map((tab) => (
+                <button
+                  className={`h-7 rounded px-3 text-xs ${
+                    activeTab === tab.id
+                      ? "bg-accent/15 text-accent"
+                      : "text-muted hover:bg-white/[0.04] hover:text-slate-100"
+                  }`}
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id)}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-3 text-xs text-muted">
+              <span>{activeVersion?.label ?? "No active version"}</span>
+              <span className={warningCount > 0 ? "text-warning" : "text-success"}>
+                {warningCount} warnings
+              </span>
+            </div>
+          </div>
+
+          <div className={`overflow-auto p-3 ${activeTab === "scores" ? "h-[22rem]" : "h-44"}`}>
         {activeTab === "tasks" ? (
           <div className="grid gap-2 lg:grid-cols-5">
             {taskRows.map((task) => (
@@ -279,7 +302,9 @@ export function BottomPanel({
             ))}
           </div>
         ) : null}
-      </div>
+          </div>
+        </>
+      ) : null}
     </section>
   );
 }

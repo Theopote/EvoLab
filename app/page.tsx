@@ -1,12 +1,5 @@
-"use client";
-
-import { EvoLabWorkspace } from "@/components/evolab-workspace";
-import { EvoProjectProvider } from "@/lib/project-store";
+import { LauncherHome } from "@/components/launcher/LauncherHome";
 
 export default function Home() {
-  return (
-    <EvoProjectProvider>
-      <EvoLabWorkspace />
-    </EvoProjectProvider>
-  );
+  return <LauncherHome />;
 }
