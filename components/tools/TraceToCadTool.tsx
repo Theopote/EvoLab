@@ -1,36 +1,111 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { FileJson, FileOutput, Loader2, PlusCircle } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { FileJson, FileOutput, Loader2, PlusCircle, Save } from "lucide-react";
 import { ImportWizard, type ImportWizardResult } from "@/components/workflow/import/ImportWizard";
 import { ToolPageShell } from "@/components/tools/ToolPageShell";
 import type { AnalyzePlanClientResult } from "@/lib/plan-import/analyze-plan-client";
 import { createPlanSvg, downloadTextFile, exportVersionJson } from "@/lib/export-utils";
-import { useProjectActions } from "@/lib/project-store";
+import { useProjectActions, useProjectState } from "@/lib/project-store";
 import type { PlanVersion } from "@/lib/project-types";
-import type { CopilotPinnedFile } from "@/lib/copilot-upload";
+import type { PlanImportSource } from "@/lib/plan-import/types";
+import { saveTraceToCadSession, useToolSessionStore } from "@/lib/tools/tool-session-store";
+import type { ToolSession } from "@/lib/tools/tool-session-types";
+import { useInteractionStore } from "@/lib/interaction-store";
 
 interface TraceReviewState {
   draftVersion: PlanVersion;
   analysis: AnalyzePlanClientResult;
-  file: CopilotPinnedFile;
+  fileName: string;
+  sourceType: PlanImportSource;
   referencePreviewUrl?: string;
 }
 
 export function TraceToCadTool() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const projectId = useProjectState((state) => state.project.projectId);
   const { appendGeneratedVersions, setActiveVersion, setWorkflowPhase, setActiveTab } = useProjectActions();
+  const { createSession, getSession, promoteSession, setActiveSessionId } = useToolSessionStore();
+  const [sessionId, setSessionId] = useState<string | undefined>(searchParams.get("session") ?? undefined);
   const [reviewState, setReviewState] = useState<TraceReviewState | undefined>();
   const [dxfExportPending, setDxfExportPending] = useState(false);
+  const [saveNotice, setSaveNotice] = useState<string | undefined>();
+  const bootstrappedRef = useRef(false);
 
-  const handleReviewStateChange = useCallback((state: TraceReviewState | undefined) => {
-    setReviewState(state);
-  }, []);
+  useEffect(() => {
+    if (bootstrappedRef.current) {
+      return;
+    }
+
+    bootstrappedRef.current = true;
+    const requestedSessionId = searchParams.get("session");
+    const existing = requestedSessionId ? getSession(requestedSessionId) : undefined;
+
+    if (existing?.outputs?.planVersion && existing.analysisMeta) {
+      setSessionId(existing.id);
+      setActiveSessionId(existing.id);
+      setReviewState(reviewStateFromSession(existing));
+      return;
+    }
+
+    const session = createSession("trace-to-cad");
+    setSessionId(session.id);
+    setActiveSessionId(session.id);
+    router.replace(`/tools/trace-to-cad?session=${session.id}`);
+  }, [createSession, getSession, router, searchParams, setActiveSessionId]);
+
+  const persistSession = useCallback(
+    (state: TraceReviewState) => {
+      if (!sessionId) {
+        return;
+      }
+
+      saveTraceToCadSession({
+        sessionId,
+        title: `${state.fileName} · 扫描转 CAD`,
+        inputFiles: [{ fileName: state.fileName, sourceType: state.sourceType }],
+        outputs: {
+          kind: "plan-version",
+          planVersion: state.draftVersion,
+          referencePreviewUrl: state.referencePreviewUrl
+        },
+        analysisMeta: {
+          confidence: state.analysis.confidence,
+          importPath: state.analysis.importPath,
+          sourceType: state.analysis.sourceType,
+          warnings: state.analysis.warnings,
+          fallback: state.analysis.fallback
+        }
+      });
+    },
+    [sessionId]
+  );
+
+  const handleReviewStateChange = useCallback(
+    (state: TraceReviewState | undefined) => {
+      setReviewState(state);
+      if (state) {
+        persistSession(state);
+      }
+    },
+    [persistSession]
+  );
+
+  const handleSaveResult = useCallback(() => {
+    if (!reviewState) {
+      return;
+    }
+
+    persistSession(reviewState);
+    setSaveNotice("结果已保存到工具会话，可在首页继续。");
+    window.setTimeout(() => setSaveNotice(undefined), 2400);
+  }, [persistSession, reviewState]);
 
   const handleAddToProject = useCallback(
     (openTrace: boolean) => {
-      if (!reviewState) {
+      if (!reviewState || !sessionId) {
         return;
       }
 
@@ -39,7 +114,7 @@ export function TraceToCadTool() {
         metadata: {
           ...reviewState.draftVersion.metadata,
           importSource: {
-            fileName: reviewState.file.fileName,
+            fileName: reviewState.fileName,
             sourceType: reviewState.analysis.sourceType,
             importPath: reviewState.analysis.importPath,
             confidence: reviewState.analysis.confidence,
@@ -52,9 +127,23 @@ export function TraceToCadTool() {
       setActiveVersion(enrichedVersion);
       setWorkflowPhase("scheme");
       setActiveTab("Plan");
-      router.push(openTrace ? "/workspace" : "/workspace");
+      promoteSession(sessionId, projectId);
+      if (openTrace) {
+        useInteractionStore.getState().setActiveTool("trace");
+      }
+      router.push("/workspace");
     },
-    [appendGeneratedVersions, reviewState, router, setActiveTab, setActiveVersion, setWorkflowPhase]
+    [
+      appendGeneratedVersions,
+      projectId,
+      promoteSession,
+      reviewState,
+      router,
+      sessionId,
+      setActiveTab,
+      setActiveVersion,
+      setWorkflowPhase
+    ]
   );
 
   const handleExportSvg = useCallback(() => {
@@ -89,12 +178,19 @@ export function TraceToCadTool() {
       toolName="扫描图转 CAD"
       toolDescription="上传图片、PDF 或 DXF，识别为可编辑 PlanVersion"
       inputPanel={
-        <TraceToCadInput
-          onImportComplete={() => {
-            /* handled via review state in embedded mode */
-          }}
-          onReviewStateChange={handleReviewStateChange}
-        />
+        <div className="space-y-3">
+          {sessionId ? (
+            <div className="rounded border border-line bg-panel/70 px-3 py-2 text-[11px] text-muted">
+              会话 ID：<span className="text-slate-200">{sessionId}</span>
+            </div>
+          ) : null}
+          <TraceToCadInput
+            onImportComplete={() => {
+              /* handled via review state in embedded mode */
+            }}
+            onReviewStateChange={handleReviewStateChange}
+          />
+        </div>
       }
       previewPanel={
         hasResult && reviewState ? (
@@ -116,35 +212,47 @@ export function TraceToCadTool() {
       }
       footerActions={
         <>
-          <div className="flex flex-wrap gap-2">
-            <button
-              className="inline-flex items-center gap-1.5 rounded border border-line px-3 py-2 text-xs text-slate-100 transition hover:border-accent/50 disabled:opacity-40"
-              disabled={!hasResult}
-              type="button"
-              onClick={handleExportSvg}
-            >
-              <FileOutput className="h-3.5 w-3.5" />
-              导出 SVG
-            </button>
-            <button
-              className="inline-flex items-center gap-1.5 rounded border border-line px-3 py-2 text-xs text-slate-100 transition hover:border-accent/50 disabled:opacity-40"
-              disabled={!hasResult}
-              type="button"
-              onClick={handleExportJson}
-            >
-              <FileJson className="h-3.5 w-3.5" />
-              导出 JSON
-            </button>
-            <button
-              className="inline-flex items-center gap-1.5 rounded border border-line px-3 py-2 text-xs text-muted transition hover:border-accent/50 hover:text-slate-100 disabled:opacity-40"
-              disabled={!hasResult || dxfExportPending}
-              title="DXF 导出接口预留"
-              type="button"
-              onClick={handleExportDxf}
-            >
-              {dxfExportPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileOutput className="h-3.5 w-3.5" />}
-              导出 DXF（即将推出）
-            </button>
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap gap-2">
+              <button
+                className="inline-flex items-center gap-1.5 rounded border border-line px-3 py-2 text-xs text-slate-100 transition hover:border-accent/50 disabled:opacity-40"
+                disabled={!hasResult}
+                type="button"
+                onClick={handleExportSvg}
+              >
+                <FileOutput className="h-3.5 w-3.5" />
+                导出 SVG
+              </button>
+              <button
+                className="inline-flex items-center gap-1.5 rounded border border-line px-3 py-2 text-xs text-slate-100 transition hover:border-accent/50 disabled:opacity-40"
+                disabled={!hasResult}
+                type="button"
+                onClick={handleExportJson}
+              >
+                <FileJson className="h-3.5 w-3.5" />
+                导出 JSON
+              </button>
+              <button
+                className="inline-flex items-center gap-1.5 rounded border border-line px-3 py-2 text-xs text-muted transition hover:border-accent/50 hover:text-slate-100 disabled:opacity-40"
+                disabled={!hasResult || dxfExportPending}
+                title="DXF 导出接口预留"
+                type="button"
+                onClick={handleExportDxf}
+              >
+                {dxfExportPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileOutput className="h-3.5 w-3.5" />}
+                导出 DXF（即将推出）
+              </button>
+              <button
+                className="inline-flex items-center gap-1.5 rounded border border-line px-3 py-2 text-xs text-slate-100 transition hover:border-accent/50 disabled:opacity-40"
+                disabled={!hasResult}
+                type="button"
+                onClick={handleSaveResult}
+              >
+                <Save className="h-3.5 w-3.5" />
+                保存结果
+              </button>
+            </div>
+            {saveNotice ? <span className="text-[11px] text-success">{saveNotice}</span> : null}
           </div>
           <div className="flex flex-wrap gap-2">
             <button
@@ -171,6 +279,30 @@ export function TraceToCadTool() {
   );
 }
 
+function reviewStateFromSession(session: ToolSession): TraceReviewState | undefined {
+  if (!session.outputs?.planVersion || !session.analysisMeta) {
+    return undefined;
+  }
+
+  const sourceType = session.analysisMeta.sourceType as PlanImportSource;
+  const analysis: AnalyzePlanClientResult = {
+    version: session.outputs.planVersion,
+    confidence: session.analysisMeta.confidence,
+    importPath: session.analysisMeta.importPath,
+    sourceType,
+    warnings: session.analysisMeta.warnings,
+    fallback: session.analysisMeta.fallback
+  };
+
+  return {
+    draftVersion: session.outputs.planVersion,
+    analysis,
+    fileName: session.inputFiles?.[0]?.fileName ?? "restored-drawing",
+    sourceType,
+    referencePreviewUrl: session.outputs.referencePreviewUrl
+  };
+}
+
 function TraceToCadInput({
   onImportComplete,
   onReviewStateChange
@@ -194,7 +326,8 @@ function TraceToCadInput({
         onReviewStateChange({
           draftVersion: state.draftVersion,
           analysis: state.analysis,
-          file: state.file,
+          fileName: state.file.fileName,
+          sourceType: state.analysis.sourceType,
           referencePreviewUrl: state.referencePreviewUrl
         });
       }}

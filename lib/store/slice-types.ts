@@ -7,6 +7,8 @@ export type ProjectSliceActions = Pick<
   | "setActiveTab"
   | "updateBrief"
   | "setProjectTypology"
+  | "updateProjectIntake"
+  | "loadDemoProject"
   | "updateScoringConfig"
   | "resetScoringConfig"
   | "updateFacadeEnvelope"

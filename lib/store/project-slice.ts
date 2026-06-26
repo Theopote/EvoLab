@@ -10,7 +10,9 @@ import {
 } from "@/lib/workflow-navigation";
 import { programFromBrief } from "@/lib/project-domain";
 import { applyTypologyPackToDomain, briefFromTypologyPack } from "@/lib/typologies/domain";
+import { createDemoProjectData } from "@/lib/typologies/demo-project";
 import type { TypologyPackId } from "@/lib/typology/types";
+import { createEmptyIntakeRecord } from "@/lib/intake/project-intake-types";
 import { relayoutPlanCommand, resolveRelayoutOutline } from "@/lib/store/commands/relayout-plan";
 import {
   bumpGeometryRevision,
@@ -68,6 +70,30 @@ export const createProjectSlice: StateCreator<EvoProjectStore, [], [], ProjectSl
         };
         refreshDomainDraft(state);
         rescoreProjectVersions(state);
+        refreshDerivedDraft(state);
+      })
+    ),
+  updateProjectIntake: (patch) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        const current = state.project.domain.intake ?? createEmptyIntakeRecord();
+        state.project.domain.intake = {
+          ...current,
+          ...patch,
+          updatedAt: new Date().toISOString()
+        };
+      })
+    ),
+  loadDemoProject: (typologyId: TypologyPackId) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        const demo = createDemoProjectData(typologyId);
+        state.project = demo;
+        state.brief = briefFromTypologyPack(typologyId);
+        state.workflowPhase = "scheme";
+        state.activeTab = "Plan";
+        clearSelectionDraft(state);
+        bumpGeometryRevision(state);
         refreshDerivedDraft(state);
       })
     ),

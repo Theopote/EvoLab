@@ -30,7 +30,7 @@ const schemeItems: { id: SchemeSubview; label: string }[] = [
   { id: "compare", label: "对比" },
   { id: "massing", label: "体块" },
   { id: "facade", label: "立面" },
-  { id: "structure", label: "结构" }
+  { id: "structure", label: "结构建议" }
 ];
 
 const analyzeItems: { id: AnalyzeSubview | QuantifySubview; label: string; quantify?: boolean }[] = [

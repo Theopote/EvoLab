@@ -93,6 +93,8 @@ export interface EvoProjectStore {
   refreshEnvironmentSurrogate: () => void;
   updateBrief: (brief: DesignBrief) => void;
   setProjectTypology: (typologyId: import("@/lib/typology/types").TypologyPackId) => void;
+  updateProjectIntake: (patch: Partial<import("@/lib/intake/project-intake-types").ProjectIntakeRecord>) => void;
+  loadDemoProject: (typologyId: import("@/lib/typology/types").TypologyPackId) => void;
   updateScoringConfig: (patch: Partial<ScoringConfig>) => void;
   resetScoringConfig: () => void;
   updateFacadeEnvelope: (patch: Partial<FacadeEnvelope>) => void;

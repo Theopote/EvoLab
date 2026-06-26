@@ -1,6 +1,7 @@
 import type { Point, PlanVersion, RoomType, FunctionZone, CopilotFinding } from "@/lib/project-types";
 import type { CopilotInsightQueue } from "@/lib/copilot-insight-queue";
 import type { DesignDecision } from "@/lib/design-decision-log";
+import type { ProjectIntakeRecord } from "@/lib/intake/project-intake-types";
 import type { PlanChangeProposal } from "@/lib/schemas/plan-change-proposal-schema";
 import type { SiteContext, ZoningConstraints } from "@/lib/site-types";
 
@@ -365,6 +366,7 @@ export interface ProjectDomain {
   lockedElementIds: string[];
   designDecisions?: DesignDecision[];
   copilotInsightQueue?: CopilotInsightQueue;
+  intake?: ProjectIntakeRecord;
 }
 
 export const defaultDoorWindowFamilies: DoorWindowFamily[] = [
