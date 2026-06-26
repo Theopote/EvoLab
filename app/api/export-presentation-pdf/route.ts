@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { renderPresentationHtml } from "@/lib/presentation/render-html";
+import { apiError } from "@/lib/server/api-response";
 import { PresentationDeckSchema } from "@/lib/schemas/presentation-schema";
 
 export const runtime = "nodejs";
@@ -10,7 +11,7 @@ export async function POST(request: Request) {
   const parsed = PresentationDeckSchema.safeParse(body.deck ?? body);
 
   if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid presentation deck.", details: parsed.error.message }, { status: 400 });
+    return apiError("Invalid presentation deck.", 400, "INVALID_PAYLOAD", parsed.error.message);
   }
 
   const deck = parsed.data;
@@ -39,14 +40,12 @@ export async function POST(request: Request) {
       }
     });
   } catch (error) {
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Server PDF export unavailable. Run `npx playwright install chromium` after installing playwright."
-      },
-      { status: 503 }
+    return apiError(
+      error instanceof Error
+        ? error.message
+        : "Server PDF export unavailable. Run `npx playwright install chromium` after installing playwright.",
+      503,
+      "PDF_EXPORT_UNAVAILABLE"
     );
   }
 }

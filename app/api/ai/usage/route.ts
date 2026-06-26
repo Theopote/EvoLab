@@ -1,9 +1,9 @@
-import { NextResponse } from "next/server";
 import { getLlmUsageSummary, logLlmUsage } from "@/lib/ai/token-usage";
 import { listPromptTemplates } from "@/lib/prompts/registry";
+import { apiError, apiOk } from "@/lib/server/api-response";
 
 export async function GET() {
-  return NextResponse.json({
+  return apiOk({
     usage: getLlmUsageSummary(),
     prompts: listPromptTemplates()
   });
@@ -21,7 +21,7 @@ export async function POST(request: Request) {
   } | null;
 
   if (!body?.task) {
-    return NextResponse.json({ error: "task is required." }, { status: 400 });
+    return apiError("task is required.", 400, "INVALID_PAYLOAD");
   }
 
   await logLlmUsage({
@@ -34,5 +34,5 @@ export async function POST(request: Request) {
     cacheHit: body.cacheHit ?? false
   });
 
-  return NextResponse.json({ ok: true });
+  return apiOk({ logged: true });
 }

@@ -1,8 +1,8 @@
-import { NextResponse } from "next/server";
 import { requestAnthropicTool } from "@/lib/anthropic-tool";
 import { generateRuleBasedMep } from "@/lib/mep-router";
 import { createMockMep } from "@/lib/mock-api";
 import { mepPrompt } from "@/lib/prompts/mepPrompt";
+import { apiError, apiOk } from "@/lib/server/api-response";
 import { GenerateMepToolInputSchema } from "@/lib/schemas/mep-schema";
 import type { CopilotFinding, MepLayout, PlanVersion } from "@/lib/project-types";
 
@@ -10,16 +10,11 @@ interface GenerateMepRequest {
   version?: PlanVersion;
 }
 
-interface GenerateMepResponse {
-  mep: MepLayout;
-  findings: CopilotFinding[];
-}
-
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as GenerateMepRequest;
 
   if (!body.version) {
-    return NextResponse.json({ error: "version is required for generate-mep." }, { status: 400 });
+    return apiError("version is required for generate-mep.", 400, "INVALID_PAYLOAD");
   }
 
   const fallback = createMockMep(body.version);
@@ -35,17 +30,17 @@ export async function POST(request: Request) {
     });
 
     if (!data.mep?.routes || !Array.isArray(data.findings)) {
-      return NextResponse.json(fallback);
+      return apiOk(fallback);
     }
 
     const routed = generateRuleBasedMep(body.version, data.mep);
 
-    return NextResponse.json({
+    return apiOk({
       mep: routed.mep,
       findings: [...data.findings, ...routed.findings]
     });
   } catch (error) {
-    return NextResponse.json({
+    return apiOk({
       ...fallback,
       fallback: true,
       warning: error instanceof Error ? error.message : "Failed to generate MEP layout."

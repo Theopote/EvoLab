@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { buildPlanPrintHtml } from "@/lib/export-plan-pdf";
+import { apiError } from "@/lib/server/api-response";
 import type { PlanVersion } from "@/lib/project-types";
 
 export const runtime = "nodejs";
@@ -13,7 +14,7 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as ExportPlanPdfRequest;
 
   if (!body.version?.rooms?.length) {
-    return NextResponse.json({ error: "version with rooms is required." }, { status: 400 });
+    return apiError("version with rooms is required.", 400, "INVALID_PAYLOAD");
   }
 
   const totalArea = body.version.rooms.reduce((sum, room) => sum + room.areaSqm, 0);
@@ -41,14 +42,12 @@ export async function POST(request: Request) {
       }
     });
   } catch (error) {
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Server PDF export unavailable. Run `npx playwright install chromium` after installing playwright."
-      },
-      { status: 503 }
+    return apiError(
+      error instanceof Error
+        ? error.message
+        : "Server PDF export unavailable. Run `npx playwright install chromium` after installing playwright.",
+      503,
+      "PDF_EXPORT_UNAVAILABLE"
     );
   }
 }

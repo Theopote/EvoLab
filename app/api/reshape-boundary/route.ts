@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { requestAnthropicTool } from "@/lib/anthropic-tool";
 import { hasAnthropicKey } from "@/lib/anthropic-json";
 import type { BoundarySpanSelection } from "@/lib/boundary-span-select";
@@ -9,6 +8,7 @@ import {
   ReshapeBoundaryToolInputSchema
 } from "@/lib/schemas/local-form-edit-schema";
 import { StructuralConstraintSetSchema } from "@/lib/schemas/structural-constraints-schema";
+import { apiError, apiOk } from "@/lib/server/api-response";
 import {
   enrichUserRequestWithStructuralConstraints,
   validateStructuralConstraints,
@@ -29,17 +29,17 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as ReshapeBoundaryRequest;
 
   if (!body.currentVersion) {
-    return NextResponse.json({ error: "currentVersion is required." }, { status: 400 });
+    return apiError("currentVersion is required.", 400, "INVALID_PAYLOAD");
   }
 
   const spanResult = BoundarySpanSelectionSchema.safeParse(body.span);
 
   if (!spanResult.success) {
-    return NextResponse.json({ error: "A valid boundary span selection is required." }, { status: 400 });
+    return apiError("A valid boundary span selection is required.", 400, "INVALID_PAYLOAD");
   }
 
   if (!body.userRequest?.trim()) {
-    return NextResponse.json({ error: "userRequest is required." }, { status: 400 });
+    return apiError("userRequest is required.", 400, "INVALID_PAYLOAD");
   }
 
   const constraintResult = body.structuralConstraints
@@ -47,7 +47,7 @@ export async function POST(request: Request) {
     : undefined;
 
   if (body.structuralConstraints && !constraintResult?.success) {
-    return NextResponse.json({ error: "Invalid structuralConstraints payload." }, { status: 400 });
+    return apiError("Invalid structuralConstraints payload.", 400, "INVALID_PAYLOAD");
   }
 
   const structuralConstraints = constraintResult?.success ? constraintResult.data : undefined;
@@ -103,7 +103,7 @@ export async function POST(request: Request) {
         .join(" ");
     }
 
-    return NextResponse.json({
+    return apiOk({
       points,
       findings,
       warning,
@@ -113,11 +113,6 @@ export async function POST(request: Request) {
       version: preview.version
     });
   } catch (error) {
-    return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "Failed to reshape boundary."
-      },
-      { status: 400 }
-    );
+    return apiError(error instanceof Error ? error.message : "Failed to reshape boundary.", 400, "RESHAPE_FAILED");
   }
 }

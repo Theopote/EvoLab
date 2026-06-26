@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
 import { runGeneratePlanPipeline } from "@/lib/generate-plan-pipeline";
 import { createMockPlanVersions } from "@/lib/mock-api";
+import { apiError, apiOk } from "@/lib/server/api-response";
 import { GeneratePlanRequestSchema } from "@/lib/schemas/generate-plan-request-schema";
 import type { PlanVersion } from "@/lib/project-types";
 
@@ -27,13 +27,7 @@ export async function POST(request: Request) {
   const parsedRequest = GeneratePlanRequestSchema.safeParse(rawBody);
 
   if (!parsedRequest.success) {
-    return NextResponse.json(
-      {
-        error: "Invalid generate-plan request.",
-        details: parsedRequest.error.message
-      },
-      { status: 400 }
-    );
+    return apiError("Invalid generate-plan request.", 400, "INVALID_PAYLOAD", parsedRequest.error.message);
   }
 
   const body = parsedRequest.data;
@@ -45,19 +39,19 @@ export async function POST(request: Request) {
     const result = await runGeneratePlanPipeline(body);
 
     if (result.versions.length === 0) {
-      return NextResponse.json({
+      return apiOk({
         ...fallback,
         fallback: true,
         warning: result.meta.warnings.join(" ") || "Pipeline produced no valid plan versions."
       });
     }
 
-    return NextResponse.json({
+    return apiOk({
       versions: result.versions,
       pipeline: result.meta
     });
   } catch (error) {
-    return NextResponse.json({
+    return apiOk({
       ...fallback,
       fallback: true,
       warning: error instanceof Error ? error.message : "Failed to generate plan."

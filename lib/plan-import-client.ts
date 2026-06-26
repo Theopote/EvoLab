@@ -1,3 +1,4 @@
+import { readApiResponse } from "@/lib/api-client";
 import type { PlanVersion } from "@/lib/project-types";
 import type { PlanImportSource } from "@/lib/plan-import/types";
 
@@ -25,17 +26,13 @@ export async function analyzePlanFromUpload(input: {
     })
   });
 
-  if (!response.ok) {
-    throw new Error(`analyze-plan failed with status ${response.status}.`);
-  }
-
-  const data = (await response.json()) as {
+  const data = await readApiResponse<{
     version?: PlanVersion;
     warnings?: string[];
     confidence?: number;
     importPath?: "vision" | "structured";
     sourceType?: string;
-  };
+  }>(response);
 
   if (!data.version?.rooms) {
     throw new Error("analyze-plan did not return a complete PlanVersion.");

@@ -1,3 +1,4 @@
+import { readApiBlob } from "@/lib/api-client";
 import type { PresentationDeck } from "@/lib/presentation/types";
 
 export function svgToPngDataUrl(svg: string, width = 1280, height = 720): Promise<string> {
@@ -56,11 +57,7 @@ export async function downloadPresentationPptxViaApi(deck: PresentationDeck) {
     body: JSON.stringify({ deck })
   });
 
-  if (!response.ok) {
-    throw new Error(`export-presentation-pptx failed with ${response.status}`);
-  }
-
-  const blob = await response.blob();
+  const blob = await readApiBlob(response);
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
@@ -76,12 +73,7 @@ export async function downloadPresentationPdfViaApi(deck: PresentationDeck) {
     body: JSON.stringify({ deck })
   });
 
-  if (!response.ok) {
-    const data = (await response.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `export-presentation-pdf failed with ${response.status}`);
-  }
-
-  const blob = await response.blob();
+  const blob = await readApiBlob(response);
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { renderPresentationHtml } from "@/lib/presentation/render-html";
+import { apiError } from "@/lib/server/api-response";
 import type { PresentationDeck } from "@/lib/presentation/types";
 
 interface ExportPresentationRequest {
@@ -10,7 +11,7 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as ExportPresentationRequest;
 
   if (!body.deck?.slides?.length) {
-    return NextResponse.json({ error: "deck with slides is required." }, { status: 400 });
+    return apiError("deck with slides is required.", 400, "INVALID_PAYLOAD");
   }
 
   const html = renderPresentationHtml(body.deck);

@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { apiError, apiOk } from "@/lib/server/api-response";
 import { z } from "zod";
 import {
   createSuggestedOutline,
@@ -243,7 +243,7 @@ export async function POST(request: Request) {
   const parsed = FetchSiteRequestSchema.safeParse(await request.json().catch(() => ({})));
 
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.message }, { status: 400 });
+    return apiError(parsed.error.message, 400, "INVALID_PAYLOAD");
   }
 
   const { address, radiusMeters } = parsed.data;
@@ -252,7 +252,7 @@ export async function POST(request: Request) {
     const geocoded = await geocodeAddress(address);
 
     if (!geocoded) {
-      return NextResponse.json({ error: "Address not found." }, { status: 404 });
+      return apiError("Address not found.", 404, "NOT_FOUND");
     }
 
     const [overpass, terrain] = await Promise.all([
@@ -284,7 +284,7 @@ export async function POST(request: Request) {
       source: "openstreetmap"
     };
 
-    return NextResponse.json({ context });
+    return apiOk({ context });
   } catch (error) {
     const fallbackAddress: SiteAddress = {
       query: address,
@@ -293,7 +293,7 @@ export async function POST(request: Request) {
       lon: 121.4737
     };
 
-    return NextResponse.json({
+    return apiOk({
       context: createMockSiteContext(fallbackAddress, radiusMeters),
       fallback: true,
       warning: error instanceof Error ? error.message : "Failed to fetch live GIS context."

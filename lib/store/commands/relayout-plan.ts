@@ -1,3 +1,4 @@
+import { readApiResponse } from "@/lib/api-client";
 import type { PlanVersion, Point } from "@/lib/project-types";
 import type { BuildableEnvelope } from "@/lib/site-types";
 
@@ -12,12 +13,7 @@ export async function relayoutPlanCommand(input: {
     body: JSON.stringify(input)
   });
 
-  if (!response.ok) {
-    const payload = (await response.json().catch(() => ({}))) as { error?: string };
-    throw new Error(payload.error ?? `relayout-plan failed with ${response.status}`);
-  }
-
-  const data = (await response.json()) as { version?: PlanVersion };
+  const data = await readApiResponse<{ version?: PlanVersion }>(response);
 
   if (!data.version) {
     throw new Error("relayout-plan did not return a version.");

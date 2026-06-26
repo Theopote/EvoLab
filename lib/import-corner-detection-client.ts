@@ -1,3 +1,4 @@
+import { readApiResponse } from "@/lib/api-client";
 import type { AnthropicImageMediaType } from "@/lib/anthropic-types";
 import { cornersResultToQuad } from "@/lib/import-image-utils";
 import type { PerspectiveQuad } from "@/lib/import-image-utils";
@@ -21,12 +22,7 @@ export async function detectSheetCornersClient(input: {
     body: JSON.stringify(input)
   });
 
-  if (!response.ok) {
-    const payload = (await response.json().catch(() => ({}))) as { error?: string };
-    throw new Error(payload.error ?? `detect-sheet-corners failed with ${response.status}`);
-  }
-
-  const data = (await response.json()) as SheetCornerDetectionResult & { fallback?: boolean };
+  const data = await readApiResponse<SheetCornerDetectionResult & { fallback?: boolean }>(response);
 
   return {
     quad: cornersResultToQuad(data),

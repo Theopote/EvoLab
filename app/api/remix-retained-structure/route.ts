@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
 import { remixPlanWithRetainedStructure } from "@/lib/retained-structure/remix-plan-version";
 import { remixParametersFromRecord } from "@/lib/retained-structure/remix-parameters";
+import { apiError, apiOk } from "@/lib/server/api-response";
 import type { PlanVersion, Point } from "@/lib/project-types";
 
 export const runtime = "nodejs";
@@ -16,11 +16,11 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as RemixRetainedStructureRequest;
 
   if (!body.version?.rooms?.length) {
-    return NextResponse.json({ error: "version with rooms is required." }, { status: 400 });
+    return apiError("version with rooms is required.", 400, "INVALID_PAYLOAD");
   }
 
   if (!body.outline || body.outline.length < 3) {
-    return NextResponse.json({ error: "outline with at least 3 points is required." }, { status: 400 });
+    return apiError("outline with at least 3 points is required.", 400, "INVALID_PAYLOAD");
   }
 
   try {
@@ -32,9 +32,9 @@ export async function POST(request: Request) {
       ...remixOptions
     });
 
-    return NextResponse.json({ version });
+    return apiOk({ version });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to remix plan with retained structure.";
-    return NextResponse.json({ error: message }, { status: 400 });
+    return apiError(message, 400, "REMIX_FAILED");
   }
 }

@@ -1,7 +1,7 @@
-import { NextResponse } from "next/server";
 import { requestAnthropicJson } from "@/lib/anthropic-json";
 import { createMockDiagram } from "@/lib/mock-api";
 import { diagramPrompt } from "@/lib/prompts/diagramPrompt";
+import { apiOk } from "@/lib/server/api-response";
 import type { AnalysisLayerId, PlanVersion } from "@/lib/project-types";
 
 interface GenerateDiagramRequest {
@@ -26,12 +26,12 @@ export async function POST(request: Request) {
     });
 
     if (!data.svg && !data.overlays) {
-      return NextResponse.json(fallback);
+      return apiOk(fallback);
     }
 
-    return NextResponse.json(data);
+    return apiOk(data);
   } catch (error) {
-    return NextResponse.json({
+    return apiOk({
       ...fallback,
       fallback: true,
       warning: error instanceof Error ? error.message : "Failed to generate diagram."

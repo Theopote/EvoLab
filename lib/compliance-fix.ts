@@ -9,6 +9,7 @@ import { captureInpaintImagesFromBBox } from "@/lib/inpaint-capture";
 import { buildComplianceFixProposal } from "@/lib/compliance-fix-proposal";
 import { buildPreviewVersion } from "@/lib/plan-change-engine";
 import type { PlanChangeProposal } from "@/lib/schemas/plan-change-proposal-schema";
+import { readApiResponse } from "@/lib/api-client";
 import type { ModifyPlanResponse } from "@/lib/copilot-modify-types";
 import { getResolvedLevel, resolveLevelRooms } from "@/lib/level-rooms";
 import type { SelectionBBox } from "@/lib/region-lock";
@@ -622,13 +623,14 @@ export async function requestComplianceFixPreview(
     })
   });
 
-  const data = (await response.json()) as ModifyPlanResponse & {
-    structuralViolations?: string[];
-    error?: string;
-  };
+  const data = await readApiResponse<
+    ModifyPlanResponse & {
+      structuralViolations?: string[];
+    }
+  >(response);
 
-  if (!response.ok || !data.version?.rooms || !data.proposal?.operations?.length) {
-    throw new Error(data.error ?? `inpaint-plan failed with ${response.status}`);
+  if (!data.version?.rooms || !data.proposal?.operations?.length) {
+    throw new Error(`inpaint-plan did not return a change proposal.`);
   }
 
   const warning = [data.warning, ...(data.structuralViolations ?? [])].filter(Boolean).join(" ");

@@ -1,7 +1,7 @@
-import { NextResponse } from "next/server";
 import { requestAnthropicTool } from "@/lib/anthropic-tool";
 import { normalizeImageInput } from "@/lib/image-input";
 import { sketchInterpretationPrompt } from "@/lib/prompts/sketchInterpretationPrompt";
+import { apiError, apiOk } from "@/lib/server/api-response";
 import type { ProcessedLoop } from "@/lib/sketch-processing";
 import {
   buildRecognizedRoomsFromLoops,
@@ -33,13 +33,13 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as InterpretSketchRequest;
 
   if (!body.currentVersion) {
-    return NextResponse.json({ error: "currentVersion is required for interpret-sketch." }, { status: 400 });
+    return apiError("currentVersion is required for interpret-sketch.", 400, "INVALID_PAYLOAD");
   }
 
   const closedLoops = body.closedLoops ?? [];
 
   if (closedLoops.length === 0) {
-    return NextResponse.json({ error: "At least one closed loop is required." }, { status: 400 });
+    return apiError("At least one closed loop is required.", 400, "INVALID_PAYLOAD");
   }
 
   const fallbackRooms = buildFallbackRecognition(closedLoops);
@@ -73,7 +73,7 @@ export async function POST(request: Request) {
       append: body.appendRooms ?? true
     });
 
-    return NextResponse.json({
+    return apiOk({
       version,
       recognizedRooms,
       warnings: data.warnings ?? [],
@@ -83,10 +83,10 @@ export async function POST(request: Request) {
     const message = error instanceof Error ? error.message : "Failed to interpret sketch.";
 
     if (/required|valid base64|too large/i.test(message)) {
-      return NextResponse.json({ error: message }, { status: 400 });
+      return apiError(message, 400, "INVALID_PAYLOAD");
     }
 
-    return NextResponse.json({
+    return apiOk({
       version: fallbackVersion,
       recognizedRooms: fallbackRooms,
       warnings: [message, "Returned geometry-only fallback recognition."],

@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
 import { requestAnthropicText } from "@/lib/anthropic-json";
 import { enforceSectionScope, detectSectionScopeViolations } from "@/lib/report-section-scope";
+import { apiError, apiOk } from "@/lib/server/api-response";
 import type { ReportBlock, ReportSection } from "@/lib/report-types";
 
 interface EditReportSectionRequest {
@@ -75,16 +75,13 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as EditReportSectionRequest;
 
   if (!body.section || !body.blockId || !body.instruction?.trim() || !body.allSections?.length) {
-    return NextResponse.json(
-      { error: "section, blockId, instruction, and allSections are required." },
-      { status: 400 }
-    );
+    return apiError("section, blockId, instruction, and allSections are required.", 400, "INVALID_PAYLOAD");
   }
 
   const targetBlock = body.section.blocks.find((block) => block.id === body.blockId);
 
   if (!targetBlock || targetBlock.type === "image_ref") {
-    return NextResponse.json({ error: "Editable text block not found in section." }, { status: 400 });
+    return apiError("Editable text block not found in section.", 400, "INVALID_PAYLOAD");
   }
 
   const currentText = blockText(targetBlock);
@@ -129,7 +126,7 @@ Return only the revised text for this block.`;
   const sections = enforceSectionScope(body.allSections, aiModified, body.section.id);
   const nextSection = sections.find((section) => section.id === body.section!.id);
 
-  return NextResponse.json({
+  return apiOk({
     sections,
     section: nextSection,
     scopeViolations: violations,

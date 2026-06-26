@@ -1,7 +1,7 @@
-import { NextResponse } from "next/server";
 import { applySlideCopy } from "@/lib/presentation/apply-slide-copy";
 import { appendNarrativeSlide, buildPresentationDeck, toStoryboardRequest } from "@/lib/presentation/storyboard";
 import { presentationNarrativePrompt } from "@/lib/prompts/presentationNarrativePrompt";
+import { apiError, apiOk } from "@/lib/server/api-response";
 import { GenerateStoryboardToolInputSchema } from "@/lib/schemas/presentation-schema";
 import type { DesignBrief, PlanVersion, ProjectData } from "@/lib/project-types";
 import type { BuildableEnvelope, EnvironmentSurrogate, SiteContext, ZoningConstraints } from "@/lib/site-types";
@@ -22,7 +22,7 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as GenerateStoryboardRequest;
 
   if (!body.project || !body.version) {
-    return NextResponse.json({ error: "project and version are required." }, { status: 400 });
+    return apiError("project and version are required.", 400, "INVALID_PAYLOAD");
   }
 
   const envelope =
@@ -61,9 +61,9 @@ export async function POST(request: Request) {
       storyArc: storyboard.storyArc
     };
 
-    return NextResponse.json({ deck, storyArc: storyboard.storyArc });
+    return apiOk({ deck, storyArc: storyboard.storyArc });
   } catch (error) {
-    return NextResponse.json({
+    return apiOk({
       deck,
       fallback: true,
       warning: error instanceof Error ? error.message : "Narrative generation unavailable; deck exported without AI story."

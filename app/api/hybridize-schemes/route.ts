@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { requestAnthropicTool } from "@/lib/anthropic-tool";
 import { geometryValidationPassed, detectGapsAndOverlaps } from "@/lib/geometry-validate";
 import { buildHybridModifyPlanResponse } from "@/lib/hybridize-proposal";
@@ -8,6 +7,7 @@ import { postProcessPlanVersion } from "@/lib/plan-postprocess";
 import { normalizePlanVersion } from "@/lib/architecture-model";
 import { hybridizeSchemesPrompt } from "@/lib/prompts/hybridizeSchemesPrompt";
 import { resolveAllVersionRooms } from "@/lib/level-rooms";
+import { apiError, apiOk } from "@/lib/server/api-response";
 import { ModifyPlanToolInputSchema } from "@/lib/schemas/plan-version-schema";
 import type { CopilotFinding, PlanVersion } from "@/lib/project-types";
 import type { ModifyPlanResponse } from "@/lib/copilot-modify-types";
@@ -93,10 +93,7 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as HybridizeSchemesRequest;
 
   if (!body.versionA || !body.versionB || !body.keptFromA || !body.keptFromB) {
-    return NextResponse.json(
-      { error: "versionA, versionB, keptFromA, and keptFromB are required." },
-      { status: 400 }
-    );
+    return apiError("versionA, versionB, keptFromA, and keptFromB are required.", 400, "INVALID_PAYLOAD");
   }
 
   const lockedA = roomsFromVersion(body.versionA, body.keptFromA.roomIds);
@@ -170,7 +167,7 @@ Fill remaining space with a coherent layout. Keep fixed room polygons unchanged.
       }))
     ];
 
-    return NextResponse.json(
+    return apiOk(
       buildHybridResponse({
         baseVersion,
         versionA: body.versionA,
@@ -201,7 +198,7 @@ Fill remaining space with a coherent layout. Keep fixed room polygons unchanged.
       priority
     );
 
-    return NextResponse.json(
+    return apiOk(
       buildHybridResponse({
         baseVersion,
         versionA: body.versionA,

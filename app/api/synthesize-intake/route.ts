@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
 import { z } from "zod";
 import { synthesizeIntakeRecord } from "@/lib/intake/synthesize-intake";
+import { apiError, apiOk } from "@/lib/server/api-response";
 
 const RequestSchema = z.object({
   projectName: z.string().optional(),
@@ -21,12 +21,12 @@ export async function POST(request: Request) {
     const body = RequestSchema.parse(await request.json());
     const result = await synthesizeIntakeRecord(body);
 
-    return NextResponse.json({
+    return apiOk({
       ...result,
       fallback: "fallback" in result ? result.fallback : false
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to synthesize intake.";
-    return NextResponse.json({ error: message }, { status: 400 });
+    return apiError(message, 400, "SYNTHESIZE_INTAKE_FAILED");
   }
 }

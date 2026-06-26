@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
 import { createMockAnalyzedVersion } from "@/lib/mock-api";
 import { importPlan } from "@/lib/plan-import";
+import { apiError, apiOk } from "@/lib/server/api-response";
 import type { PlanImportSource } from "@/lib/plan-import/types";
 
 interface AnalyzePlanRequest {
@@ -24,7 +24,7 @@ export async function POST(request: Request) {
       pdfPageNumber: body.pdfPageNumber
     });
 
-    return NextResponse.json({
+    return apiOk({
       version: result.version,
       confidence: result.confidence,
       warnings: result.warnings,
@@ -35,10 +35,10 @@ export async function POST(request: Request) {
     const message = error instanceof Error ? error.message : "Failed to analyze plan.";
 
     if (/required|valid base64|too large|Unsupported/i.test(message)) {
-      return NextResponse.json({ error: message }, { status: 400 });
+      return apiError(message, 400, "INVALID_PAYLOAD");
     }
 
-    return NextResponse.json({
+    return apiOk({
       ...fallback,
       fallback: true,
       warnings: [...fallback.warnings, message]

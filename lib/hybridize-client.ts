@@ -1,3 +1,4 @@
+import { readApiResponse } from "@/lib/api-client";
 import { normalizePlanVersion } from "@/lib/architecture-model";
 import { getResolvedLevel } from "@/lib/level-rooms";
 import type { ModifyPlanResponse } from "@/lib/copilot-modify-types";
@@ -66,12 +67,7 @@ export async function requestSchemeHybridize(input: {
     })
   });
 
-  if (!response.ok) {
-    const payload = (await response.json().catch(() => ({}))) as { error?: string };
-    throw new Error(payload.error ?? `hybridize-schemes failed with ${response.status}`);
-  }
-
-  const data = (await response.json()) as HybridizeClientResponse;
+  const data = await readApiResponse<HybridizeClientResponse>(response);
 
   if (!data.version?.rooms?.length || !data.proposal?.operations?.length) {
     throw new Error("hybridize-schemes did not return a change proposal.");

@@ -1,3 +1,4 @@
+import { readApiResponse } from "@/lib/api-client";
 import type { SiteContext } from "@/lib/site-types";
 
 export async function fetchSiteContextCommand(address: string): Promise<{
@@ -10,11 +11,7 @@ export async function fetchSiteContextCommand(address: string): Promise<{
     body: JSON.stringify({ address })
   });
 
-  if (!response.ok) {
-    throw new Error(`fetch-site-context failed with ${response.status}`);
-  }
-
-  const data = (await response.json()) as { context?: SiteContext; warning?: string };
+  const data = await readApiResponse<{ context?: SiteContext; warning?: string }>(response);
 
   if (!data.context) {
     throw new Error("Site context response was empty.");

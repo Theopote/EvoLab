@@ -1,3 +1,4 @@
+import { readApiResponse } from "@/lib/api-client";
 import { captureSketchImage } from "@/lib/sketch-capture";
 import type { PlanVersion, Point } from "@/lib/project-types";
 import type { RecognizedSketchRoom } from "@/lib/schemas/sketch-interpretation-schema";
@@ -31,16 +32,12 @@ export async function recognizeSketchInput(options: {
     signal: options.signal
   });
 
-  if (!response.ok) {
-    throw new Error(`interpret-sketch failed with ${response.status}`);
-  }
-
-  const data = (await response.json()) as {
+  const data = await readApiResponse<{
     version?: PlanVersion;
     recognizedRooms?: RecognizedSketchRoom[];
     warnings?: string[];
     fallback?: boolean;
-  };
+  }>(response);
 
   if (!data.version?.rooms) {
     throw new Error("interpret-sketch did not return a complete PlanVersion.");

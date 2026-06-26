@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { generatePresentationPptxBuffer } from "@/lib/presentation/render-pptx";
+import { apiError } from "@/lib/server/api-response";
 import { PresentationDeckSchema } from "@/lib/schemas/presentation-schema";
 
 export const runtime = "nodejs";
@@ -9,10 +10,7 @@ export async function POST(request: Request) {
   const parsed = PresentationDeckSchema.safeParse(body.deck ?? body);
 
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: "Invalid presentation deck.", details: parsed.error.message },
-      { status: 400 }
-    );
+    return apiError("Invalid presentation deck.", 400, "INVALID_PAYLOAD", parsed.error.message);
   }
 
   const deck = parsed.data;
@@ -30,6 +28,6 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to generate PPTX.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return apiError(message, 500, "PPTX_EXPORT_FAILED");
   }
 }

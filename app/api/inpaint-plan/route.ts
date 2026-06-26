@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { requestAnthropicTool } from "@/lib/anthropic-tool";
 import { normalizeImageInputs } from "@/lib/image-input";
 import { createMockInpaintProposal } from "@/lib/mock-api";
@@ -6,6 +5,7 @@ import { buildPreviewVersion } from "@/lib/plan-change-engine";
 import { proposeInpaintChangesPrompt } from "@/lib/prompts/proposeInpaintChangesPrompt";
 import { ProposePlanChangesToolInputSchema } from "@/lib/schemas/plan-change-proposal-schema";
 import { StructuralConstraintSetSchema } from "@/lib/schemas/structural-constraints-schema";
+import { apiError, apiOk } from "@/lib/server/api-response";
 import {
   enrichUserRequestWithStructuralConstraints,
   validateStructuralConstraints,
@@ -31,11 +31,11 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as InpaintPlanRequest;
 
   if (!body.currentVersion) {
-    return NextResponse.json({ error: "currentVersion is required for inpaint-plan." }, { status: 400 });
+    return apiError("currentVersion is required for inpaint-plan.", 400, "INVALID_PAYLOAD");
   }
 
   if (!body.userRequest?.trim()) {
-    return NextResponse.json({ error: "userRequest is required for inpaint-plan." }, { status: 400 });
+    return apiError("userRequest is required for inpaint-plan.", 400, "INVALID_PAYLOAD");
   }
 
   const constraintResult = body.structuralConstraints
@@ -43,7 +43,7 @@ export async function POST(request: Request) {
     : undefined;
 
   if (body.structuralConstraints && !constraintResult?.success) {
-    return NextResponse.json({ error: "Invalid structuralConstraints payload." }, { status: 400 });
+    return apiError("Invalid structuralConstraints payload.", 400, "INVALID_PAYLOAD");
   }
 
   const structuralConstraints = constraintResult?.success ? constraintResult.data : undefined;
@@ -65,7 +65,7 @@ export async function POST(request: Request) {
     );
 
     if (images.length < 2) {
-      return NextResponse.json({ error: "baseImage and maskImage are required." }, { status: 400 });
+      return apiError("baseImage and maskImage are required.", 400, "INVALID_PAYLOAD");
     }
 
     const proposalData = await requestAnthropicTool({
@@ -105,7 +105,7 @@ export async function POST(request: Request) {
           )
         : [];
 
-      return NextResponse.json({
+      return apiOk({
         mode: "proposal",
         proposal: proposalData.proposal,
         version,
@@ -121,7 +121,7 @@ export async function POST(request: Request) {
     // Fall through to deterministic mock proposal.
   }
 
-  return NextResponse.json({
+  return apiOk({
     ...fallback,
     fallback: true
   } satisfies ModifyPlanResponse);

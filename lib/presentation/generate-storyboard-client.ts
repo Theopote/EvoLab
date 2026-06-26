@@ -1,3 +1,4 @@
+import { readApiResponse } from "@/lib/api-client";
 import type { DesignBrief, PlanVersion, ProjectData } from "@/lib/project-types";
 import type { PresentationDeck } from "@/lib/presentation/types";
 
@@ -23,14 +24,10 @@ export async function generateStoryboardViaApi(input: {
     })
   });
 
-  if (!response.ok) {
-    throw new Error(`generate-storyboard failed with ${response.status}`);
-  }
-
-  const data = (await response.json()) as GenerateStoryboardResult & { error?: string };
+  const data = await readApiResponse<GenerateStoryboardResult>(response);
 
   if (!data.deck) {
-    throw new Error(data.error ?? "No presentation deck returned.");
+    throw new Error("No presentation deck returned.");
   }
 
   return data;

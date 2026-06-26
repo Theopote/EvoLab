@@ -1,9 +1,9 @@
-import { NextResponse } from "next/server";
 import { requestAnthropicTool } from "@/lib/anthropic-tool";
 import { hasAnthropicKey } from "@/lib/anthropic-json";
 import { buildProtrusionPreviewVersion, mockProtrusionFromWall } from "@/lib/local-form-edit";
 import { addProtrusionPrompt } from "@/lib/prompts/addProtrusionPrompt";
 import { AddProtrusionToolInputSchema } from "@/lib/schemas/local-form-edit-schema";
+import { apiError, apiOk } from "@/lib/server/api-response";
 import type { CopilotFinding, PlanVersion, RoomProtrusion, Wall } from "@/lib/project-types";
 import type { ScoringConfig } from "@/lib/building-domain";
 
@@ -22,15 +22,15 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as AddProtrusionRequest;
 
   if (!body.currentVersion) {
-    return NextResponse.json({ error: "currentVersion is required." }, { status: 400 });
+    return apiError("currentVersion is required.", 400, "INVALID_PAYLOAD");
   }
 
   if (!body.roomId || !body.wall) {
-    return NextResponse.json({ error: "roomId and wall are required." }, { status: 400 });
+    return apiError("roomId and wall are required.", 400, "INVALID_PAYLOAD");
   }
 
   if (!body.userRequest?.trim()) {
-    return NextResponse.json({ error: "userRequest is required." }, { status: 400 });
+    return apiError("userRequest is required.", 400, "INVALID_PAYLOAD");
   }
 
   const positionOnEdge = body.positionOnEdge ?? 0.5;
@@ -46,7 +46,7 @@ export async function POST(request: Request) {
   let findings: CopilotFinding[] = [];
 
   if (!protrusion) {
-    return NextResponse.json({ error: "Could not build a protrusion footprint on the selected wall." }, { status: 400 });
+    return apiError("Could not build a protrusion footprint on the selected wall.", 400, "PROTRUSION_FAILED");
   }
 
   if (hasAnthropicKey()) {
@@ -93,7 +93,7 @@ export async function POST(request: Request) {
   }
 
   if (!protrusion) {
-    return NextResponse.json({ error: "Protrusion generation failed." }, { status: 400 });
+    return apiError("Protrusion generation failed.", 400, "PROTRUSION_FAILED");
   }
 
   try {
@@ -102,7 +102,7 @@ export async function POST(request: Request) {
       scoringConfig: body.scoringConfig
     });
 
-    return NextResponse.json({
+    return apiOk({
       protrusion,
       findings,
       warning,
@@ -110,11 +110,6 @@ export async function POST(request: Request) {
       version: preview.version
     });
   } catch (error) {
-    return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "Failed to add protrusion."
-      },
-      { status: 400 }
-    );
+    return apiError(error instanceof Error ? error.message : "Failed to add protrusion.", 400, "PROTRUSION_FAILED");
   }
 }

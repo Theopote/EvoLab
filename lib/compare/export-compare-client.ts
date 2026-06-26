@@ -1,3 +1,4 @@
+import { readApiBlob } from "@/lib/api-client";
 import type { CompareReport } from "@/lib/compare/compare-report-types";
 
 export async function downloadCompareReportPdfViaApi(report: CompareReport) {
@@ -7,12 +8,7 @@ export async function downloadCompareReportPdfViaApi(report: CompareReport) {
     body: JSON.stringify({ report })
   });
 
-  if (!response.ok) {
-    const data = (await response.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `export-compare-pdf failed with ${response.status}`);
-  }
-
-  const blob = await response.blob();
+  const blob = await readApiBlob(response);
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;

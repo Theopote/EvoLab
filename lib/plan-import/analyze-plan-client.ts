@@ -1,3 +1,4 @@
+import { readApiResponse } from "@/lib/api-client";
 import type { PlanVersion } from "@/lib/project-types";
 import type { PlanImportResult, PlanImportSource } from "@/lib/plan-import/types";
 
@@ -24,19 +25,14 @@ export async function analyzePlanDrawing(input: AnalyzePlanClientInput): Promise
     })
   });
 
-  if (!response.ok) {
-    const payload = (await response.json().catch(() => ({}))) as { error?: string };
-    throw new Error(payload.error ?? `analyze-plan failed with ${response.status}`);
-  }
-
-  const data = (await response.json()) as {
+  const data = await readApiResponse<{
     version?: PlanVersion;
     confidence?: number;
     warnings?: string[];
     sourceType?: PlanImportSource;
     importPath?: "vision" | "structured";
     fallback?: boolean;
-  };
+  }>(response);
 
   if (!data.version?.rooms) {
     throw new Error("analyze-plan did not return a complete PlanVersion.");

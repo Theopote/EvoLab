@@ -1,5 +1,4 @@
-import { NextResponse } from "next/server";
-import { requestAnthropicTool } from "@/lib/anthropic-tool";
+import { apiError, apiOk } from "@/lib/server/api-response";
 import { formatCopilotFallbackWarning } from "@/lib/copilot-supported-operations";
 import { normalizeImageInputs } from "@/lib/image-input";
 import { createMockModifiedVersion } from "@/lib/mock-api";
@@ -118,10 +117,7 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as ModifyPlanRequest;
 
   if (!body.currentVersion) {
-    return NextResponse.json(
-      { error: "currentVersion is required for modify-plan." },
-      { status: 400 }
-    );
+    return apiError("currentVersion is required for modify-plan.", 400, "INVALID_PAYLOAD");
   }
 
   if (body.stream) {
@@ -132,11 +128,11 @@ export async function POST(request: Request) {
     const result = await runModifyPlan(body);
 
     if (result) {
-      return NextResponse.json(result);
+      return apiOk(result);
     }
   } catch {
     // Fall through to deterministic mock proposal.
   }
 
-  return NextResponse.json(buildFallbackResponse(body));
+  return apiOk(buildFallbackResponse(body));
 }

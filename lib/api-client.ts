@@ -42,3 +42,28 @@ export async function readOptionalApiResponse<T>(response: Response): Promise<T 
 
   return readApiResponse<T>(response);
 }
+
+export async function assertApiOk(response: Response): Promise<void> {
+  if (response.ok) {
+    return;
+  }
+
+  const payload = await response.json().catch(() => null);
+
+  if (typeof payload === "object" && payload !== null && "success" in payload && payload.success === false) {
+    const error = (payload as ApiResponse<never> & { success: false }).error;
+    throw new ApiClientError(error.code, error.message, response.status, error.details);
+  }
+
+  const legacyError = payload as { error?: string; message?: string } | null;
+  throw new ApiClientError(
+    "REQUEST_FAILED",
+    legacyError?.error ?? legacyError?.message ?? `HTTP ${response.status}`,
+    response.status
+  );
+}
+
+export async function readApiBlob(response: Response): Promise<Blob> {
+  await assertApiOk(response);
+  return response.blob();
+}
