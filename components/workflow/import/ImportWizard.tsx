@@ -394,7 +394,7 @@ export function ImportWizard({
       {step === "review" && analysis && pinnedFile && draftVersion && recognizedVersion ? (
         embedded ? (
           <div className="mt-3 rounded border border-success/30 bg-success/10 p-3 text-xs text-success">
-            识别完成 — 请在右侧查看参数，底部导出或加入项目。
+            识别完成 — 请在中间预览区「复核编辑」，修正后再导出或加入项目。
           </div>
         ) : (
           <div className="flex min-h-0 flex-1 flex-col gap-4">

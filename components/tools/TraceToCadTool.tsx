@@ -35,6 +35,7 @@ export function TraceToCadTool() {
   const [reviewState, setReviewState] = useState<TraceReviewState | undefined>();
   const [dxfExportPending, setDxfExportPending] = useState(false);
   const [saveNotice, setSaveNotice] = useState<string | undefined>();
+  const [previewTab, setPreviewTab] = useState<"snapshot" | "review">("review");
   const bootstrappedRef = useRef(false);
 
   useEffect(() => {
@@ -90,6 +91,7 @@ export function TraceToCadTool() {
     (state: TraceReviewState | undefined) => {
       setReviewState(state);
       if (state) {
+        setPreviewTab("review");
         persistSession(state);
       }
     },
@@ -235,17 +237,38 @@ export function TraceToCadTool() {
       }
       previewPanel={
         hasResult && reviewState ? (
-          <TraceReviewEditor
-            draftVersion={reviewState.draftVersion}
-            fileName={reviewState.fileName}
-            recognizedVersion={reviewState.recognizedVersion}
-            referencePreviewUrl={reviewState.referencePreviewUrl}
-            sourceType={reviewState.sourceType}
-            onDraftVersionChange={handleDraftVersionChange}
-          />
+          <div className="flex h-full min-h-0 flex-col gap-3">
+            <div className="flex flex-wrap gap-2">
+              <PreviewTabButton
+                active={previewTab === "snapshot"}
+                label="识别预览"
+                onClick={() => setPreviewTab("snapshot")}
+              />
+              <PreviewTabButton
+                active={previewTab === "review"}
+                label="复核编辑"
+                onClick={() => setPreviewTab("review")}
+              />
+            </div>
+            {previewTab === "snapshot" ? (
+              <RecognitionSnapshotPreview
+                draftVersion={reviewState.draftVersion}
+                recognizedVersion={reviewState.recognizedVersion}
+              />
+            ) : (
+              <TraceReviewEditor
+                draftVersion={reviewState.draftVersion}
+                fileName={reviewState.fileName}
+                recognizedVersion={reviewState.recognizedVersion}
+                referencePreviewUrl={reviewState.referencePreviewUrl}
+                sourceType={reviewState.sourceType}
+                onDraftVersionChange={handleDraftVersionChange}
+              />
+            )}
+          </div>
         ) : (
           <div className="grid h-full min-h-[280px] place-items-center rounded border border-dashed border-line bg-panel/40 p-8 text-center">
-            <p className="text-sm text-muted">上传并识别后，此处显示平面预览与追踪叠加</p>
+            <p className="text-sm text-muted">上传并识别后，在中间预览区复核编辑或查看识别结果</p>
           </div>
         )
       }
@@ -324,6 +347,50 @@ export function TraceToCadTool() {
         </>
       }
     />
+  );
+}
+
+function PreviewTabButton({
+  active,
+  label,
+  onClick
+}: {
+  active: boolean;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      className={`rounded border px-3 py-1.5 text-xs transition ${
+        active ? "border-accent/50 bg-accent/10 text-accent" : "border-line text-muted hover:text-slate-100"
+      }`}
+      type="button"
+      onClick={onClick}
+    >
+      {label}
+    </button>
+  );
+}
+
+function RecognitionSnapshotPreview({
+  draftVersion,
+  recognizedVersion
+}: {
+  draftVersion: PlanVersion;
+  recognizedVersion: PlanVersion;
+}) {
+  const hasCorrections = JSON.stringify(recognizedVersion.rooms) !== JSON.stringify(draftVersion.rooms);
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      <p className="text-xs text-muted">
+        只读查看原始识别几何。{hasCorrections ? "当前已有手动修正，请切换到「复核编辑」继续调整。" : "可在「复核编辑」中拖顶点或追踪补房间。"}
+      </p>
+      <div
+        className="min-h-[360px] flex-1 overflow-auto rounded border border-line bg-[#081018] p-3 [&_svg]:h-auto [&_svg]:w-full"
+        dangerouslySetInnerHTML={{ __html: createPlanSvg(recognizedVersion) }}
+      />
+    </div>
   );
 }
 
