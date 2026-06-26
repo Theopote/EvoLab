@@ -24,7 +24,8 @@ import { usePresentationActions, useProjectActions, useProjectState } from "@/li
 import type { DesignBrief, PlanVersion, ProjectData } from "@/lib/project-types";
 import {
   savePresentationGeneratorSession,
-  useToolSessionStore
+  useRecentToolSessions,
+  useToolSessionActions
 } from "@/lib/tools/tool-session-store";
 import type { ToolSession } from "@/lib/tools/tool-session-types";
 import { getPlanVersionOutput, getPresentationDeckOutput } from "@/lib/tools/tool-session-utils";
@@ -53,7 +54,8 @@ export function PresentationGeneratorTool() {
   const projectId = useProjectState((state) => state.project.projectId);
   const { appendGeneratedVersions, setActiveVersion, setWorkflowPhase, setActiveTab } = useProjectActions();
   const { savePresentationSession } = usePresentationActions();
-  const { createSession, getSession, listRecentSessions, promoteSession, setActiveSessionId } = useToolSessionStore();
+  const { createSession, getSession, promoteSession, setActiveSessionId } = useToolSessionActions();
+  const recentSessions = useRecentToolSessions(10);
 
   const [sessionId, setSessionId] = useState<string | undefined>(searchParams.get("session") ?? undefined);
   const [state, setState] = useState<GeneratorToolState | undefined>();
@@ -66,12 +68,12 @@ export function PresentationGeneratorTool() {
 
   const planSessions = useMemo(
     () =>
-      listRecentSessions(10).filter(
+      recentSessions.filter(
         (session) =>
           (session.toolId === "trace-to-cad" || session.toolId === "retained-structure-remix") &&
           session.status !== "promoted"
       ),
-    [listRecentSessions]
+    [recentSessions]
   );
 
   const persistSession = useCallback(
@@ -144,8 +146,8 @@ export function PresentationGeneratorTool() {
         })
       : presentationSourceFromDemo("healthcare");
 
-    applyState(createInitialState(initialSource));
-  }, [activeVersion, applyState, brief, compareVersionIds, project, sessionId, state]);
+    setState(createInitialState(initialSource));
+  }, [activeVersion, brief, compareVersionIds, project, sessionId, state]);
 
   const activeSlide = state?.deck?.slides[state.activeSlideIndex];
 

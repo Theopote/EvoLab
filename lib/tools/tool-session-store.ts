@@ -1,6 +1,7 @@
 "use client";
 
 import { create } from "zustand";
+import { useShallow } from "zustand/react/shallow";
 import type { PresentationDeck } from "@/lib/presentation/types";
 import type { PlanVersion } from "@/lib/project-types";
 import { getToolDefinition } from "@/lib/tools/tool-definitions";
@@ -153,6 +154,24 @@ export const useToolSessionStore = create<ToolSessionState>((set, get) => ({
     });
   }
 }));
+
+function pickToolSessionActions(state: ToolSessionState) {
+  return {
+    createSession: state.createSession,
+    getSession: state.getSession,
+    promoteSession: state.promoteSession,
+    setActiveSessionId: state.setActiveSessionId,
+    listRecentSessions: state.listRecentSessions
+  };
+}
+
+export function useToolSessionActions() {
+  return useToolSessionStore(useShallow(pickToolSessionActions));
+}
+
+export function useRecentToolSessions(limit = 6) {
+  return useToolSessionStore(useShallow(selectRecentToolSessions(limit)));
+}
 
 if (typeof window !== "undefined") {
   void hydrateSessionsFromDetailCache(useToolSessionStore.getState().sessions).then((sessions) => {

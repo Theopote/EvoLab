@@ -33,7 +33,8 @@ import { createDemoProjectData } from "@/lib/typologies";
 import type { TypologyPackId } from "@/lib/typology/types";
 import {
   saveRetainedStructureRemixSession,
-  useToolSessionStore
+  useRecentToolSessions,
+  useToolSessionActions
 } from "@/lib/tools/tool-session-store";
 import type { ToolSession } from "@/lib/tools/tool-session-types";
 import { getPlanVersionOutput } from "@/lib/tools/tool-session-utils";
@@ -66,7 +67,8 @@ export function RetainedStructureRemixTool() {
   const activeVersion = useProjectState((state) => state.activeVersion);
   const projectId = useProjectState((state) => state.project.projectId);
   const { appendGeneratedVersions, setActiveVersion, setWorkflowPhase, setActiveTab } = useProjectActions();
-  const { createSession, getSession, listRecentSessions, promoteSession, setActiveSessionId } = useToolSessionStore();
+  const { createSession, getSession, promoteSession, setActiveSessionId } = useToolSessionActions();
+  const recentSessions = useRecentToolSessions(8);
 
   const [sessionId, setSessionId] = useState<string | undefined>(searchParams.get("session") ?? undefined);
   const [state, setState] = useState<RemixToolState | undefined>();
@@ -78,10 +80,10 @@ export function RetainedStructureRemixTool() {
 
   const traceSessions = useMemo(
     () =>
-      listRecentSessions(8).filter(
+      recentSessions.filter(
         (session) => session.toolId === "trace-to-cad" && session.status !== "promoted"
       ),
-    [listRecentSessions]
+    [recentSessions]
   );
 
   const persistSession = useCallback(
@@ -141,14 +143,14 @@ export function RetainedStructureRemixTool() {
     }
 
     const initialVersion = activeVersion ?? demoVersion("healthcare");
-    applyState({
+    setState({
       sourceKind: activeVersion ? "project" : "demo",
       sourceLabel: activeVersion?.label ?? "医疗示例方案",
       sourceVersion: initialVersion,
       previewMode: "before",
       ...createInitialParameters(initialVersion)
     });
-  }, [activeVersion, applyState, sessionId, state]);
+  }, [activeVersion, sessionId, state]);
 
   const structureSummary = useMemo(
     () => (state ? summarizeRetainedStructure(state.sourceVersion) : undefined),

@@ -11,7 +11,7 @@ import { createPlanSvg, downloadTextFile, exportDxfDocument, exportVersionJson }
 import { useProjectActions, useProjectState } from "@/lib/project-store";
 import type { PlanVersion } from "@/lib/project-types";
 import type { PlanImportSource } from "@/lib/plan-import/types";
-import { saveTraceToCadSession, useToolSessionStore } from "@/lib/tools/tool-session-store";
+import { saveTraceToCadSession, useToolSessionActions } from "@/lib/tools/tool-session-store";
 import type { ToolSession } from "@/lib/tools/tool-session-types";
 import { getPlanVersionOutput } from "@/lib/tools/tool-session-utils";
 import { useInteractionStore } from "@/lib/interaction-store";
@@ -31,7 +31,7 @@ export function TraceToCadTool() {
   const searchParams = useSearchParams();
   const projectId = useProjectState((state) => state.project.projectId);
   const { appendGeneratedVersions, setActiveVersion, setWorkflowPhase, setActiveTab } = useProjectActions();
-  const { createSession, getSession, promoteSession, setActiveSessionId } = useToolSessionStore();
+  const { createSession, getSession, promoteSession, setActiveSessionId } = useToolSessionActions();
   const [sessionId, setSessionId] = useState<string | undefined>(searchParams.get("session") ?? undefined);
   const [reviewState, setReviewState] = useState<TraceReviewState | undefined>();
   const [dxfExportPending, setDxfExportPending] = useState(false);
