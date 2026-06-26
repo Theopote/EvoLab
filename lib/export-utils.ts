@@ -126,6 +126,15 @@ export function downloadTextFile(fileName: string, content: string, mimeType: st
   URL.revokeObjectURL(url);
 }
 
+export function downloadDataUrl(fileName: string, dataUrl: string) {
+  const anchor = document.createElement("a");
+  anchor.href = dataUrl;
+  anchor.download = fileName;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+}
+
 export function exportProjectJson(project: ProjectData) {
   downloadTextFile(`${project.projectId}.json`, JSON.stringify(project, null, 2), "application/json");
 }
