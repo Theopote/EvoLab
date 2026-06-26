@@ -1,11 +1,11 @@
 import type { PlanVersion } from "@/lib/project-types";
+import type { PresentationDeck } from "@/lib/presentation/types";
 import type {
   ToolSessionDetail,
   ToolSessionOutput,
   ToolSessionPlanVersionOutput,
   ToolSessionPresentationDeckOutput
 } from "@/lib/tools/tool-session-types";
-
 export function createToolSessionOutputId() {
   return `tool-output-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -114,6 +114,47 @@ export function normalizeToolSession(session: ToolSessionDetail): ToolSessionDet
 
 export function getPlanVersionOutput(session: ToolSessionDetail | undefined): ToolSessionPlanVersionOutput | undefined {
   return session?.outputs.find((output): output is ToolSessionPlanVersionOutput => output.kind === "plan-version");
+}
+
+export function getPresentationDeckOutput(
+  session: ToolSessionDetail | undefined
+): ToolSessionPresentationDeckOutput | undefined {
+  return session?.outputs.find(
+    (output): output is ToolSessionPresentationDeckOutput => output.kind === "presentation-deck"
+  );
+}
+
+export function upsertPresentationDeckOutput(
+  outputs: ToolSessionOutput[],
+  patch: {
+    label?: string;
+    deck: PresentationDeck;
+  }
+): ToolSessionOutput[] {
+  const existing = outputs.find((output) => output.kind === "presentation-deck");
+
+  if (existing?.kind === "presentation-deck") {
+    return outputs.map((output) =>
+      output.kind === "presentation-deck"
+        ? {
+            ...existing,
+            ...patch,
+            label: patch.label ?? existing.label
+          }
+        : output
+    );
+  }
+
+  return [
+    ...outputs,
+    {
+      id: createToolSessionOutputId(),
+      kind: "presentation-deck",
+      label: patch.label ?? "Presentation deck",
+      createdAt: new Date().toISOString(),
+      deck: patch.deck
+    }
+  ];
 }
 
 export function getOutputsByKind<K extends ToolSessionOutput["kind"]>(

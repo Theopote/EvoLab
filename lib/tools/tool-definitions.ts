@@ -98,7 +98,8 @@ export const toolDefinitions: ToolDefinition[] = [
     descriptionZh: "根据项目资料生成汇报 PPT",
     category: "presentation",
     icon: Presentation,
-    status: "coming-soon"
+    status: "available",
+    workspaceTab: "Presentation"
   },
   {
     id: "render-variants",

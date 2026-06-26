@@ -1,6 +1,7 @@
 "use client";
 
 import { create } from "zustand";
+import type { PresentationDeck } from "@/lib/presentation/types";
 import type { PlanVersion } from "@/lib/project-types";
 import { getToolDefinition } from "@/lib/tools/tool-definitions";
 import {
@@ -20,7 +21,11 @@ import type {
   ToolSessionOutput,
   ToolSessionSummary
 } from "@/lib/tools/tool-session-types";
-import { normalizeToolSession, upsertPlanVersionOutput } from "@/lib/tools/tool-session-utils";
+import {
+  normalizeToolSession,
+  upsertPlanVersionOutput,
+  upsertPresentationDeckOutput
+} from "@/lib/tools/tool-session-utils";
 
 interface ToolSessionState {
   sessions: ToolSessionMap;
@@ -218,5 +223,36 @@ export function saveRetainedStructureRemixSession(input: {
     outputs,
     status: input.remixedVersion ? "ready" : "draft",
     canPromoteToProject: Boolean(input.remixedVersion)
+  });
+}
+
+export function savePresentationGeneratorSession(input: {
+  sessionId: string;
+  title: string;
+  sourceLabel: string;
+  deck: PresentationDeck;
+  parameters?: Record<string, string | number | boolean>;
+  planVersion?: PlanVersion;
+}) {
+  const current = useToolSessionStore.getState().getSession(input.sessionId);
+  let outputs = upsertPresentationDeckOutput(current?.outputs ?? [], {
+    label: input.title,
+    deck: input.deck
+  });
+
+  if (input.planVersion) {
+    outputs = upsertPlanVersionOutput(outputs, {
+      label: input.sourceLabel,
+      planVersion: input.planVersion
+    });
+  }
+
+  return useToolSessionStore.getState().updateSession(input.sessionId, {
+    title: input.title,
+    inputFiles: [{ fileName: input.sourceLabel, sourceType: "presentation-source" }],
+    parameters: input.parameters,
+    outputs,
+    status: "ready",
+    canPromoteToProject: true
   });
 }
