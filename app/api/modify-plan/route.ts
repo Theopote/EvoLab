@@ -1,3 +1,4 @@
+import { requestAnthropicTool } from "@/lib/anthropic-tool";
 import { apiError, apiOk } from "@/lib/server/api-response";
 import { formatCopilotFallbackWarning } from "@/lib/copilot-supported-operations";
 import { normalizeImageInputs } from "@/lib/image-input";
