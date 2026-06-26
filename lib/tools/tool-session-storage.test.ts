@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { readToolSessions, writeToolSessions } from "@/lib/tools/tool-session-storage";
-import type { ToolSessionMap } from "@/lib/tools/tool-session-types";
+import { toStoredSession } from "@/lib/tools/tool-session-persist";
+import type { ToolSessionDetail, ToolSessionMap } from "@/lib/tools/tool-session-types";
 import { createDemoProjectData } from "@/lib/typologies";
 
 const STORAGE_KEY = "evolab.tool.sessions";
@@ -38,19 +39,26 @@ describe("tool session storage", () => {
 
   it("reads persisted sessions from localStorage", () => {
     const sessions = createSessionMap();
-    window.localStorage.getItem = vi.fn(() => JSON.stringify(sessions));
+    const stored = { "session-1": toStoredSession(sessions["session-1"]!) };
+    window.localStorage.getItem = vi.fn(() => JSON.stringify(stored));
 
-    expect(readToolSessions()).toEqual(sessions);
+    expect(readToolSessions()["session-1"]).toMatchObject({
+      id: "session-1",
+      toolId: "trace-to-cad",
+      title: "scan.pdf · 扫描转 CAD"
+    });
   });
 
-  it("writes sessions to localStorage", () => {
+  it("writes lightweight stored sessions to localStorage", () => {
     const sessions = createSessionMap();
     writeToolSessions(sessions);
 
-    expect(window.localStorage.setItem).toHaveBeenCalledWith(STORAGE_KEY, JSON.stringify(sessions));
+    const payload = JSON.parse(String((window.localStorage.setItem as ReturnType<typeof vi.fn>).mock.calls[0]?.[1]));
+    expect(payload["session-1"]).toEqual(toStoredSession(sessions["session-1"]!));
+    expect(JSON.stringify(payload)).not.toContain("data:image");
   });
 
-  it("migrates legacy single-object outputs when reading", () => {
+  it("migrates legacy single-object outputs and strips inline previews when reading", () => {
     const legacy = {
       "session-legacy": {
         id: "session-legacy",
@@ -62,7 +70,8 @@ describe("tool session storage", () => {
         status: "ready",
         outputs: {
           kind: "plan-version",
-          planVersion: createDemoProjectData("office").versions[0]
+          planVersion: createDemoProjectData("office").versions[0],
+          referencePreviewUrl: "data:image/png;base64,abc"
         }
       }
     };
@@ -72,5 +81,13 @@ describe("tool session storage", () => {
 
     expect(Array.isArray(sessions["session-legacy"]?.outputs)).toBe(true);
     expect(sessions["session-legacy"]?.outputs[0]?.kind).toBe("plan-version");
+    expect(
+      sessions["session-legacy"]?.outputs[0]?.kind === "plan-version"
+        ? sessions["session-legacy"]?.outputs[0]?.referencePreviewUrl
+        : undefined
+    ).toBeUndefined();
+
+    const migratedPayload = JSON.parse(String((window.localStorage.setItem as ReturnType<typeof vi.fn>).mock.calls[0]?.[1]));
+    expect(JSON.stringify(migratedPayload)).not.toContain("data:image");
   });
 });

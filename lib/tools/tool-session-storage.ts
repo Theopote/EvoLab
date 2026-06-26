@@ -1,5 +1,5 @@
-import type { ToolSession, ToolSessionMap } from "@/lib/tools/tool-session-types";
-import { normalizeToolSession } from "@/lib/tools/tool-session-utils";
+import type { ToolSessionMap } from "@/lib/tools/tool-session-types";
+import { fromStoredMap, hydrateStoredRecord, toStoredMap } from "@/lib/tools/tool-session-persist";
 
 const STORAGE_KEY = "evolab.tool.sessions";
 
@@ -14,14 +14,18 @@ export function readToolSessions(): ToolSessionMap {
       return {};
     }
 
-    const parsed = JSON.parse(raw) as ToolSessionMap;
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
     if (!parsed || typeof parsed !== "object") {
       return {};
     }
 
-    return Object.fromEntries(
-      Object.entries(parsed).map(([id, session]) => [id, normalizeToolSession(session)])
+    const hydrated = Object.fromEntries(
+      Object.entries(parsed).map(([id, record]) => [id, hydrateStoredRecord(record)])
     );
+
+    // Migrate legacy full payloads to the lightweight stored shape on read.
+    writeToolSessions(hydrated);
+    return hydrated;
   } catch {
     return {};
   }
@@ -32,13 +36,11 @@ export function writeToolSessions(sessions: ToolSessionMap) {
     return;
   }
 
-  const normalized = Object.fromEntries(
-    Object.entries(sessions).map(([id, session]) => [id, normalizeToolSession(session)])
-  );
-
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(toStoredMap(sessions)));
 }
 
 export function createToolSessionId() {
   return `tool-session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
+
+export { fromStoredMap, toStoredMap };

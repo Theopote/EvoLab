@@ -13,6 +13,9 @@ export type ToolSessionOutputKind =
 export interface ToolSessionInputFile {
   fileName: string;
   sourceType: string;
+  /** External preview URL only — never persist inline data: URLs or base64 payloads. */
+  previewUrl?: string;
+  sizeBytes?: number;
 }
 
 export interface ToolSessionAnalysisMeta {
@@ -64,7 +67,8 @@ export type ToolSessionOutput =
   | ToolSessionImageBriefOutput
   | ToolSessionFileExportOutput;
 
-export interface ToolSession {
+/** Full in-memory session, including heavy payloads active during the current browser session. */
+export interface ToolSessionDetail {
   id: string;
   toolId: ToolDefinition["id"];
   title: string;
@@ -79,12 +83,49 @@ export interface ToolSession {
   status: ToolSessionStatus;
 }
 
-export type ToolSessionMap = Record<string, ToolSession>;
+/** @deprecated Use ToolSessionDetail — kept for existing imports. */
+export type ToolSession = ToolSessionDetail;
+
+export type ToolSessionMap = Record<string, ToolSessionDetail>;
 
 export interface ToolSessionSummary {
   id: string;
-  toolId: ToolSession["toolId"];
+  toolId: ToolSessionDetail["toolId"];
   title: string;
   status: ToolSessionStatus;
   updatedAt: string;
 }
+
+/** Lightweight output metadata persisted in localStorage — no base64, decks, or export blobs. */
+export interface ToolSessionStoredOutput {
+  id: string;
+  kind: ToolSessionOutputKind;
+  label: string;
+  createdAt: string;
+  planVersion?: PlanVersion;
+  recognizedPlanVersion?: PlanVersion;
+  sourcePlanVersion?: PlanVersion;
+  referencePreviewUrl?: string;
+  fileName?: string;
+  mimeType?: string;
+  slideCount?: number;
+  briefCount?: number;
+}
+
+/** localStorage record: summary fields plus lightweight outputs only. */
+export interface ToolSessionStoredRecord {
+  id: string;
+  toolId: ToolSessionDetail["toolId"];
+  title: string;
+  inputFiles?: ToolSessionInputFile[];
+  parameters?: Record<string, string | number | boolean>;
+  outputs: ToolSessionStoredOutput[];
+  analysisMeta?: ToolSessionAnalysisMeta;
+  createdAt: string;
+  updatedAt: string;
+  canPromoteToProject: boolean;
+  linkedProjectId?: string;
+  status: ToolSessionStatus;
+}
+
+export type ToolSessionStoredMap = Record<string, ToolSessionStoredRecord>;

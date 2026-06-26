@@ -70,7 +70,13 @@ export function TraceToCadTool() {
       saveTraceToCadSession({
         sessionId,
         title: `${state.fileName} · 扫描转 CAD`,
-        inputFiles: [{ fileName: state.fileName, sourceType: state.sourceType }],
+        inputFiles: [
+          {
+            fileName: state.fileName,
+            sourceType: state.sourceType,
+            previewUrl: state.referencePreviewUrl
+          }
+        ],
         draftPlanVersion: state.draftVersion,
         recognizedPlanVersion: state.recognizedVersion,
         referencePreviewUrl: state.referencePreviewUrl,
@@ -415,7 +421,7 @@ function reviewStateFromSession(session: ToolSession): TraceReviewState | undefi
     analysis,
     fileName: session.inputFiles?.[0]?.fileName ?? "restored-drawing",
     sourceType,
-    referencePreviewUrl: planOutput.referencePreviewUrl
+    referencePreviewUrl: planOutput.referencePreviewUrl ?? session.inputFiles?.[0]?.previewUrl
   };
 }
 

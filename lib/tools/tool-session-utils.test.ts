@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ToolSession } from "@/lib/tools/tool-session-types";
+import type { ToolSessionDetail } from "@/lib/tools/tool-session-types";
 import {
   getPlanVersionOutput,
   normalizeToolSession,
@@ -42,7 +42,7 @@ describe("tool session utils", () => {
       planVersion: { ...corrected, label: "Corrected again" }
     });
 
-    const planOutput = getPlanVersionOutput({ outputs: updated } as ToolSession);
+    const planOutput = getPlanVersionOutput({ outputs: updated } as ToolSessionDetail);
     expect(planOutput?.recognizedPlanVersion).toEqual(recognized);
     expect(planOutput?.planVersion.label).toBe("Corrected again");
   });
@@ -54,7 +54,7 @@ describe("tool session utils", () => {
       sourcePlanVersion: sourceVersion
     });
 
-    const planOutput = getPlanVersionOutput({ outputs } as ToolSession);
+    const planOutput = getPlanVersionOutput({ outputs } as ToolSessionDetail);
     expect(planOutput?.sourcePlanVersion).toEqual(sourceVersion);
     expect(planOutput?.planVersion).toEqual(remixedVersion);
   });
@@ -71,7 +71,7 @@ describe("tool session utils", () => {
       outputs: {
         kind: "plan-version",
         planVersion: sourceVersion
-      } as unknown as ToolSession["outputs"]
+      } as unknown as ToolSessionDetail["outputs"]
     });
 
     expect(Array.isArray(session.outputs)).toBe(true);

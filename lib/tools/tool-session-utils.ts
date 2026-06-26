@@ -1,6 +1,6 @@
 import type { PlanVersion } from "@/lib/project-types";
 import type {
-  ToolSession,
+  ToolSessionDetail,
   ToolSessionOutput,
   ToolSessionPlanVersionOutput,
   ToolSessionPresentationDeckOutput
@@ -105,19 +105,19 @@ export function normalizeToolSessionOutputs(
   return [];
 }
 
-export function normalizeToolSession(session: ToolSession): ToolSession {
+export function normalizeToolSession(session: ToolSessionDetail): ToolSessionDetail {
   return {
     ...session,
     outputs: normalizeToolSessionOutputs(session.outputs, session.title)
   };
 }
 
-export function getPlanVersionOutput(session: ToolSession | undefined): ToolSessionPlanVersionOutput | undefined {
+export function getPlanVersionOutput(session: ToolSessionDetail | undefined): ToolSessionPlanVersionOutput | undefined {
   return session?.outputs.find((output): output is ToolSessionPlanVersionOutput => output.kind === "plan-version");
 }
 
 export function getOutputsByKind<K extends ToolSessionOutput["kind"]>(
-  session: ToolSession | undefined,
+  session: ToolSessionDetail | undefined,
   kind: K
 ): Extract<ToolSessionOutput, { kind: K }>[] {
   if (!session) {

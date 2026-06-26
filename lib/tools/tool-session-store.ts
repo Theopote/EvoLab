@@ -9,7 +9,7 @@ import {
   writeToolSessions
 } from "@/lib/tools/tool-session-storage";
 import type {
-  ToolSession,
+  ToolSessionDetail,
   ToolSessionAnalysisMeta,
   ToolSessionInputFile,
   ToolSessionMap,
@@ -21,13 +21,13 @@ import { normalizeToolSession, upsertPlanVersionOutput } from "@/lib/tools/tool-
 interface ToolSessionState {
   sessions: ToolSessionMap;
   activeSessionId?: string;
-  upsertSession: (session: ToolSession) => void;
-  createSession: (toolId: ToolSession["toolId"], title?: string) => ToolSession;
+  upsertSession: (session: ToolSessionDetail) => void;
+  createSession: (toolId: ToolSessionDetail["toolId"], title?: string) => ToolSessionDetail;
   updateSession: (
     sessionId: string,
     patch: Partial<
       Pick<
-        ToolSession,
+        ToolSessionDetail,
         | "title"
         | "inputFiles"
         | "parameters"
@@ -38,19 +38,19 @@ interface ToolSessionState {
         | "linkedProjectId"
       >
     >
-  ) => ToolSession | undefined;
-  promoteSession: (sessionId: string, linkedProjectId: string) => ToolSession | undefined;
+  ) => ToolSessionDetail | undefined;
+  promoteSession: (sessionId: string, linkedProjectId: string) => ToolSessionDetail | undefined;
   setActiveSessionId: (sessionId?: string) => void;
-  getSession: (sessionId: string) => ToolSession | undefined;
+  getSession: (sessionId: string) => ToolSessionDetail | undefined;
   listRecentSessions: (limit?: number) => ToolSessionSummary[];
-  appendOutput: (sessionId: string, output: ToolSessionOutput) => ToolSession | undefined;
+  appendOutput: (sessionId: string, output: ToolSessionOutput) => ToolSessionDetail | undefined;
 }
 
 function persistSessions(sessions: ToolSessionMap) {
   writeToolSessions(sessions);
 }
 
-function toSummary(session: ToolSession): ToolSessionSummary {
+function toSummary(session: ToolSessionDetail): ToolSessionSummary {
   return {
     id: session.id,
     toolId: session.toolId,
@@ -75,7 +75,7 @@ export const useToolSessionStore = create<ToolSessionState>((set, get) => ({
   createSession: (toolId, title) => {
     const tool = getToolDefinition(toolId);
     const now = new Date().toISOString();
-    const session: ToolSession = {
+    const session: ToolSessionDetail = {
       id: createToolSessionId(),
       toolId,
       title: title ?? tool?.nameZh ?? toolId,
@@ -96,7 +96,7 @@ export const useToolSessionStore = create<ToolSessionState>((set, get) => ({
       return undefined;
     }
 
-    const next: ToolSession = normalizeToolSession({
+    const next: ToolSessionDetail = normalizeToolSession({
       ...current,
       ...patch,
       updatedAt: new Date().toISOString()
@@ -156,7 +156,10 @@ export function saveTraceToCadSession(input: {
 
   return useToolSessionStore.getState().updateSession(input.sessionId, {
     title: input.title,
-    inputFiles: input.inputFiles,
+    inputFiles: input.inputFiles.map((file) => ({
+      ...file,
+      previewUrl: file.previewUrl ?? input.referencePreviewUrl
+    })),
     outputs,
     analysisMeta: input.analysisMeta,
     status: "ready",
