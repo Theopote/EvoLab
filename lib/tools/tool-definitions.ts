@@ -87,7 +87,7 @@ export const toolDefinitions: ToolDefinition[] = [
     descriptionZh: "保留柱网/核心筒后重新划分空间",
     category: "scheme",
     icon: Layers,
-    status: "coming-soon"
+    status: "available"
   },
   {
     id: "presentation-generator",

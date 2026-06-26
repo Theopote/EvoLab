@@ -131,6 +131,9 @@ export interface PlanVersionMetadata {
   floorPrograms?: Array<{ levelIndex: number; program: FloorProgram }>;
   topologyGraph?: TopologyGraph;
   relayoutedAt?: string;
+  retainedStructureRemixAt?: string;
+  preservedStructureRoomIds?: string[];
+  preservedColumnGrid?: boolean;
   validationWarnings?: string[];
   floorValidationSummary?: FloorValidationSummary[];
   repairs?: string[];

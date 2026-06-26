@@ -7,6 +7,7 @@ import {
   readToolSessions,
   writeToolSessions
 } from "@/lib/tools/tool-session-storage";
+import type { PlanVersion } from "@/lib/project-types";
 import type {
   ToolSession,
   ToolSessionAnalysisMeta,
@@ -133,5 +134,29 @@ export function saveTraceToCadSession(input: {
     analysisMeta: input.analysisMeta,
     status: "ready",
     canPromoteToProject: true
+  });
+}
+
+export function saveRetainedStructureRemixSession(input: {
+  sessionId: string;
+  title: string;
+  sourceLabel: string;
+  sourceVersion: PlanVersion;
+  remixedVersion?: PlanVersion;
+  parameters?: Record<string, string | number | boolean>;
+}) {
+  return useToolSessionStore.getState().updateSession(input.sessionId, {
+    title: input.title,
+    inputFiles: [{ fileName: input.sourceLabel, sourceType: "plan-version" }],
+    parameters: input.parameters,
+    outputs: input.remixedVersion
+      ? {
+          kind: "plan-version",
+          planVersion: input.remixedVersion,
+          sourcePlanVersion: input.sourceVersion
+        }
+      : undefined,
+    status: input.remixedVersion ? "ready" : "draft",
+    canPromoteToProject: Boolean(input.remixedVersion)
   });
 }

@@ -36,7 +36,7 @@ export const workflowTemplates: WorkflowTemplate[] = [
     id: "retrofit",
     title: "老旧改造",
     description: "从扫描图转 CAD 开始，保留结构后重划空间。",
-    href: "/tools/trace-to-cad"
+    href: "/tools/retained-structure-remix"
   },
   {
     id: "elevator",

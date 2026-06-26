@@ -19,6 +19,7 @@ export interface ToolSessionAnalysisMeta {
 export interface ToolSessionOutput {
   kind: "plan-version";
   planVersion: PlanVersion;
+  sourcePlanVersion?: PlanVersion;
   referencePreviewUrl?: string;
 }
 
