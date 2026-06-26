@@ -6,7 +6,7 @@ import { ArrowRight, Boxes, Clock3, Sparkles, Wrench } from "lucide-react";
 import { RecentToolSessionsList } from "@/components/tools/RecentToolSessionsList";
 import { workflowTemplates } from "@/lib/launcher/workflow-templates";
 import { listRecentProjects, type ProjectRegistryEntry } from "@/lib/project-registry";
-import { selectRecentToolSessions, useToolSessionStore } from "@/lib/tools/tool-session-store";
+import { useRecentToolSessions } from "@/lib/tools/tool-session-store";
 
 const entryCards = [
   {
@@ -27,7 +27,7 @@ const entryCards = [
 
 export function LauncherHome() {
   const [recentProjects, setRecentProjects] = useState<ProjectRegistryEntry[]>([]);
-  const recentSessions = useToolSessionStore(selectRecentToolSessions(4));
+  const recentSessions = useRecentToolSessions(4);
 
   useEffect(() => {
     setRecentProjects(listRecentProjects(5));

@@ -3,10 +3,7 @@
 import Link from "next/link";
 import { ArrowLeft, Sparkles } from "lucide-react";
 import { RecentToolSessionsList } from "@/components/tools/RecentToolSessionsList";
-import {
-  selectRecentToolSessions,
-  useToolSessionStore
-} from "@/lib/tools/tool-session-store";
+import { useRecentToolSessions } from "@/lib/tools/tool-session-store";
 import {
   getAvailableTools,
   toolCategoryLabels,
@@ -54,7 +51,7 @@ function ToolCard({ tool }: { tool: ToolDefinition }) {
 }
 
 export function ToolsHome() {
-  const recentSessions = useToolSessionStore(selectRecentToolSessions(4));
+  const recentSessions = useRecentToolSessions(4);
   const availableTools = getAvailableTools();
   const comingSoonTools = toolDefinitions.filter((tool) => tool.status === "coming-soon");
 
