@@ -21,6 +21,13 @@ import {
   type RemixLayoutPriority,
   type RetainedStructureRemixParameters
 } from "@/lib/retained-structure/remix-parameters";
+import { RemixDiffPanel } from "@/components/tools/RemixDiffPanel";
+import {
+  isRoomInVersion,
+  previewFocusHint,
+  previewModeForRoomFocus,
+  type RemixRoomDiffEntry
+} from "@/lib/retained-structure/remix-diff";
 import { summarizeRetainedStructure, isRetainedStructureRoom } from "@/lib/retained-structure/structure-rooms";
 import { createDemoProjectData } from "@/lib/typologies";
 import type { TypologyPackId } from "@/lib/typology/types";
@@ -53,17 +60,6 @@ function demoVersion(typologyId: TypologyPackId) {
   return createDemoProjectData(typologyId).versions[0]!;
 }
 
-function countRelayoutedRooms(before: PlanVersion, after: PlanVersion, preservedRoomIds: Set<string>) {
-  return after.rooms.filter((room) => {
-    if (preservedRoomIds.has(room.id)) {
-      return false;
-    }
-
-    const original = before.rooms.find((item) => item.id === room.id);
-    return !original || JSON.stringify(original.polygon) !== JSON.stringify(room.polygon);
-  }).length;
-}
-
 export function RetainedStructureRemixTool() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -77,6 +73,7 @@ export function RetainedStructureRemixTool() {
   const [isRemixing, setIsRemixing] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [saveNotice, setSaveNotice] = useState<string | undefined>();
+  const [focusedRoom, setFocusedRoom] = useState<RemixRoomDiffEntry | undefined>();
   const bootstrappedRef = useRef(false);
 
   const traceSessions = useMemo(
@@ -158,13 +155,46 @@ export function RetainedStructureRemixTool() {
     [state]
   );
 
-  const preservedRoomIds = useMemo(
-    () => new Set(structureSummary?.preservedRooms.map((room) => room.id) ?? []),
-    [structureSummary]
-  );
-
   const previewVersion =
     state?.previewMode === "after" && state.remixedVersion ? state.remixedVersion : state?.sourceVersion;
+
+  const highlightedRoomId =
+    focusedRoom && previewVersion && isRoomInVersion(previewVersion, focusedRoom.id) ? focusedRoom.id : undefined;
+
+  const previewFocusMessage =
+    focusedRoom && state ? previewFocusHint(focusedRoom, state.previewMode) : undefined;
+
+  const handleRoomFocus = useCallback(
+    (entry: RemixRoomDiffEntry) => {
+      if (focusedRoom?.id === entry.id) {
+        setFocusedRoom(undefined);
+        return;
+      }
+
+      setFocusedRoom(entry);
+
+      if (!state) {
+        return;
+      }
+
+      const nextMode = previewModeForRoomFocus(entry, state.previewMode);
+      if (nextMode !== state.previewMode) {
+        applyState({ ...state, previewMode: nextMode });
+      }
+    },
+    [applyState, focusedRoom?.id, state]
+  );
+
+  const handlePreviewModeChange = useCallback(
+    (mode: "before" | "after") => {
+      if (!state) {
+        return;
+      }
+
+      applyState({ ...state, previewMode: mode });
+    },
+    [applyState, state]
+  );
 
   const handleLoadSource = useCallback(
     (kind: SourceKind, label: string, version: PlanVersion) => {
@@ -181,6 +211,7 @@ export function RetainedStructureRemixTool() {
         previewMode: "before",
         ...createInitialParameters(version)
       });
+      setFocusedRoom(undefined);
       setError(undefined);
     },
     [applyState, state]
@@ -193,6 +224,7 @@ export function RetainedStructureRemixTool() {
 
     setIsRemixing(true);
     setError(undefined);
+    setFocusedRoom(undefined);
 
     try {
       const remixedVersion = await remixRetainedStructureViaApi({
@@ -273,11 +305,6 @@ export function RetainedStructureRemixTool() {
 
     exportVersionJson(version);
   }, [state]);
-
-  const relayoutedCount =
-    state?.remixedVersion && state.sourceVersion
-      ? countRelayoutedRooms(state.sourceVersion, state.remixedVersion, preservedRoomIds)
-      : 0;
 
   return (
     <ToolPageShell
@@ -563,7 +590,7 @@ export function RetainedStructureRemixTool() {
       previewPanel={
         previewVersion ? (
           <div className="space-y-3">
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 className={`rounded border px-3 py-1 text-xs ${
                   state?.previewMode === "before"
@@ -571,7 +598,7 @@ export function RetainedStructureRemixTool() {
                     : "border-line text-muted"
                 }`}
                 type="button"
-                onClick={() => state && applyState({ ...state, previewMode: "before" })}
+                onClick={() => handlePreviewModeChange("before")}
               >
                 重划前
               </button>
@@ -583,13 +610,34 @@ export function RetainedStructureRemixTool() {
                 }`}
                 disabled={!state?.remixedVersion}
                 type="button"
-                onClick={() => state?.remixedVersion && applyState({ ...state, previewMode: "after" })}
+                onClick={() => state?.remixedVersion && handlePreviewModeChange("after")}
               >
                 重划后
               </button>
+              {focusedRoom ? (
+                <span className="text-[11px] text-accent">
+                  已选：{focusedRoom.name}
+                  {previewFocusMessage ? (
+                    <button
+                      className="ml-2 underline decoration-accent/40 underline-offset-2 hover:text-accent/80"
+                      type="button"
+                      onClick={() =>
+                        handlePreviewModeChange(focusedRoom.kind === "removed" ? "before" : "after")
+                      }
+                    >
+                      {previewFocusMessage}
+                    </button>
+                  ) : null}
+                </span>
+              ) : null}
             </div>
             <div className="overflow-hidden rounded border border-line bg-[#081018]">
-              <FloorPlanCanvas className="h-[min(72vh,720px)] w-full" interactive={false} version={previewVersion} />
+              <FloorPlanCanvas
+                className="h-[min(72vh,720px)] w-full"
+                interactive={false}
+                selectedRoomId={highlightedRoomId}
+                version={previewVersion}
+              />
             </div>
           </div>
         ) : (
@@ -630,10 +678,23 @@ export function RetainedStructureRemixTool() {
               </div>
             ) : null}
             {state.remixedVersion ? (
-              <div className="rounded border border-success/40 bg-success/10 p-3 text-success">
-                已重划 {relayoutedCount} 个非结构房间 · {REMIX_FUNCTIONAL_TYPE_LABELS[state.targetFunctionalType]} ·{" "}
-                {REMIX_CORRIDOR_STRATEGY_LABELS[state.corridorStrategy]} · 目标 {state.targetRoomCount} 间
-              </div>
+              <RemixDiffPanel
+                after={state.remixedVersion}
+                before={state.sourceVersion}
+                focusedRoomId={focusedRoom?.id}
+                parameters={{
+                  targetFunctionalType: state.targetFunctionalType,
+                  targetRoomCount: state.targetRoomCount,
+                  publicAreaRatio: state.publicAreaRatio,
+                  corridorStrategy: state.corridorStrategy,
+                  layoutPriority: state.layoutPriority,
+                  allowSplitLargeRooms: state.allowSplitLargeRooms,
+                  lockExteriorWindows: state.lockExteriorWindows,
+                  preserveColumns: state.preserveColumns,
+                  preserveCores: state.preserveCores
+                }}
+                onRoomFocus={handleRoomFocus}
+              />
             ) : (
               <div className="rounded border border-line bg-panel/70 p-3 text-muted">
                 点击「执行重划」后，程序房间将按拓扑重新排布，结构房间保持原位。
