@@ -9,7 +9,19 @@ import { createPlanSvg, downloadTextFile, exportVersionJson } from "@/lib/export
 import { useProjectActions, useProjectState } from "@/lib/project-store";
 import type { PlanVersion } from "@/lib/project-types";
 import { remixRetainedStructureViaApi } from "@/lib/retained-structure/remix-client";
-import { summarizeRetainedStructure } from "@/lib/retained-structure/structure-rooms";
+import {
+  defaultRemixParameters,
+  REMIX_CORRIDOR_STRATEGY_LABELS,
+  REMIX_FUNCTIONAL_TYPE_LABELS,
+  REMIX_LAYOUT_PRIORITY_LABELS,
+  remixParametersFromRecord,
+  remixParametersToRecord,
+  type RemixCorridorStrategy,
+  type RemixFunctionalType,
+  type RemixLayoutPriority,
+  type RetainedStructureRemixParameters
+} from "@/lib/retained-structure/remix-parameters";
+import { summarizeRetainedStructure, isRetainedStructureRoom } from "@/lib/retained-structure/structure-rooms";
 import { createDemoProjectData } from "@/lib/typologies";
 import type { TypologyPackId } from "@/lib/typology/types";
 import {
@@ -21,14 +33,20 @@ import { getPlanVersionOutput } from "@/lib/tools/tool-session-utils";
 
 type SourceKind = "project" | "demo" | "trace-session";
 
-interface RemixToolState {
+interface RemixToolState extends RetainedStructureRemixParameters {
   sourceKind: SourceKind;
   sourceLabel: string;
   sourceVersion: PlanVersion;
   remixedVersion?: PlanVersion;
-  preserveColumns: boolean;
-  preserveCores: boolean;
   previewMode: "before" | "after";
+}
+
+function relayoutableRoomCount(version: PlanVersion) {
+  return version.rooms.filter((room) => !isRetainedStructureRoom(room)).length;
+}
+
+function createInitialParameters(version: PlanVersion): RetainedStructureRemixParameters {
+  return defaultRemixParameters({ relayoutableRoomCount: relayoutableRoomCount(version) });
 }
 
 function demoVersion(typologyId: TypologyPackId) {
@@ -82,9 +100,8 @@ export function RetainedStructureRemixTool() {
         sourceVersion: next.sourceVersion,
         remixedVersion: next.remixedVersion,
         parameters: {
-          sourceKind: next.sourceKind,
-          preserveColumns: next.preserveColumns,
-          preserveCores: next.preserveCores
+          ...remixParametersToRecord(next),
+          sourceKind: next.sourceKind
         }
       });
     },
@@ -131,9 +148,8 @@ export function RetainedStructureRemixTool() {
       sourceKind: activeVersion ? "project" : "demo",
       sourceLabel: activeVersion?.label ?? "医疗示例方案",
       sourceVersion: initialVersion,
-      preserveColumns: true,
-      preserveCores: true,
-      previewMode: "before"
+      previewMode: "before",
+      ...createInitialParameters(initialVersion)
     });
   }, [activeVersion, applyState, sessionId, state]);
 
@@ -162,7 +178,8 @@ export function RetainedStructureRemixTool() {
         sourceLabel: label,
         sourceVersion: version,
         remixedVersion: undefined,
-        previewMode: "before"
+        previewMode: "before",
+        ...createInitialParameters(version)
       });
       setError(undefined);
     },
@@ -182,6 +199,13 @@ export function RetainedStructureRemixTool() {
         version: state.sourceVersion,
         outline: state.sourceVersion.outline,
         options: {
+          targetFunctionalType: state.targetFunctionalType,
+          targetRoomCount: state.targetRoomCount,
+          publicAreaRatio: state.publicAreaRatio,
+          corridorStrategy: state.corridorStrategy,
+          layoutPriority: state.layoutPriority,
+          allowSplitLargeRooms: state.allowSplitLargeRooms,
+          lockExteriorWindows: state.lockExteriorWindows,
           preserveColumns: state.preserveColumns,
           preserveCores: state.preserveCores
         }
@@ -327,6 +351,171 @@ export function RetainedStructureRemixTool() {
           ) : null}
 
           <section className="space-y-2">
+            <h3 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">方案目标</h3>
+            <label className="block rounded border border-line bg-panel/70 px-3 py-2">
+              <span className="text-muted">目标功能类型</span>
+              <select
+                className="mt-1 w-full rounded border border-line bg-canvas px-2 py-1.5 text-slate-100"
+                value={state?.targetFunctionalType ?? "office"}
+                onChange={(event) =>
+                  state &&
+                  applyState({
+                    ...state,
+                    targetFunctionalType: event.target.value as RemixFunctionalType,
+                    remixedVersion: undefined,
+                    previewMode: "before"
+                  })
+                }
+              >
+                {(Object.entries(REMIX_FUNCTIONAL_TYPE_LABELS) as [RemixFunctionalType, string][]).map(
+                  ([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  )
+                )}
+              </select>
+            </label>
+            <label className="block rounded border border-line bg-panel/70 px-3 py-2">
+              <div className="flex items-center justify-between text-muted">
+                <span>目标房间数量</span>
+                <span className="text-slate-200">{state?.targetRoomCount ?? 6}</span>
+              </div>
+              <input
+                className="mt-2 w-full accent-accent"
+                max={24}
+                min={3}
+                step={1}
+                type="range"
+                value={state?.targetRoomCount ?? 6}
+                onChange={(event) =>
+                  state &&
+                  applyState({
+                    ...state,
+                    targetRoomCount: Number(event.target.value),
+                    remixedVersion: undefined,
+                    previewMode: "before"
+                  })
+                }
+              />
+            </label>
+            <label className="block rounded border border-line bg-panel/70 px-3 py-2">
+              <div className="flex items-center justify-between text-muted">
+                <span>公共区比例</span>
+                <span className="text-slate-200">{Math.round((state?.publicAreaRatio ?? 0.25) * 100)}%</span>
+              </div>
+              <input
+                className="mt-2 w-full accent-accent"
+                max={45}
+                min={8}
+                step={1}
+                type="range"
+                value={Math.round((state?.publicAreaRatio ?? 0.25) * 100)}
+                onChange={(event) =>
+                  state &&
+                  applyState({
+                    ...state,
+                    publicAreaRatio: Number(event.target.value) / 100,
+                    remixedVersion: undefined,
+                    previewMode: "before"
+                  })
+                }
+              />
+            </label>
+          </section>
+
+          <section className="space-y-2">
+            <h3 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">布局策略</h3>
+            <label className="block rounded border border-line bg-panel/70 px-3 py-2">
+              <span className="text-muted">走廊策略</span>
+              <select
+                className="mt-1 w-full rounded border border-line bg-canvas px-2 py-1.5 text-slate-100"
+                value={state?.corridorStrategy ?? "central"}
+                onChange={(event) =>
+                  state &&
+                  applyState({
+                    ...state,
+                    corridorStrategy: event.target.value as RemixCorridorStrategy,
+                    remixedVersion: undefined,
+                    previewMode: "before"
+                  })
+                }
+              >
+                {(Object.entries(REMIX_CORRIDOR_STRATEGY_LABELS) as [RemixCorridorStrategy, string][]).map(
+                  ([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  )
+                )}
+              </select>
+            </label>
+            <div className="space-y-1 rounded border border-line bg-panel/70 px-3 py-2">
+              <span className="text-muted">优化优先</span>
+              <div className="mt-2 grid grid-cols-1 gap-1">
+                {(Object.entries(REMIX_LAYOUT_PRIORITY_LABELS) as [RemixLayoutPriority, string][]).map(
+                  ([value, label]) => (
+                    <label className="flex items-center gap-2" key={value}>
+                      <input
+                        checked={(state?.layoutPriority ?? "daylight") === value}
+                        name="layoutPriority"
+                        type="radio"
+                        value={value}
+                        onChange={() =>
+                          state &&
+                          applyState({
+                            ...state,
+                            layoutPriority: value,
+                            remixedVersion: undefined,
+                            previewMode: "before"
+                          })
+                        }
+                      />
+                      <span>{label}</span>
+                    </label>
+                  )
+                )}
+              </div>
+            </div>
+          </section>
+
+          <section className="space-y-2">
+            <h3 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">高级选项</h3>
+            <label className="flex items-center gap-2 rounded border border-line bg-panel/70 px-3 py-2">
+              <input
+                checked={state?.allowSplitLargeRooms ?? true}
+                type="checkbox"
+                onChange={(event) =>
+                  state &&
+                  applyState({
+                    ...state,
+                    allowSplitLargeRooms: event.target.checked,
+                    remixedVersion: undefined,
+                    previewMode: "before"
+                  })
+                }
+              />
+              <span>允许拆分大房间</span>
+            </label>
+            <label className="flex items-center gap-2 rounded border border-line bg-panel/70 px-3 py-2">
+              <input
+                checked={state?.lockExteriorWindows ?? false}
+                type="checkbox"
+                onChange={(event) =>
+                  state &&
+                  applyState({
+                    ...state,
+                    lockExteriorWindows: event.target.checked,
+                    remixedVersion: undefined,
+                    previewMode: "before"
+                  })
+                }
+              />
+              <span>锁定外墙窗位</span>
+            </label>
+          </section>
+
+          <section className="space-y-2">
             <h3 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">保留约束</h3>
             <label className="flex items-center gap-2 rounded border border-line bg-panel/70 px-3 py-2">
               <input
@@ -442,7 +631,8 @@ export function RetainedStructureRemixTool() {
             ) : null}
             {state.remixedVersion ? (
               <div className="rounded border border-success/40 bg-success/10 p-3 text-success">
-                已重划 {relayoutedCount} 个非结构房间，核心筒位置未变。
+                已重划 {relayoutedCount} 个非结构房间 · {REMIX_FUNCTIONAL_TYPE_LABELS[state.targetFunctionalType]} ·{" "}
+                {REMIX_CORRIDOR_STRATEGY_LABELS[state.corridorStrategy]} · 目标 {state.targetRoomCount} 间
               </div>
             ) : (
               <div className="rounded border border-line bg-panel/70 p-3 text-muted">
@@ -513,14 +703,14 @@ function restoredStateFromSession(session: ToolSession): RemixToolState | undefi
 
   const sourceKind = (session.parameters?.sourceKind as SourceKind | undefined) ?? "demo";
   const sourceVersion = planOutput.sourcePlanVersion ?? planOutput.planVersion;
+  const parameters = remixParametersFromRecord(session.parameters, createInitialParameters(sourceVersion));
 
   return {
     sourceKind,
     sourceLabel: session.inputFiles?.[0]?.fileName ?? session.title,
     sourceVersion,
     remixedVersion: planOutput.sourcePlanVersion ? planOutput.planVersion : undefined,
-    preserveColumns: session.parameters?.preserveColumns !== false,
-    preserveCores: session.parameters?.preserveCores !== false,
-    previewMode: planOutput.sourcePlanVersion ? "after" : "before"
+    previewMode: planOutput.sourcePlanVersion ? "after" : "before",
+    ...parameters
   };
 }

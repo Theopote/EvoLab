@@ -1,4 +1,9 @@
 import type { PlanTopologyVersion } from "@/lib/schemas/plan-version-schema";
+import type { RemixLayoutPriority } from "@/lib/retained-structure/remix-parameters";
+
+export interface LayoutOptimizationOptions {
+  layoutPriority?: RemixLayoutPriority;
+}
 
 export interface LayoutRect {
   x: number;
@@ -162,11 +167,16 @@ export function applyAdjacencyForces(
 
 export function optimizeLayoutRects(
   rects: Map<string, LayoutRect>,
-  topology: Pick<PlanTopologyVersion, "edges">,
-  bounds: LayoutBounds
+  topology: Pick<PlanTopologyVersion, "edges" | "rooms">,
+  bounds: LayoutBounds,
+  options: LayoutOptimizationOptions = {}
 ) {
-  applyAdjacencyForces(rects, topology, bounds, 8);
-  resolveRectOverlaps(rects, bounds, 28);
-  applyAdjacencyForces(rects, topology, bounds, 4);
-  resolveRectOverlaps(rects, bounds, 12);
+  const priority = options.layoutPriority ?? "daylight";
+  const adjacencyIterations = priority === "circulation" ? 14 : priority === "area-efficiency" ? 4 : 8;
+  const overlapIterations = priority === "area-efficiency" ? 36 : priority === "circulation" ? 18 : 28;
+
+  applyAdjacencyForces(rects, topology, bounds, adjacencyIterations);
+  resolveRectOverlaps(rects, bounds, overlapIterations);
+  applyAdjacencyForces(rects, topology, bounds, Math.max(2, Math.round(adjacencyIterations / 2)));
+  resolveRectOverlaps(rects, bounds, Math.max(8, Math.round(overlapIterations / 2)));
 }

@@ -1,4 +1,8 @@
-import { optimizeLayoutRects } from "@/lib/layout-optimizer";
+import { optimizeLayoutRects, type LayoutOptimizationOptions } from "@/lib/layout-optimizer";
+import type {
+  RemixCorridorStrategy,
+  RemixLayoutPriority
+} from "@/lib/retained-structure/remix-parameters";
 import { postProcessPlanVersion } from "@/lib/plan-postprocess";
 import { topologyGraphFromTopology } from "@/lib/topology-graph";
 import type { PlanTopologyVersion, TopologyRoom } from "@/lib/schemas/plan-version-schema";
@@ -152,7 +156,7 @@ function classifyRooms(rooms: TopologyRoom[]) {
   return { corridors, service, south, north };
 }
 
-function layoutHorizontal(rooms: TopologyRoom[], bounds: Bounds) {
+function layoutHorizontal(rooms: TopologyRoom[], bounds: Bounds, corridorStrategy: RemixCorridorStrategy = "central") {
   const { corridors, service, south, north } = classifyRooms(rooms);
   const rects = new Map<string, Rect>();
   const width = bounds.width;
@@ -160,18 +164,46 @@ function layoutHorizontal(rooms: TopologyRoom[], bounds: Bounds) {
   const serviceW = service.length ? clamp(width * 0.18, 7, width * 0.28) : 0;
   const usableW = Math.max(8, width - serviceW);
   const corridorH = clamp(height * 0.13, 4, 7);
-  const corridorY = clamp(height * 0.42, height * 0.28, height - corridorH - height * 0.2);
-  const southH = Math.max(4, corridorY);
-  const northY = corridorY + corridorH;
+  const corridorW = clamp(width * 0.12, 4, 7);
+  const southH =
+    corridorStrategy === "ring"
+      ? Math.max(4, height * 0.34)
+      : corridorStrategy === "side"
+        ? Math.max(4, height - corridorH)
+        : Math.max(4, clamp(height * 0.42, height * 0.28, height - corridorH - height * 0.2));
+  const corridorY =
+    corridorStrategy === "side"
+      ? 0
+      : corridorStrategy === "ring"
+        ? clamp(height * 0.34, height * 0.24, height - corridorH - 4)
+        : clamp(height * 0.42, height * 0.28, height - corridorH - height * 0.2);
+  const northY = corridorStrategy === "side" ? corridorH : corridorY + corridorH;
   const northH = Math.max(4, height - northY);
+  const programRect =
+    corridorStrategy === "side"
+      ? { x: corridorW, y: 0, width: Math.max(8, usableW - corridorW), height }
+      : { x: 0, y: 0, width: usableW, height: southH };
 
-  splitRect(south.length ? south : north.slice(0, 1), { x: 0, y: 0, width: usableW, height: southH }, "x").forEach(([id, rect]) =>
-    rects.set(id, rect)
-  );
-  splitRect(north, { x: 0, y: northY, width: usableW, height: northH }, "x").forEach(([id, rect]) => rects.set(id, rect));
-  splitRect(corridors, { x: 0, y: corridorY, width: usableW, height: corridorH }, "x").forEach(([id, rect]) =>
-    rects.set(id, rect)
-  );
+  splitRect(south.length ? south : north.slice(0, 1), programRect, "x").forEach(([id, rect]) => rects.set(id, rect));
+  if (corridorStrategy !== "side") {
+    splitRect(north, { x: 0, y: northY, width: usableW, height: northH }, "x").forEach(([id, rect]) => rects.set(id, rect));
+  }
+  if (corridorStrategy === "side") {
+    splitRect(corridors, { x: 0, y: 0, width: corridorW, height }, "y").forEach(([id, rect]) => rects.set(id, rect));
+  } else if (corridorStrategy === "ring") {
+    splitRect(corridors, { x: 0, y: corridorY, width: usableW, height: corridorH }, "x").forEach(([id, rect]) =>
+      rects.set(id, rect)
+    );
+    splitRect(
+      corridors.slice(1),
+      { x: usableW - corridorW, y: corridorY, width: corridorW, height: Math.max(4, height - corridorY) },
+      "y"
+    ).forEach(([id, rect]) => rects.set(id, rect));
+  } else if (corridorStrategy !== "open") {
+    splitRect(corridors, { x: 0, y: corridorY, width: usableW, height: corridorH }, "x").forEach(([id, rect]) =>
+      rects.set(id, rect)
+    );
+  }
   splitRect(service, { x: usableW, y: 0, width: serviceW || width * 0.16, height }, "y").forEach(([id, rect]) =>
     rects.set(id, rect)
   );
@@ -179,7 +211,7 @@ function layoutHorizontal(rooms: TopologyRoom[], bounds: Bounds) {
   return rects;
 }
 
-function layoutVertical(rooms: TopologyRoom[], bounds: Bounds) {
+function layoutVertical(rooms: TopologyRoom[], bounds: Bounds, corridorStrategy: RemixCorridorStrategy = "central") {
   const { corridors, service, south, north } = classifyRooms(rooms);
   const rects = new Map<string, Rect>();
   const width = bounds.width;
@@ -187,18 +219,43 @@ function layoutVertical(rooms: TopologyRoom[], bounds: Bounds) {
   const serviceH = service.length ? clamp(height * 0.2, 7, height * 0.3) : 0;
   const usableH = Math.max(8, height - serviceH);
   const corridorW = clamp(width * 0.14, 4, 7);
-  const corridorX = clamp(width * 0.42, width * 0.25, width - corridorW - width * 0.2);
-  const westW = Math.max(4, corridorX);
-  const eastX = corridorX + corridorW;
+  const corridorH = clamp(height * 0.12, 4, 7);
+  const corridorX =
+    corridorStrategy === "side"
+      ? 0
+      : corridorStrategy === "ring"
+        ? clamp(width * 0.3, width * 0.18, width - corridorW - 4)
+        : clamp(width * 0.42, width * 0.25, width - corridorW - width * 0.2);
+  const westW = corridorStrategy === "side" ? Math.max(4, width - corridorW) : Math.max(4, corridorX);
+  const eastX = corridorStrategy === "side" ? corridorW : corridorX + corridorW;
   const eastW = Math.max(4, width - eastX);
 
-  splitRect(south.length ? south : north.slice(0, 1), { x: 0, y: 0, width: westW, height: usableH }, "y").forEach(([id, rect]) =>
-    rects.set(id, rect)
-  );
-  splitRect(north, { x: eastX, y: 0, width: eastW, height: usableH }, "y").forEach(([id, rect]) => rects.set(id, rect));
-  splitRect(corridors, { x: corridorX, y: 0, width: corridorW, height: usableH }, "y").forEach(([id, rect]) =>
-    rects.set(id, rect)
-  );
+  splitRect(
+    south.length ? south : north.slice(0, 1),
+    corridorStrategy === "side" ? { x: corridorW, y: 0, width: westW, height: usableH } : { x: 0, y: 0, width: westW, height: usableH },
+    "y"
+  ).forEach(([id, rect]) => rects.set(id, rect));
+  if (corridorStrategy !== "side") {
+    splitRect(north, { x: eastX, y: 0, width: eastW, height: usableH }, "y").forEach(([id, rect]) => rects.set(id, rect));
+  }
+  if (corridorStrategy === "ring") {
+    splitRect(corridors, { x: corridorX, y: 0, width: corridorW, height: usableH }, "y").forEach(([id, rect]) =>
+      rects.set(id, rect)
+    );
+    splitRect(
+      corridors.slice(1),
+      { x: corridorX, y: usableH - corridorH, width: Math.max(4, width - corridorX), height: corridorH },
+      "x"
+    ).forEach(([id, rect]) => rects.set(id, rect));
+  } else if (corridorStrategy !== "open") {
+    splitRect(
+      corridors,
+      corridorStrategy === "side"
+        ? { x: 0, y: 0, width: corridorW, height: usableH }
+        : { x: corridorX, y: 0, width: corridorW, height: usableH },
+      "y"
+    ).forEach(([id, rect]) => rects.set(id, rect));
+  }
   splitRect(service, { x: 0, y: usableH, width, height: serviceH || height * 0.16 }, "x").forEach(([id, rect]) =>
     rects.set(id, rect)
   );
@@ -248,6 +305,10 @@ export interface TopologyLayoutOptions {
   layoutOutline?: Point[];
   siteOutline?: Point[];
   wetRoomTypes?: RoomType[];
+  corridorStrategy?: RemixCorridorStrategy;
+  layoutPriority?: RemixLayoutPriority;
+  lockExteriorWindows?: boolean;
+  sourceWindowsByRoomId?: Record<string, Room["windows"]>;
 }
 
 export function resolveTopologyLayout(outlineOrOptions?: Point[] | TopologyLayoutOptions) {
@@ -291,14 +352,27 @@ export function topologyToPlanVersion(
     !Array.isArray(outlineOrOptions) && outlineOrOptions?.wetRoomTypes?.length
       ? outlineOrOptions.wetRoomTypes
       : DEFAULT_WET_ROOM_TYPES;
-  const rooms = completeTopologyRooms(topology, bounds, wetRoomTypes);
-  const rects = bounds.width >= bounds.height ? layoutHorizontal(rooms, bounds) : layoutVertical(rooms, bounds);
-  optimizeLayoutRects(rects, topology, bounds);
+  const layoutOptions = Array.isArray(outlineOrOptions) ? undefined : outlineOrOptions;
+  const corridorStrategy = layoutOptions?.corridorStrategy ?? "central";
+  const layoutPriority = layoutOptions?.layoutPriority ?? "daylight";
+  const rooms =
+    corridorStrategy === "open"
+      ? completeTopologyRooms(topology, bounds, wetRoomTypes).filter((room) => room.type !== "corridor")
+      : completeTopologyRooms(topology, bounds, wetRoomTypes);
+  const rects =
+    bounds.width >= bounds.height
+      ? layoutHorizontal(rooms, bounds, corridorStrategy)
+      : layoutVertical(rooms, bounds, corridorStrategy);
+  optimizeLayoutRects(rects, topology, bounds, { layoutPriority });
   const corridorIds = rooms.filter((room) => room.type === "corridor").map((room) => room.id);
   const planRooms: Room[] = rooms.map((room) => {
     const rect = rects.get(room.id) ?? { x: 0, y: 0, width: bounds.width, height: bounds.height };
     const door = openingForRoom(room, rect, bounds, "door");
-    const window = openingForRoom(room, rect, bounds, "window");
+    const lockedWindows =
+      layoutOptions?.lockExteriorWindows && layoutOptions.sourceWindowsByRoomId?.[room.id]?.length
+        ? layoutOptions.sourceWindowsByRoomId[room.id]
+        : undefined;
+    const generatedWindow = openingForRoom(room, rect, bounds, "window");
 
     return {
       id: room.id,
@@ -310,7 +384,7 @@ export function topologyToPlanVersion(
       ceilingHeight: room.ceilingHeight ?? (room.type === "lobby" ? 5.2 : room.type === "equipment_room" ? 3.6 : 3.3),
       orientation: room.preferredEdge,
       doors: door ? [door] : [],
-      windows: window ? [window] : [],
+      windows: lockedWindows ?? (generatedWindow ? [generatedWindow] : []),
       needsDaylight: room.needsDaylight,
       needsPlumbing: room.needsPlumbing,
       adjacents: buildAdjacencyIds(room, topology, corridorIds)

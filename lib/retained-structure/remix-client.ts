@@ -1,11 +1,11 @@
 import type { PlanVersion, Point } from "@/lib/project-types";
-import type { RetainedStructureRemixOptions } from "@/lib/retained-structure/remix-plan-version";
+import type { ResolvedRetainedStructureRemixOptions } from "@/lib/retained-structure/remix-plan-version";
 
 export async function remixRetainedStructureViaApi(input: {
   version: PlanVersion;
   outline: Point[];
   layoutOutline?: Point[];
-  options?: Pick<RetainedStructureRemixOptions, "preserveColumns" | "preserveCores">;
+  options?: Partial<ResolvedRetainedStructureRemixOptions>;
 }): Promise<PlanVersion> {
   const response = await fetch("/api/remix-retained-structure", {
     method: "POST",

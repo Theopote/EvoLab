@@ -134,6 +134,7 @@ export interface PlanVersionMetadata {
   retainedStructureRemixAt?: string;
   preservedStructureRoomIds?: string[];
   preservedColumnGrid?: boolean;
+  remixParameters?: Record<string, string | number | boolean>;
   validationWarnings?: string[];
   floorValidationSummary?: FloorValidationSummary[];
   repairs?: string[];

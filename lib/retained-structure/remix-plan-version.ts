@@ -1,17 +1,39 @@
 import { normalizePlanVersion } from "@/lib/architecture-model";
 import { applyLevelRoomsToVersion } from "@/lib/level-rooms";
 import { expandPlanVersionToFloors } from "@/lib/multi-floor";
-import { relayoutPlanVersion, type RelayoutPlanVersionOptions } from "@/lib/relayout-version";
+import { extractTopologyFromVersion, relayoutPlanVersion, type RelayoutPlanVersionOptions } from "@/lib/relayout-version";
 import type { PlanVersion } from "@/lib/project-types";
 import { syncVerticalElements } from "@/lib/vertical-elements";
+import { adaptTopologyForRemix } from "@/lib/retained-structure/adapt-topology-for-remix";
+import {
+  defaultRemixParameters,
+  remixParametersToRecord,
+  type RetainedStructureRemixParameters
+} from "@/lib/retained-structure/remix-parameters";
 import {
   collectPreservedStructureRooms,
   isRetainedStructureRoom
 } from "@/lib/retained-structure/structure-rooms";
 
-export interface RetainedStructureRemixOptions extends RelayoutPlanVersionOptions {
-  preserveColumns?: boolean;
-  preserveCores?: boolean;
+export type ResolvedRetainedStructureRemixOptions = RelayoutPlanVersionOptions & RetainedStructureRemixParameters;
+
+export function resolveRetainedStructureRemixOptions(
+  version: PlanVersion,
+  options: Partial<ResolvedRetainedStructureRemixOptions> = {}
+): ResolvedRetainedStructureRemixOptions {
+  const relayoutableRoomCount = version.rooms.filter((room) => !isRetainedStructureRoom(room)).length;
+  const defaults = defaultRemixParameters({ relayoutableRoomCount });
+
+  return {
+    ...defaults,
+    siteOutline: options.siteOutline ?? options.layoutOutline ?? version.outline,
+    layoutOutline: options.layoutOutline ?? options.siteOutline ?? version.outline,
+    ...options,
+    targetRoomCount:
+      typeof options.targetRoomCount === "number" ? options.targetRoomCount : defaults.targetRoomCount,
+    publicAreaRatio:
+      typeof options.publicAreaRatio === "number" ? options.publicAreaRatio : defaults.publicAreaRatio
+  };
 }
 
 function mergePreservedStructureRooms(
@@ -28,12 +50,25 @@ function mergePreservedStructureRooms(
 
 export function remixPlanWithRetainedStructure(
   version: PlanVersion,
-  options: RetainedStructureRemixOptions = {}
+  options: Partial<ResolvedRetainedStructureRemixOptions> = {}
 ): PlanVersion {
-  const preserveColumns = options.preserveColumns !== false;
-  const preserveCores = options.preserveCores !== false;
+  const resolved = resolveRetainedStructureRemixOptions(version, options);
+  const sourceTopology = extractTopologyFromVersion(version);
+  if (!sourceTopology) {
+    throw new Error("Cannot remix: active version has no stored or reconstructable topology graph.");
+  }
+
+  const adaptedTopology = adaptTopologyForRemix(sourceTopology, version, resolved);
+  const preserveColumns = resolved.preserveColumns !== false;
+  const preserveCores = resolved.preserveCores !== false;
   const preservedRooms = collectPreservedStructureRooms(version, { preserveCores });
-  const relaid = relayoutPlanVersion(version, options);
+  const relaid = relayoutPlanVersion(version, {
+    ...resolved,
+    topologyOverride: adaptedTopology,
+    corridorStrategy: resolved.corridorStrategy,
+    layoutPriority: resolved.layoutPriority,
+    lockExteriorWindows: resolved.lockExteriorWindows
+  });
   const floorCount = version.metadata?.floorCount ?? version.levels.length;
   const mergedRooms = mergePreservedStructureRooms(relaid, preservedRooms);
   const levelId = relaid.levels[0]?.id;
@@ -50,7 +85,8 @@ export function remixPlanWithRetainedStructure(
       ...relaid.metadata,
       retainedStructureRemixAt: new Date().toISOString(),
       preservedStructureRoomIds: preservedRooms.map((room) => room.id),
-      preservedColumnGrid: preserveColumns
+      preservedColumnGrid: preserveColumns,
+      remixParameters: remixParametersToRecord(resolved)
     },
     verticalElements: undefined,
     mep: undefined

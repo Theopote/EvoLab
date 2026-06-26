@@ -87,15 +87,28 @@ export function extractTopologyFromVersion(version: PlanVersion): PlanTopologyVe
 
 export interface RelayoutPlanVersionOptions extends TopologyLayoutOptions {
   preserveVersionMeta?: boolean;
+  topologyOverride?: PlanTopologyVersion;
 }
 
 export function relayoutPlanVersion(version: PlanVersion, options: RelayoutPlanVersionOptions): PlanVersion {
-  const topology = extractTopologyFromVersion(version);
+  const topology = options.topologyOverride ?? extractTopologyFromVersion(version);
   if (!topology) {
     throw new Error("Cannot relayout: active version has no stored or reconstructable topology graph.");
   }
 
-  const relaid = topologyToPlanVersion(topology, options, 0);
+  const layoutOptions: TopologyLayoutOptions = {
+    ...options,
+    sourceWindowsByRoomId:
+      options.lockExteriorWindows && !options.sourceWindowsByRoomId
+        ? Object.fromEntries(
+            version.rooms
+              .filter((room) => room.windows?.length)
+              .map((room) => [room.id, room.windows ?? []])
+          )
+        : options.sourceWindowsByRoomId
+  };
+
+  const relaid = topologyToPlanVersion(topology, layoutOptions, 0);
   const topologyGraph = topologyGraphFromTopology(topology);
   const floorCount = version.metadata?.floorCount ?? version.levels.length;
 

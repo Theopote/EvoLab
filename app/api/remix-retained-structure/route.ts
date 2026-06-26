@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { remixPlanWithRetainedStructure } from "@/lib/retained-structure/remix-plan-version";
+import { remixParametersFromRecord } from "@/lib/retained-structure/remix-parameters";
 import type { PlanVersion, Point } from "@/lib/project-types";
 
 export const runtime = "nodejs";
@@ -8,10 +9,7 @@ interface RemixRetainedStructureRequest {
   version?: PlanVersion;
   outline?: Point[];
   layoutOutline?: Point[];
-  options?: {
-    preserveColumns?: boolean;
-    preserveCores?: boolean;
-  };
+  options?: Record<string, string | number | boolean>;
 }
 
 export async function POST(request: Request) {
@@ -26,12 +24,12 @@ export async function POST(request: Request) {
   }
 
   try {
+    const remixOptions = remixParametersFromRecord(body.options);
     const version = remixPlanWithRetainedStructure(body.version, {
       siteOutline: body.outline,
       layoutOutline:
         body.layoutOutline && body.layoutOutline.length >= 3 ? body.layoutOutline : body.outline,
-      preserveColumns: body.options?.preserveColumns,
-      preserveCores: body.options?.preserveCores
+      ...remixOptions
     });
 
     return NextResponse.json({ version });
