@@ -312,7 +312,8 @@ export type CopilotProposalAuditAction =
   | "skipped_locked"
   | "commented"
   | "applied"
-  | "dismissed";
+  | "dismissed"
+  | "reverted";
 
 export interface CopilotProposalComment {
   id: string;

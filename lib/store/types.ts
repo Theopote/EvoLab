@@ -26,7 +26,7 @@ import type { PlanScopeKind } from "@/lib/plan-scope";
 import type { PresentationSessionMap } from "@/lib/presentation/session-types";
 import type { PresentationDeck, PresentationTemplateId } from "@/lib/presentation/types";
 import type { WorkflowPhase, WorkflowPhaseId } from "@/lib/workflow-phases";
-import type { WorkspaceHistorySnapshot, WorkspacePersistedSnapshot } from "@/lib/store/workspace-history";
+import type { WorkspaceHistorySnapshot, WorkspacePersistedSnapshot, WorkspaceUndoEntry } from "@/lib/store/workspace-history";
 
 export type SelectionType = "none" | "room" | "wall" | "opening";
 
@@ -82,8 +82,8 @@ export interface EvoProjectStore {
   compareLevelId?: string;
   selectedChangeSetId?: string;
   presentationSessions: PresentationSessionMap;
-  undoStack: WorkspaceHistorySnapshot[];
-  redoStack: WorkspaceHistorySnapshot[];
+  undoStack: WorkspaceUndoEntry[];
+  redoStack: WorkspaceUndoEntry[];
   setActiveTab: (tab: WorkspaceTab) => void;
   setOutline: (outline: Point[]) => void;
   setOutlineClosed: (closed: boolean) => void;
@@ -168,7 +168,7 @@ export interface EvoProjectStore {
     proposalId: string,
     version: PlanVersion,
     acceptedOperationIds: string[]
-  ) => { prompt: string; parentVersion: PlanVersion; resultVersion: PlanVersion } | undefined;
+  ) => { prompt: string; parentVersion: PlanVersion; resultVersion: PlanVersion; changeSetId: string } | undefined;
   dismissCopilotProposal: (proposalId: string) => void;
   addCopilotProposalComment: (proposalId: string, text: string) => void;
   refreshCopilotInsights: () => void;

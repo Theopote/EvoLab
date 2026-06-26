@@ -1,19 +1,19 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { useCopilotTimelineStore } from "@/lib/copilot-timeline-store";
+import { fetchProjectSnapshot, saveProjectSnapshot } from "@/lib/project-sync-client";
 import { useEvoProjectStore } from "@/lib/store/store";
 import { buildWorkspacePersistedSnapshot } from "@/lib/store/workspace-history";
-import {
-  readWorkspaceSnapshot,
-  writeWorkspaceSnapshot,
-  WORKSPACE_SNAPSHOT_KEY
-} from "@/lib/store/workspace-persistence";
+import { readWorkspaceSnapshot, writeWorkspaceSnapshot } from "@/lib/store/workspace-persistence";
 
 const SAVE_DEBOUNCE_MS = 400;
+const SERVER_SYNC_DEBOUNCE_MS = 1500;
 
 export function useWorkspacePersistence(options?: { skipRestore?: boolean }) {
   const hydratedRef = useRef(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const serverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hydrateWorkspaceSnapshot = useEvoProjectStore((state) => state.hydrateWorkspaceSnapshot);
 
   useEffect(() => {
@@ -23,11 +23,19 @@ export function useWorkspacePersistence(options?: { skipRestore?: boolean }) {
 
     hydratedRef.current = true;
 
-    void readWorkspaceSnapshot(WORKSPACE_SNAPSHOT_KEY).then((snapshot) => {
+    void (async () => {
+      const projectId = useEvoProjectStore.getState().project.projectId;
+      const remoteSnapshot = await fetchProjectSnapshot(projectId);
+      const localSnapshot = await readWorkspaceSnapshot(projectId);
+      const snapshot = pickNewestSnapshot(remoteSnapshot, localSnapshot);
+
       if (snapshot?.project?.versions?.length) {
         hydrateWorkspaceSnapshot(snapshot);
+        if (snapshot.copilotTimelineEntries?.length) {
+          useCopilotTimelineStore.getState().hydrateEntries(snapshot.copilotTimelineEntries);
+        }
       }
-    });
+    })();
   }, [hydrateWorkspaceSnapshot, options?.skipRestore]);
 
   useEffect(() => {
@@ -39,7 +47,8 @@ export function useWorkspacePersistence(options?: { skipRestore?: boolean }) {
         state.activeTab === previousState.activeTab &&
         state.outline === previousState.outline &&
         state.outlineClosed === previousState.outlineClosed &&
-        state.zoning === previousState.zoning
+        state.zoning === previousState.zoning &&
+        state.undoStack === previousState.undoStack
       ) {
         return;
       }
@@ -48,10 +57,25 @@ export function useWorkspacePersistence(options?: { skipRestore?: boolean }) {
         clearTimeout(saveTimerRef.current);
       }
 
+      if (serverTimerRef.current) {
+        clearTimeout(serverTimerRef.current);
+      }
+
       saveTimerRef.current = setTimeout(() => {
-        const snapshot = buildWorkspacePersistedSnapshot(useEvoProjectStore.getState());
+        const snapshot = buildWorkspacePersistedSnapshot(
+          useEvoProjectStore.getState(),
+          useCopilotTimelineStore.getState().entries
+        );
         void writeWorkspaceSnapshot(snapshot);
       }, SAVE_DEBOUNCE_MS);
+
+      serverTimerRef.current = setTimeout(() => {
+        const snapshot = buildWorkspacePersistedSnapshot(
+          useEvoProjectStore.getState(),
+          useCopilotTimelineStore.getState().entries
+        );
+        void saveProjectSnapshot(snapshot);
+      }, SERVER_SYNC_DEBOUNCE_MS);
     });
 
     return () => {
@@ -59,8 +83,26 @@ export function useWorkspacePersistence(options?: { skipRestore?: boolean }) {
       if (saveTimerRef.current) {
         clearTimeout(saveTimerRef.current);
       }
+      if (serverTimerRef.current) {
+        clearTimeout(serverTimerRef.current);
+      }
     };
   }, []);
+}
+
+function pickNewestSnapshot(
+  remote: Awaited<ReturnType<typeof fetchProjectSnapshot>>,
+  local: Awaited<ReturnType<typeof readWorkspaceSnapshot>>
+) {
+  if (!remote) {
+    return local;
+  }
+
+  if (!local) {
+    return remote;
+  }
+
+  return remote.savedAt >= local.savedAt ? remote : local;
 }
 
 export function useWorkspaceEditHistoryShortcuts() {

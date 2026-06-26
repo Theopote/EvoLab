@@ -178,6 +178,32 @@ export function markCopilotProposalApplied(
   };
 }
 
+export function revertCopilotProposalAfterUndo(domain: ProjectDomain, proposalId: string): ProjectDomain {
+  const now = new Date().toISOString();
+
+  return {
+    ...domain,
+    copilotProposals: domain.copilotProposals.map((item) =>
+      item.id === proposalId
+        ? {
+            ...item,
+            status: "draft" as const,
+            resultVersionId: undefined,
+            changeSetId: undefined,
+            reviewedAt: now,
+            auditLog: [
+              ...item.auditLog,
+              auditEntry("reverted", {
+                actor: "user",
+                detail: "Applied proposal was undone."
+              })
+            ]
+          }
+        : item
+    )
+  };
+}
+
 export function dismissCopilotProposal(domain: ProjectDomain, proposalId: string): ProjectDomain {
   const now = new Date().toISOString();
 

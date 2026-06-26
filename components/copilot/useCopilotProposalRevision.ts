@@ -6,6 +6,8 @@ import { diffRoomIds } from "@/lib/design-decision-log";
 import type { CopilotFinding, PlanVersion } from "@/lib/project-types";
 import type { PlanChangeProposal } from "@/lib/schemas/plan-change-proposal-schema";
 import { useReviewSlice } from "@/lib/project-store";
+import { useEvoProjectStore } from "@/lib/store/store";
+import { attachTimelineEntryToLatestCopilotUndo } from "@/lib/store/history-slice";
 
 export interface PreparedCopilotProposalInput {
   prompt: string;
@@ -22,6 +24,7 @@ interface UseCopilotProposalRevisionOptions {
     prompt: string;
     parentVersion: PlanVersion;
     resultVersion: PlanVersion;
+    changeSetId: string;
   }) => void;
 }
 
@@ -96,13 +99,21 @@ export function useCopilotProposalRevision(options: UseCopilotProposalRevisionOp
       const result = applyCopilotProposal(pendingProposalId, version, acceptedOperationIds);
 
       if (result) {
-        useCopilotTimelineStore.getState().addEntry({
+        const timelineEntry = useCopilotTimelineStore.getState().addEntry({
           prompt: result.prompt,
           parentVersionId: result.parentVersion.id,
           parentVersionLabel: result.parentVersion.label,
           resultVersionId: result.resultVersion.id,
-          resultVersionLabel: result.resultVersion.label
+          resultVersionLabel: result.resultVersion.label,
+          changeSetId: result.changeSetId,
+          proposalId: pendingProposalId
         });
+
+        useEvoProjectStore.setState((state) => {
+          attachTimelineEntryToLatestCopilotUndo(state, timelineEntry.id);
+          return {};
+        });
+
         recordDesignDecision({
           trigger: "ai_suggestion_accepted",
           description: pendingProposal?.proposal.intent ?? result.prompt,

@@ -75,7 +75,7 @@ export function TopNav({ project, workflowPhase, onPhaseChange, onOpenReviews }:
         <span className="rounded border border-line px-2 py-1 text-xs text-muted">AI Credits 1,240</span>
         <span className="flex items-center gap-1 rounded border border-success/30 px-2 py-1 text-xs text-success">
           <Cloud className="h-3.5 w-3.5" />
-          已同步
+          本地 + 服务端
         </span>
         <button
           className="grid h-8 w-8 place-items-center rounded border border-line text-slate-300 hover:border-accent/60 hover:text-accent"

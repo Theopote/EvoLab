@@ -61,7 +61,7 @@ export function CopilotConsole({
   const [pinnedFiles, setPinnedFiles] = useState<CopilotPinnedFile[]>([]);
   const [pendingPlan, setPendingPlan] = useState<CopilotPlan | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { addCopilotProposalComment, refreshCopilotInsights, reviewCopilotInsights } = useReviewActions();
+  const { addCopilotProposalComment, refreshCopilotInsights, reviewCopilotInsights, rejectChangeSet } = useReviewActions();
   const scoringConfig = useReviewState((state) => state.scoringConfig);
   const {
     lockedElementIds,
@@ -383,7 +383,24 @@ export function CopilotConsole({
     dismissRevisionProposal();
   }
 
-  function handleUndo(entryId: string, parentVersionId: string) {
+  function handleUndo(entryId: string, parentVersionId: string, changeSetId?: string) {
+    const entry = entries.find((item) => item.id === entryId);
+
+    if (changeSetId) {
+      rejectChangeSet(changeSetId);
+      markUndone(entryId);
+      const parent = projectVersions.find((version) => version.id === parentVersionId);
+      setMessages((current) => [
+        ...current,
+        {
+          id: `assistant-undo-${Date.now()}`,
+          role: "assistant",
+          content: `Reverted Copilot edit${parent ? ` back to ${parent.label}` : ""}.`
+        }
+      ]);
+      return;
+    }
+
     const parent = projectVersions.find((version) => version.id === parentVersionId);
 
     if (!parent) {

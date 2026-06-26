@@ -7,6 +7,8 @@ export interface CopilotTimelineEntry {
   parentVersionLabel: string;
   resultVersionId: string;
   resultVersionLabel: string;
+  changeSetId?: string;
+  proposalId?: string;
   createdAt: string;
   status: "applied" | "undone";
 }
@@ -16,6 +18,8 @@ interface CopilotTimelineStore {
   addEntry: (entry: Omit<CopilotTimelineEntry, "id" | "createdAt" | "status">) => CopilotTimelineEntry;
   markUndone: (entryId: string) => void;
   markApplied: (entryId: string) => void;
+  hydrateEntries: (entries: CopilotTimelineEntry[]) => void;
+  clearEntries: () => void;
 }
 
 export const useCopilotTimelineStore = create<CopilotTimelineStore>((set) => ({
@@ -45,5 +49,10 @@ export const useCopilotTimelineStore = create<CopilotTimelineStore>((set) => ({
       entries: state.entries.map((entry) =>
         entry.id === entryId ? { ...entry, status: "applied" as const } : entry
       )
-    }))
+    })),
+  hydrateEntries: (entries) =>
+    set({
+      entries: entries.slice(0, 40)
+    }),
+  clearEntries: () => set({ entries: [] })
 }));

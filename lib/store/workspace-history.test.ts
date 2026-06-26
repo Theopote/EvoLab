@@ -9,7 +9,7 @@ describe("workspace edit history", () => {
       ...createInitialState(),
       undoStack: [],
       redoStack: []
-    } as EvoProjectStore;
+    } as unknown as EvoProjectStore;
     const originalName = state.project.projectName;
 
     pushUserEditUndoSnapshot(state);
@@ -19,8 +19,11 @@ describe("workspace edit history", () => {
     };
 
     expect(state.undoStack).toHaveLength(1);
+    expect(state.undoStack[0]?.kind).toBe("snapshot");
     expect(state.project.projectName).toBe("Edited Project");
-    expect(state.undoStack[0]?.project.projectName).toBe(originalName);
+    if (state.undoStack[0]?.kind === "snapshot") {
+      expect(state.undoStack[0].snapshot.project.projectName).toBe(originalName);
+    }
     expect(state.redoStack).toHaveLength(0);
   });
 });

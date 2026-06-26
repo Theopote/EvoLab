@@ -6,7 +6,8 @@ import {
   createStoredCopilotProposal,
   dismissCopilotProposal as dismissCopilotProposalInDomain,
   markCopilotProposalApplied,
-  resolveProposalOperationSets
+  resolveProposalOperationSets,
+  revertCopilotProposalAfterUndo
 } from "@/lib/copilot-proposals";
 import {
   appendChangeSet,
@@ -26,6 +27,7 @@ import {
   getActiveVersion,
   refreshDerivedDraft
 } from "@/lib/store/draft-helpers";
+import { pushCopilotUndoEntry } from "@/lib/store/history-slice";
 import type { EvoProjectStore } from "@/lib/store/types";
 import type { ReviewSliceActions } from "@/lib/store/slice-types";
 import type { StateCreator } from "zustand";
@@ -90,6 +92,10 @@ export const createReviewSlice: StateCreator<EvoProjectStore, [], [], ReviewSlic
           changeSetId: changeSet.id,
           ...operationSets
         });
+        pushCopilotUndoEntry(draft, {
+          changeSetId: changeSet.id,
+          proposalId
+        });
         bumpGeometryRevision(draft);
         refreshDerivedDraft(draft);
       })
@@ -98,7 +104,8 @@ export const createReviewSlice: StateCreator<EvoProjectStore, [], [], ReviewSlic
     return {
       prompt: stored.prompt,
       parentVersion,
-      resultVersion: normalized
+      resultVersion: normalized,
+      changeSetId: changeSet.id
     };
   },
   dismissCopilotProposal: (proposalId) =>
@@ -162,10 +169,20 @@ export const createReviewSlice: StateCreator<EvoProjectStore, [], [], ReviewSlic
   rejectChangeSet: (changeSetId) =>
     set(
       produce<EvoProjectStore>((state) => {
+        const changeSet = state.project.domain.changeSets.find((item) => item.id === changeSetId);
         const result = rejectChangeSetInDomain(state.project.domain, changeSetId, state.project.versions);
         state.project.domain = result.domain;
         state.project.versions = result.versions;
         state.project.activeVersionId = result.activeVersionId;
+
+        if (changeSet?.proposalId) {
+          state.project.domain = revertCopilotProposalAfterUndo(state.project.domain, changeSet.proposalId);
+        }
+
+        state.undoStack = state.undoStack.filter(
+          (entry) => !(entry.kind === "copilot" && entry.changeSetId === changeSetId)
+        );
+
         clearSelectionDraft(state);
         bumpGeometryRevision(state);
         refreshDerivedDraft(state);

@@ -7,7 +7,7 @@ import { useCopilotTimelineStore } from "@/lib/copilot-timeline-store";
 interface AiTimelinePanelProps {
   versions: PlanVersion[];
   activeVersionId: string;
-  onUndo: (entryId: string, parentVersionId: string) => void;
+  onUndo: (entryId: string, parentVersionId: string, changeSetId?: string) => void;
   onRegenerate: (prompt: string, parentVersionId: string) => void;
 }
 
@@ -40,6 +40,7 @@ export function AiTimelinePanel({ versions, activeVersionId, onUndo, onRegenerat
         {entries.map((entry) => {
           const isActive = entry.resultVersionId === activeVersionId;
           const parentExists = versions.some((version) => version.id === entry.parentVersionId);
+          const canUndo = entry.status === "applied" && (Boolean(entry.changeSetId) || parentExists);
 
           return (
             <article
@@ -57,9 +58,9 @@ export function AiTimelinePanel({ versions, activeVersionId, onUndo, onRegenerat
               <div className="mt-2 flex flex-wrap gap-1.5">
                 <button
                   className="flex items-center gap-1 rounded border border-line px-2 py-1 text-[11px] text-muted hover:border-accent/50 hover:text-accent disabled:opacity-40"
-                  disabled={!parentExists}
+                  disabled={!canUndo}
                   type="button"
-                  onClick={() => onUndo(entry.id, entry.parentVersionId)}
+                  onClick={() => onUndo(entry.id, entry.parentVersionId, entry.changeSetId)}
                 >
                   <Undo2 className="h-3 w-3" />
                   Undo

@@ -5,4 +5,4 @@ dist
 *.tsbuildinfo
 .env*.local
 .codex-next-dev.log
-.codex-next-dev.err.log
+.data
