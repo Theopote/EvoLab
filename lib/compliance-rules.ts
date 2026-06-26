@@ -140,6 +140,18 @@ function resultBase(
   };
 }
 
+function enrichResultsWithRulePackCodes(results: ComplianceResult[], rulePack: RulePack): ComplianceResult[] {
+  return results.map((result) => {
+    const packRule = rulePack.rules.find((rule) => rule.id === result.ruleId);
+
+    return {
+      ...result,
+      code: packRule?.code ?? result.code,
+      basis: packRule?.basis ?? result.basis
+    };
+  });
+}
+
 function fixActionForRule(ruleId: string, fixScope?: ComplianceFixScope): CopilotActionId | undefined {
   if (ruleId === "vertical_alignment" && fixScope !== "single_floor") {
     return undefined;
@@ -629,7 +641,7 @@ export function runComplianceCheck(
 
   const buildingWideResults = buildingWideRules.flatMap((rule) => rule.check(ctx));
 
-  return [...perFloorResults, ...buildingWideResults];
+  return enrichResultsWithRulePackCodes([...perFloorResults, ...buildingWideResults], ctx.rulePack);
 }
 
 export function computeRiskCount(results: ComplianceResult[], validationErrors = 0): number {

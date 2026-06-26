@@ -93,9 +93,15 @@ function resolveProjectRates(projectType: string): ProjectCostRates {
 }
 
 function scaleRates(rates: ProjectCostRates, multiplier: number): ProjectCostRates {
-  return Object.fromEntries(
-    Object.entries(rates).map(([key, value]) => [key, value * multiplier])
-  ) as ProjectCostRates;
+  return {
+    shellPerGrossSqm: rates.shellPerGrossSqm * multiplier,
+    mepPerGrossSqm: rates.mepPerGrossSqm * multiplier,
+    fitoutPerNetSqm: rates.fitoutPerNetSqm * multiplier,
+    facadePerSqm: rates.facadePerSqm * multiplier,
+    doorEach: rates.doorEach * multiplier,
+    concretePerM3: rates.concretePerM3 * multiplier,
+    rebarPerKg: rates.rebarPerKg * multiplier
+  };
 }
 
 export const defaultCostDatabase: CostDatabaseProvider = {

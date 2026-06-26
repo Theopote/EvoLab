@@ -2,7 +2,8 @@
 
 import { Download, FileArchive, FileCode2, FileJson, FileSpreadsheet, FileText } from "lucide-react";
 import { useState } from "react";
-import type { ComplianceItem, QuantityResult } from "@/lib/quantity-engine";
+import { buildComplianceReport, type ComplianceItem, type QuantityResult } from "@/lib/quantity-engine";
+import { complianceReportToMarkdown } from "@/lib/compliance/compliance-report";
 import {
   createComplianceCsv,
   createPlanSvg,
@@ -195,6 +196,24 @@ export function ExportPanel({ project, activeVersion, quantities, complianceItem
                   "text/csv"
                 )
               }
+            />
+            <ExportCard
+              disabled={!activeVersion || complianceItems.length === 0}
+              icon={FileText}
+              label="Compliance report"
+              detail="Markdown with clause refs & recommendations"
+              onClick={() => {
+                if (!activeVersion) {
+                  return;
+                }
+
+                const report = buildComplianceReport(activeVersion, { buildingType: project.projectType });
+                downloadTextFile(
+                  `${project.projectId}-compliance-report.md`,
+                  complianceReportToMarkdown(report),
+                  "text/markdown"
+                );
+              }}
             />
             <ExportCard
               disabled={!canExportVersion}

@@ -61,7 +61,7 @@ export function calculateCostEstimate(
     lineItems,
     totalCost,
     costPerSqm: grossArea > 0 ? round(totalCost / grossArea) : 0,
-    summary: `${round(totalCost / 1_000_000)}M ${built.currency} total · ${round(totalCost / grossArea)} ${built.currency}/sqm gross`
+    summary: grossArea > 0 ? `${round(totalCost / 1_000_000)}M ${built.currency} total · ${round(totalCost / grossArea)} ${built.currency}/sqm gross` : `${round(totalCost / 1_000_000)}M ${built.currency} total`
   };
 }
 

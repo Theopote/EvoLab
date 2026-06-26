@@ -32,6 +32,8 @@ export interface CodeRule {
   category: CodeRuleCategory;
   title: string;
   basis: string;
+  /** Formal code clause reference, e.g. GB 50016 §5.5.18 */
+  code?: string;
   threshold?: number;
   unit?: string;
   comparator?: "lte" | "gte" | "eq";

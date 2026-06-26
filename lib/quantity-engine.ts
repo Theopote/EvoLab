@@ -7,6 +7,7 @@ import {
   type ComplianceSeverity,
   type ComplianceScope
 } from "@/lib/compliance-rules";
+import { generateComplianceReport, type ComplianceReport } from "@/lib/compliance/compliance-report";
 import type { FunctionZone, OpeningElement, PlanVersion, Point, Room, RoomType, Wall, CopilotActionId } from "@/lib/project-types";
 import { resolveLevelOutline, resolveLevelRooms } from "@/lib/level-rooms";
 import { resolvePlanScope, type PlanScopeKind } from "@/lib/plan-scope";
@@ -452,4 +453,29 @@ export function checkCompliance(
   });
 
   return runComplianceCheck(ctx).map(toComplianceItem);
+}
+
+export function buildComplianceReport(
+  version: PlanVersion,
+  options: {
+    buildingType?: string;
+    scoringConfig?: ScoringConfig;
+    region?: string;
+    rulePack?: RulePack;
+  } = {}
+): ComplianceReport {
+  const buildingType = options.buildingType ?? "healthcare";
+  const rulePack =
+    options.rulePack ??
+    resolveRulePack({
+      projectType: buildingType,
+      region: options.region
+    });
+  const ctx = buildComplianceContext(version, rulePack, {
+    buildingType,
+    scoringConfig: options.scoringConfig
+  });
+  const results = runComplianceCheck(ctx);
+
+  return generateComplianceReport(results, rulePack);
 }

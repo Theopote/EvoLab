@@ -1,5 +1,6 @@
 import type { CodeContext } from "@/lib/building-domain";
 import { defaultHealthcareCodeContext } from "@/lib/building-domain";
+import { resolveChinaRulePack } from "@/lib/rules/china-code-pack";
 import type { RulePack, ScoringThresholds } from "@/lib/rules/types";
 
 const defaultScoringThresholds: ScoringThresholds = {
@@ -169,8 +170,18 @@ export function ruleBasis(rulePack: RulePack, ruleId: string, fallback: string) 
   return rulePack.rules.find((rule) => rule.id === ruleId)?.basis ?? fallback;
 }
 
-export function resolveRulePack(options?: { codeContext?: CodeContext; projectType?: string }): RulePack {
+export function resolveRulePack(options?: {
+  codeContext?: CodeContext;
+  projectType?: string;
+  region?: string;
+}): RulePack {
   const projectType = options?.projectType?.toLowerCase().trim() ?? "";
+  const region = options?.region?.toUpperCase() ?? options?.codeContext?.region?.toUpperCase() ?? "";
+
+  if (region === "CN" || region.startsWith("CN-")) {
+    return resolveChinaRulePack(projectType || "office");
+  }
+
   const preset = rulePacksByProjectType[projectType];
 
   if (!options?.codeContext) {
