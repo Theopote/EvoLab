@@ -14,6 +14,7 @@ import type { PlanImportSource } from "@/lib/plan-import/types";
 import { saveTraceToCadSession, useToolSessionStore } from "@/lib/tools/tool-session-store";
 import type { ToolSession } from "@/lib/tools/tool-session-types";
 import { useInteractionStore } from "@/lib/interaction-store";
+import { useImportSessionStore } from "@/lib/import-session-store";
 
 interface TraceReviewState {
   draftVersion: PlanVersion;
@@ -142,12 +143,27 @@ export function TraceToCadTool() {
 
       appendGeneratedVersions([enrichedVersion]);
       setActiveVersion(enrichedVersion);
+
+      const previewUrl = reviewState.referencePreviewUrl;
+      if (previewUrl) {
+        useImportSessionStore.getState().setReference({
+          versionId: enrichedVersion.id,
+          fileName: reviewState.fileName,
+          sourceType: reviewState.analysis.sourceType,
+          previewUrl,
+          opacity: reviewState.sourceType === "image" ? 0.45 : 0.35
+        });
+      }
+
+      if (openTrace) {
+        useInteractionStore.getState().setActiveTool("trace");
+      } else {
+        useInteractionStore.getState().setActiveTool("select");
+      }
+
       setWorkflowPhase("scheme");
       setActiveTab("Plan");
       promoteSession(sessionId, projectId);
-      if (openTrace) {
-        useInteractionStore.getState().setActiveTool("trace");
-      }
       router.push("/workspace");
     },
     [
