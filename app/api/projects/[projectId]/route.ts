@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import {
-  deleteProjectSnapshotFromDisk,
-  readProjectSnapshotFromDisk,
-  writeProjectSnapshotToDisk
+  deleteProjectSnapshot,
+  readProjectSnapshot,
+  writeProjectSnapshot
 } from "@/lib/server/project-files";
 import type { WorkspacePersistedSnapshot } from "@/lib/store/workspace-history";
 
@@ -11,7 +11,7 @@ interface RouteContext {
 }
 
 export async function GET(_request: Request, context: RouteContext) {
-  const snapshot = await readProjectSnapshotFromDisk(context.params.projectId);
+  const snapshot = await readProjectSnapshot(context.params.projectId);
 
   if (!snapshot) {
     return NextResponse.json({ error: "Project not found." }, { status: 404 });
@@ -31,7 +31,7 @@ export async function PUT(request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Project id mismatch." }, { status: 400 });
   }
 
-  await writeProjectSnapshotToDisk({
+  await writeProjectSnapshot({
     ...body,
     savedAt: new Date().toISOString()
   });
@@ -40,6 +40,6 @@ export async function PUT(request: Request, context: RouteContext) {
 }
 
 export async function DELETE(_request: Request, context: RouteContext) {
-  await deleteProjectSnapshotFromDisk(context.params.projectId);
+  await deleteProjectSnapshot(context.params.projectId);
   return NextResponse.json({ ok: true });
 }
