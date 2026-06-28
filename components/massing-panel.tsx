@@ -222,12 +222,6 @@ export function MassingPanel({ activeVersion, onOpenModel }: MassingPanelProps) 
                 mode="wind"
               />
             ) : null}
-                  minX={0}
-                  minY={0}
-                  mode="wind"
-                />
-              </>
-            ) : null}
 
             {showSiteContextLayer && siteContext
               ? siteContext.roads.map((road) => (
