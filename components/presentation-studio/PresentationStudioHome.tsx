@@ -68,11 +68,13 @@ export function PresentationStudioHome() {
 
             <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
               {recentDocuments.map((doc) => (
-                <Link
+                <button
                   key={doc.id}
-                  href={`/presentation-studio`}
-                  onClick={() => setActiveDocument(doc.id)}
-                  className="group rounded-lg border border-line bg-panel/50 p-4 hover:border-accent/50 hover:bg-panel"
+                  onClick={() => {
+                    setActiveDocument(doc.id);
+                    window.location.href = "/presentation-studio";
+                  }}
+                  className="group rounded-lg border border-line bg-panel/50 p-4 text-left hover:border-accent/50 hover:bg-panel"
                 >
                   <div className="mb-2 flex items-start justify-between">
                     <h3 className="font-medium text-white group-hover:text-accent">{doc.title}</h3>
@@ -95,7 +97,7 @@ export function PresentationStudioHome() {
                     <span>{doc.outline.totalSlides} 张幻灯片</span>
                     <span>{new Date(doc.updatedAt).toLocaleDateString()}</span>
                   </div>
-                </Link>
+                </button>
               ))}
             </div>
           </div>
