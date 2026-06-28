@@ -22,11 +22,12 @@ export type WorkspaceUndoEntry =
 export const MAX_UNDO_STACK = 64;
 
 export function cloneWorkspaceHistorySnapshot(state: Pick<EvoProjectStore, "project" | "outline" | "outlineClosed">) {
-  return structuredClone({
+  // 使用JSON深拷贝，避免structuredClone对某些对象的限制
+  return JSON.parse(JSON.stringify({
     project: state.project,
     outline: state.outline,
     outlineClosed: state.outlineClosed
-  }) satisfies WorkspaceHistorySnapshot;
+  })) as WorkspaceHistorySnapshot;
 }
 
 export function pushUserEditUndoSnapshot(state: EvoProjectStore) {
@@ -75,8 +76,8 @@ export function restoreWorkspaceHistorySnapshot(
   state: EvoProjectStore,
   snapshot: WorkspaceHistorySnapshot
 ) {
-  state.project = structuredClone(snapshot.project);
-  state.outline = structuredClone(snapshot.outline);
+  state.project = JSON.parse(JSON.stringify(snapshot.project));
+  state.outline = JSON.parse(JSON.stringify(snapshot.outline));
   state.outlineClosed = snapshot.outlineClosed;
 }
 
@@ -104,14 +105,14 @@ export function buildWorkspacePersistedSnapshot(
   return {
     projectId: state.project.projectId,
     savedAt: new Date().toISOString(),
-    project: structuredClone(state.project),
-    brief: structuredClone(state.brief),
+    project: JSON.parse(JSON.stringify(state.project)),
+    brief: JSON.parse(JSON.stringify(state.brief)),
     workflowPhase: state.workflowPhase,
     activeTab: state.activeTab,
-    outline: structuredClone(state.outline),
+    outline: JSON.parse(JSON.stringify(state.outline)),
     outlineClosed: state.outlineClosed,
-    zoning: structuredClone(state.zoning),
-    undoStack: structuredClone(state.undoStack),
-    copilotTimelineEntries: structuredClone(copilotTimelineEntries)
+    zoning: JSON.parse(JSON.stringify(state.zoning)),
+    undoStack: JSON.parse(JSON.stringify(state.undoStack)),
+    copilotTimelineEntries: JSON.parse(JSON.stringify(copilotTimelineEntries))
   };
 }
