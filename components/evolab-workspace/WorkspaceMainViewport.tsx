@@ -19,6 +19,7 @@ import { StructureWorkspace } from "@/components/workflow/StructureWorkspace";
 import { FacadeWorkspace } from "@/components/workflow/FacadeWorkspace";
 import { FurnitureWorkspace } from "@/components/workflow/FurnitureWorkspace";
 import { CompareWorkspace } from "@/components/workflow/CompareWorkspace";
+import { BubbleDiagramCanvas } from "@/components/workflow/BubbleDiagramCanvas";
 import { PlanResultGrid } from "@/components/plan-editor/PlanResultGrid";
 import { Scene } from "@/components/viewer-3d/Scene";
 import type { ImportWizardResult } from "@/components/workflow/import/ImportWizard";
@@ -120,7 +121,8 @@ export const WorkspaceMainViewport = memo(function WorkspaceMainViewport() {
     updateStructuralSystem,
     updateFacadeEnvelope,
     updateFacadeZone,
-    relayoutActiveVersion
+    relayoutActiveVersion,
+    updateTopologyGraph
   } = useProjectActions();
 
   const { setOutline, setOutlineClosed } = useSiteActions();
@@ -182,6 +184,37 @@ export const WorkspaceMainViewport = memo(function WorkspaceMainViewport() {
     },
     [activeVersion, appendGeneratedVersions, setActiveTab, setWorkflowPhase]
   );
+
+  if (activeTab === "Bubble") {
+    return (
+      <section className="grid min-h-full grid-cols-[minmax(320px,0.85fr)_minmax(0,1.15fr)] gap-4">
+        <aside className="rounded border border-line bg-panel/90 p-4">
+          <div className="mb-4">
+            <h1 className="text-base font-semibold text-white">气泡图编辑器</h1>
+            <p className="mt-1 text-xs text-muted">
+              拖拽房间节点建立空间关系，定义直接相邻、邻近或分离的约束
+            </p>
+          </div>
+          <div className="rounded border border-blue-500/30 bg-blue-500/5 p-3 text-xs">
+            <p className="font-medium text-blue-200">功能说明</p>
+            <ul className="mt-2 space-y-1 text-blue-300/80">
+              <li>• 拖拽节点调整位置</li>
+              <li>• 点击节点查看房间信息</li>
+              <li>• 点击连线切换关系类型</li>
+              <li>• 基于任务书自动生成拓扑</li>
+            </ul>
+          </div>
+        </aside>
+        <div className="rounded border border-line bg-panel/90 p-4">
+          <BubbleDiagramCanvas
+            topology={project.domain.program.topology}
+            programLabel={project.domain.program.label}
+            onTopologyChange={updateTopologyGraph}
+          />
+        </div>
+      </section>
+    );
+  }
 
   if (activeTab === "Compare" || compareModeOpen) {
     return (
