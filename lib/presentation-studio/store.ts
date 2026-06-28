@@ -312,7 +312,9 @@ export const usePresentationStudio = create<PresentationStudioState>()(
       partialize: (state) => ({
         documents: state.documents,
         activeDocumentId: state.activeDocumentId
-      })
+      }),
+      // 跳过SSR hydration，只在客户端使用localStorage
+      skipHydration: true
     }
   )
 );

@@ -1,6 +1,7 @@
 "use client";
 
 import { Camera, Download, FileText, Layers, Loader2, Presentation, Sparkles } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { PresentationCaptureCanvas } from "@/components/presentation/PresentationCaptureCanvas";
 import { PresentationSlideEditor } from "@/components/presentation/PresentationSlideEditor";
@@ -417,9 +418,9 @@ export function PresentationWorkspace() {
               生成故事线后可在右侧编辑每页文案，再导出 PPTX 在 PowerPoint 中继续润色。
               {hasPersistedDeck ? " 已保存本机编辑会话。" : " 点击「开始编辑」或生成故事线以保存可编辑副本。"}
               {" "}或使用{" "}
-              <a href="/presentation-studio" className="text-accent hover:underline">
+              <Link href="/presentation-studio" className="text-accent hover:underline">
                 Presentation Studio
-              </a>
+              </Link>
               {" "}独立编辑器实现完全自定义。
             </p>
           </div>
