@@ -369,6 +369,34 @@ export function PresentationWorkspace() {
     requestCapture();
   }
 
+  async function exportToStudio() {
+    if (!currentDeck || !versionId) {
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/studio/import-from-project", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId: project?.id,
+          versionId: versionId,
+          mode: "create"
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        window.location.href = `/presentation-studio?doc=${data.presentationId}`;
+      } else {
+        const error = await response.json();
+        setNotice(`导入失败: ${error.error || "未知错误"}`);
+      }
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "导入到Studio失败");
+    }
+  }
+
   if (!activeVersion) {
     return (
       <div className="grid min-h-[280px] place-items-center rounded border border-dashed border-line bg-panel/60 text-sm text-muted">
@@ -388,6 +416,11 @@ export function PresentationWorkspace() {
             <p className="mt-1 text-xs text-muted">
               生成故事线后可在右侧编辑每页文案，再导出 PPTX 在 PowerPoint 中继续润色。
               {hasPersistedDeck ? " 已保存本机编辑会话。" : " 点击「开始编辑」或生成故事线以保存可编辑副本。"}
+              {" "}或使用{" "}
+              <a href="/presentation-studio" className="text-accent hover:underline">
+                Presentation Studio
+              </a>
+              {" "}独立编辑器实现完全自定义。
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -487,6 +520,16 @@ export function PresentationWorkspace() {
             >
               {isExportingPptx ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
               导出 PPTX
+            </button>
+            <button
+              className="flex h-9 items-center gap-2 rounded border border-purple-500/40 bg-purple-500/10 px-3 text-xs text-purple-400 hover:border-purple-500/60"
+              type="button"
+              onClick={exportToStudio}
+              disabled={!currentDeck}
+              title="在Presentation Studio中继续编辑"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              在Studio中编辑
             </button>
             <button
               className="flex h-9 items-center gap-2 rounded border border-line px-3 text-xs text-slate-100 hover:border-accent/50"
