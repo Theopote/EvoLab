@@ -130,7 +130,14 @@ function streamModifyPlan(body: ModifyPlanRequest) {
 }
 
 export async function POST(request: Request) {
-  const body = (await request.json().catch(() => ({}))) as ModifyPlanRequest;
+  const rawBody = await request.json().catch(() => ({}));
+  const parsed = ModifyPlanRequestSchema.safeParse(rawBody);
+
+  if (!parsed.success) {
+    return apiError("Invalid modify-plan request.", 400, "INVALID_PAYLOAD", parsed.error.message);
+  }
+
+  const body = parsed.data as ModifyPlanRequest;
 
   if (!body.currentVersion) {
     return apiError("currentVersion is required for modify-plan.", 400, "INVALID_PAYLOAD");

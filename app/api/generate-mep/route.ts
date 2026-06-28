@@ -5,13 +5,25 @@ import { mepPrompt } from "@/lib/prompts/mepPrompt";
 import { apiError, apiOk } from "@/lib/server/api-response";
 import { GenerateMepToolInputSchema } from "@/lib/schemas/mep-schema";
 import type { CopilotFinding, MepLayout, PlanVersion } from "@/lib/project-types";
+import { z } from "zod";
+
+const GenerateMepRequestSchema = z.object({
+  version: z.object({}).passthrough() // PlanVersion schema
+});
 
 interface GenerateMepRequest {
   version?: PlanVersion;
 }
 
 export async function POST(request: Request) {
-  const body = (await request.json().catch(() => ({}))) as GenerateMepRequest;
+  const rawBody = await request.json().catch(() => ({}));
+  const parsed = GenerateMepRequestSchema.safeParse(rawBody);
+
+  if (!parsed.success) {
+    return apiError("Invalid generate-mep request.", 400, "INVALID_PAYLOAD", parsed.error.message);
+  }
+
+  const body = parsed.data as GenerateMepRequest;
 
   if (!body.version) {
     return apiError("version is required for generate-mep.", 400, "INVALID_PAYLOAD");
