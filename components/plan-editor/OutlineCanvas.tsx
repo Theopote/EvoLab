@@ -64,6 +64,7 @@ export function OutlineCanvas({ points, closed, onChange, onClosedChange }: Outl
         onClick={handleCanvasClick}
         onDoubleClick={closeOutline}
         role="img"
+        aria-label={`建筑轮廓绘制画布，当前有${points.length}个点${closed ? '，轮廓已闭合' : ''}`}
       >
         <defs>
           <pattern id="outline-grid" width="24" height="24" patternUnits="userSpaceOnUse">

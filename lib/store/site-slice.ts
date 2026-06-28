@@ -9,6 +9,9 @@ import type { EvoProjectStore } from "@/lib/store/types";
 import type { SiteSliceActions } from "@/lib/store/slice-types";
 import type { StateCreator } from "zustand";
 
+// AbortController to prevent race conditions in fetchSiteContext
+let fetchSiteAbortController: AbortController | null = null;
+
 export const createSiteSlice: StateCreator<EvoProjectStore, [], [], SiteSliceActions> = (set, get) => ({
   setOutline: (outline) =>
     set(
@@ -51,6 +54,13 @@ export const createSiteSlice: StateCreator<EvoProjectStore, [], [], SiteSliceAct
       return;
     }
 
+    // Cancel any in-flight request to prevent race conditions
+    if (fetchSiteAbortController) {
+      fetchSiteAbortController.abort();
+    }
+    fetchSiteAbortController = new AbortController();
+    const currentController = fetchSiteAbortController;
+
     set(
       produce<EvoProjectStore>((state) => {
         state.isFetchingSite = true;
@@ -62,26 +72,39 @@ export const createSiteSlice: StateCreator<EvoProjectStore, [], [], SiteSliceAct
     try {
       const data = await fetchSiteContextCommand(query);
 
-      set(
-        produce<EvoProjectStore>((state) => {
-          state.siteContext = data.context;
-          refreshDomainDraft(state);
-          state.siteError = data.warning ?? null;
-          refreshSiteDerivedDraft(state);
-        })
-      );
+      // Only update state if this request wasn't aborted
+      if (!currentController.signal.aborted) {
+        set(
+          produce<EvoProjectStore>((state) => {
+            state.siteContext = data.context;
+            refreshDomainDraft(state);
+            state.siteError = data.warning ?? null;
+            refreshSiteDerivedDraft(state);
+          })
+        );
+      }
     } catch (error) {
-      set(
-        produce<EvoProjectStore>((state) => {
-          state.siteError = error instanceof Error ? error.message : "Failed to fetch site context.";
-        })
-      );
+      // Only update state if this request wasn't aborted
+      if (!currentController.signal.aborted) {
+        set(
+          produce<EvoProjectStore>((state) => {
+            state.siteError = error instanceof Error ? error.message : "Failed to fetch site context.";
+          })
+        );
+      }
     } finally {
-      set(
-        produce<EvoProjectStore>((state) => {
-          state.isFetchingSite = false;
-        })
-      );
+      // Only clear loading state if this request wasn't aborted
+      if (!currentController.signal.aborted) {
+        set(
+          produce<EvoProjectStore>((state) => {
+            state.isFetchingSite = false;
+          })
+        );
+        // Clear the controller reference if this was the last active one
+        if (fetchSiteAbortController === currentController) {
+          fetchSiteAbortController = null;
+        }
+      }
     }
   },
   applySuggestedSiteOutline: () =>

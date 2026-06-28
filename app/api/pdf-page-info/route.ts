@@ -6,6 +6,19 @@ interface PdfPageInfoRequest {
   fileBase64?: string;
 }
 
+// PDF magic bytes: %PDF (0x25 0x50 0x44 0x46)
+function validatePdfMagicBytes(buffer: Buffer): boolean {
+  if (buffer.length < 4) {
+    return false;
+  }
+  return (
+    buffer[0] === 0x25 && // %
+    buffer[1] === 0x50 && // P
+    buffer[2] === 0x44 && // D
+    buffer[3] === 0x46    // F
+  );
+}
+
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as PdfPageInfoRequest;
 
@@ -18,6 +31,11 @@ export async function POST(request: Request) {
 
     if (!buffer) {
       return apiError("fileBase64 must be valid base64.", 400, "INVALID_PAYLOAD");
+    }
+
+    // Validate PDF magic bytes to ensure it's actually a PDF file
+    if (!validatePdfMagicBytes(buffer)) {
+      return apiError("File is not a valid PDF (missing PDF magic bytes).", 400, "INVALID_FILE_TYPE");
     }
 
     const numPages = await getPdfPageCount(buffer);

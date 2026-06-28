@@ -183,7 +183,12 @@ export function DiagramCanvas({ activeLayers, version, levelId, projectType, com
 
       <div className="relative overflow-hidden rounded border border-line bg-[#081018] shadow-insetGrid">
         <div className="pointer-events-none absolute inset-0 cad-grid opacity-70" />
-        <svg className={`relative w-full ${compact ? "min-h-[220px] h-full" : "h-full min-h-[560px]"}`} viewBox={viewBox} role="img">
+        <svg
+          className={`relative w-full ${compact ? "min-h-[220px] h-full" : "h-full min-h-[560px]"}`}
+          viewBox={viewBox}
+          role="img"
+          aria-label={`建筑分析图，显示${activeLayers.length}个图层：${activeLayers.map(id => analysisLayers.find(l => l.id === id)?.label).filter(Boolean).join('、')}`}
+        >
           <defs>
             <marker id="arrow-patient" markerHeight="5" markerWidth="5" orient="auto" refX="4" refY="2.5">
               <path d="M0,0 L5,2.5 L0,5 Z" fill="#38bdf8" />

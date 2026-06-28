@@ -74,9 +74,10 @@ export function BriefForm({ value, onChange, onTypologyChange }: BriefFormProps)
       </div>
 
       <div className="grid gap-3">
-        <label className="grid gap-1 text-xs text-muted">
+        <label htmlFor="building-type" className="grid gap-1 text-xs text-muted">
           Building type
           <select
+            id="building-type"
             className="h-9 rounded border border-line bg-[#0b1118] px-2 text-sm text-slate-100 outline-none focus:border-accent/70"
             value={buildingTypeValue}
             onChange={(event) => handleBuildingTypeChange(event.target.value)}
@@ -92,9 +93,10 @@ export function BriefForm({ value, onChange, onTypologyChange }: BriefFormProps)
         </label>
 
         <div className="grid grid-cols-2 gap-2">
-          <label className="grid gap-1 text-xs text-muted">
+          <label htmlFor="floors" className="grid gap-1 text-xs text-muted">
             Floors
             <input
+              id="floors"
               className="h-9 rounded border border-line bg-[#0b1118] px-2 text-sm text-slate-100 outline-none focus:border-accent/70"
               min={1}
               type="number"
@@ -102,9 +104,10 @@ export function BriefForm({ value, onChange, onTypologyChange }: BriefFormProps)
               onChange={(event) => update("floors", Number(event.target.value))}
             />
           </label>
-          <label className="grid gap-1 text-xs text-muted">
+          <label htmlFor="target-area" className="grid gap-1 text-xs text-muted">
             Target area
             <input
+              id="target-area"
               className="h-9 rounded border border-line bg-[#0b1118] px-2 text-sm text-slate-100 outline-none focus:border-accent/70"
               min={100}
               step={50}
@@ -116,17 +119,19 @@ export function BriefForm({ value, onChange, onTypologyChange }: BriefFormProps)
         </div>
 
         <div className="grid grid-cols-2 gap-2">
-          <label className="grid gap-1 text-xs text-muted">
+          <label htmlFor="core-preference" className="grid gap-1 text-xs text-muted">
             Core
             <input
+              id="core-preference"
               className="h-9 rounded border border-line bg-[#0b1118] px-2 text-sm text-slate-100 outline-none focus:border-accent/70"
               value={value.corePreference}
               onChange={(event) => update("corePreference", event.target.value)}
             />
           </label>
-          <label className="grid gap-1 text-xs text-muted">
+          <label htmlFor="orientation-preference" className="grid gap-1 text-xs text-muted">
             Orientation
             <input
+              id="orientation-preference"
               className="h-9 rounded border border-line bg-[#0b1118] px-2 text-sm text-slate-100 outline-none focus:border-accent/70"
               value={value.orientationPreference}
               onChange={(event) => update("orientationPreference", event.target.value)}
@@ -134,9 +139,10 @@ export function BriefForm({ value, onChange, onTypologyChange }: BriefFormProps)
           </label>
         </div>
 
-        <label className="grid gap-1 text-xs text-muted">
+        <label htmlFor="requirements" className="grid gap-1 text-xs text-muted">
           Requirements
           <textarea
+            id="requirements"
             className="min-h-24 resize-none rounded border border-line bg-[#0b1118] p-2 text-sm leading-5 text-slate-100 outline-none focus:border-accent/70"
             value={value.description}
             onChange={(event) => update("description", event.target.value)}

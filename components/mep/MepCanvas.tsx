@@ -72,7 +72,12 @@ export function MepCanvas({ activeLayers, version, activeLevelId, compact = fals
 
       <div className="relative overflow-hidden rounded border border-line bg-[#081018] shadow-insetGrid">
         <div className="pointer-events-none absolute inset-0 cad-grid opacity-70" />
-        <svg className={`relative w-full ${compact ? "min-h-[220px] h-full" : "h-full min-h-[560px]"}`} viewBox={viewBox} role="img">
+        <svg
+          className={`relative w-full ${compact ? "min-h-[220px] h-full" : "h-full min-h-[560px]"}`}
+          viewBox={viewBox}
+          role="img"
+          aria-label={`MEP系统图，显示${activeLayers.length}个图层：${activeLayers.map(id => MEP_LAYERS.find(l => l.id === id)?.label).filter(Boolean).join('、')}`}
+        >
           <defs>
             {Object.entries(systemColors).map(([system, color]) => (
               <marker id={`mep-arrow-${system}`} key={system} markerHeight="5" markerWidth="5" orient="auto" refX="4" refY="2.5">

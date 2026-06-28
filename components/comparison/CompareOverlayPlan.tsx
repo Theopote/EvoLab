@@ -30,7 +30,12 @@ export function CompareOverlayPlan({
 
   return (
     <div className={`overflow-hidden rounded border border-line bg-[#081018] ${className ?? ""}`}>
-      <svg className="h-full min-h-[220px] w-full" viewBox={getViewBox(version, 4)} role="img">
+      <svg
+        className="h-full min-h-[220px] w-full"
+        viewBox={getViewBox(version, 4)}
+        role="img"
+        aria-label={`方案对比平面图，显示${lens === 'structure' ? '结构系统' : '家具布局'}图层`}
+      >
         <polygon
           fill="rgba(255,255,255,0.02)"
           points={polygonPoints(version.outline)}

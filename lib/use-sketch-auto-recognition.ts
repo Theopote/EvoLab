@@ -84,7 +84,10 @@ export function useSketchAutoRecognition({
         return;
       }
 
-      abortRef.current?.abort();
+      // Cancel any in-flight recognition request to prevent race conditions
+      if (abortRef.current) {
+        abortRef.current.abort();
+      }
       const controller = new AbortController();
       abortRef.current = controller;
 
