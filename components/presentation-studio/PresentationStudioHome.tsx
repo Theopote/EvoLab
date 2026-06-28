@@ -2,10 +2,17 @@
 
 import { Plus, FileText, Clock, Sparkles } from "lucide-react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { usePresentationStudio } from "@/lib/presentation-studio/store";
 
 export function PresentationStudioHome() {
   const { documents, createDocument, setActiveDocument } = usePresentationStudio();
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  useEffect(() => {
+    usePresentationStudio.persist.rehydrate();
+    setIsHydrated(true);
+  }, []);
 
   const handleCreateNew = () => {
     const newDoc = createDocument("新演示文稿");
@@ -13,9 +20,27 @@ export function PresentationStudioHome() {
     window.location.href = "/presentation-studio";
   };
 
-  const recentDocuments = documents
-    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-    .slice(0, 6);
+  const recentDocuments = isHydrated
+    ? documents
+        .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+        .slice(0, 6)
+    : [];
+
+  if (!isHydrated) {
+    return (
+      <div className="min-h-screen bg-canvas p-8">
+        <div className="mx-auto max-w-6xl">
+          <div className="mb-8">
+            <div className="flex items-center gap-3 mb-2">
+              <Sparkles className="h-8 w-8 text-accent" />
+              <h1 className="text-3xl font-bold text-white">Presentation Studio</h1>
+            </div>
+            <p className="text-muted">加载中...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-canvas p-8">
