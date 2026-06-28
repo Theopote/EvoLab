@@ -31,6 +31,11 @@ export function PresentationStudioWorkspace() {
 
   const [showOutlineGenerator, setShowOutlineGenerator] = useState(false);
   const [outlineTopic, setOutlineTopic] = useState("");
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
 
   const activeDocument = getActiveDocument();
   const activeSlide = getActiveSlide();
@@ -182,6 +187,10 @@ export function PresentationStudioWorkspace() {
       setGenerating(false);
     }
   };
+
+  if (!isHydrated) {
+    return null;
+  }
 
   if (!activeDocument) {
     return (
