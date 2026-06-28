@@ -69,32 +69,105 @@
 
 ---
 
+### 6. SVG可访问性修复 ✅
+**文件**: 
+- `components/plan-editor/OutlineCanvas.tsx`
+- `components/mep/MepCanvas.tsx`
+- `components/diagrams/DiagramCanvas.tsx`
+- `components/comparison/CompareOverlayPlan.tsx`
+
+**问题**: SVG图表缺少aria-label和role属性，屏幕阅读器无法访问
+**解决方案**:
+- 为所有关键SVG组件添加role="img"
+- 添加动态aria-label描述图表内容
+- 标签包含图层数量和类型信息
+- 中文标签提升本地化体验
+
+**影响**: 提升WCAG 2.1合规性，改善视障用户体验
+
+---
+
+### 7. 表单输入关联修复 ✅
+**文件**: `components/plan-editor/BriefForm.tsx`
+**问题**: 表单输入未与label关联，屏幕阅读器无法识别
+**解决方案**:
+- 为所有input和textarea添加唯一id
+- 在label上添加对应的htmlFor属性
+- 涵盖6个表单字段：建筑类型、楼层数、目标面积、核心位置、朝向、需求描述
+
+**影响**: 符合WCAG 2.1标准，改善表单可访问性
+
+---
+
+### 8. 性能优化 - O(n²)采光查找 ✅
+**文件**: `lib/rules/metrics/daylight.ts`
+**问题**: forEach循环内使用find()导致O(n²)复杂度，大型项目性能差
+**解决方案**:
+- 将samples数组转换为Map结构
+- 使用Map.get()实现O(1)查找
+- 添加性能优化注释
+
+**影响**: 大型项目（100+房间）性能提升显著，评分计算速度提高
+
+---
+
+### 9. 性能优化 - 数组重建开销 ✅
+**文件**: `lib/geometry/topology/wall-graph.ts`
+**问题**: 每次添加房间ID都重建整个数组，造成GC压力
+**解决方案**:
+- 使用includes()检查避免重复
+- 直接push到现有数组而不是重建
+- 减少Set和Array.from的开销
+
+**影响**: 减少内存分配和垃圾回收压力，大型平面图性能改善
+
+---
+
+### 10. API验证增强 ✅
+**文件**: `app/api/fetch-site-context/route.ts`
+**问题**: 地址字符串无长度限制，可能导致DoS
+**解决方案**:
+- 添加地址字符串最大长度限制（200字符）
+- 保持现有的Zod验证架构
+- 防止超长查询字符串攻击
+
+**影响**: 增强API安全性，防止资源滥用
+
+---
+
 ## 优化成果统计
 
 | 优化类型 | 数量 | 严重级别 |
 |---------|------|---------|
 | 错误处理改进 | 1 | 高 |
 | 竞态条件修复 | 2 | 高 |
-| 输入验证增强 | 2 | 高 |
-| **总计** | **5** | **全部高危** |
+| 输入验证增强 | 3 | 高 |
+| 可访问性修复 | 2 | 高 |
+| 性能优化 | 2 | 中 |
+| **总计** | **10** | **8高危+2中危** |
 
 ---
 
 ## 下一步建议
 
 ### 阶段1剩余项 (1周内完成)
-1. **SVG可访问性修复**
-   - 为所有SVG图表添加aria-label
-   - 添加role="img"属性
-   - 受影响文件: 12+个组件
+1. ~~**SVG可访问性修复**~~ ✅ 已完成
+   - ~~为所有SVG图表添加aria-label~~
+   - ~~添加role="img"属性~~
+   - 剩余: 8+个其他SVG组件
 
-2. **表单输入关联修复**
-   - 为所有表单输入添加htmlFor和id链接
-   - 受影响文件: `components/plan-editor/BriefForm.tsx`等
+2. ~~**表单输入关联修复**~~ ✅ 已完成
+   - ~~为所有表单输入添加htmlFor和id链接~~
+   - 剩余: `components/site/SiteContextPanel.tsx`等其他表单
+
+3. **范围滑块ARIA属性**
+   - 为`components/viewer-3d/ExplodeSlider.tsx`添加aria-label
+   - 添加aria-valuenow、aria-valuemin、aria-valuemax
 
 ### 阶段2 (2-4周)
-1. **API路由Zod验证**
-   - 为所有28个API端点添加Zod schema验证
+1. **API路由Zod验证** (部分完成)
+   - ✅ `generate-plan`、`fetch-site-context`已有验证
+   - 待完成: 其他26个端点
    - 设置请求参数边界
    - 添加请求认证
 

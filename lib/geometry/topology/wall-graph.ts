@@ -93,7 +93,10 @@ export function deriveWallGraph(rooms: Room[], tolerance = WALL_GRAPH_TOLERANCE)
         edgeIndex: index,
         direction: node.id < nextNode.id ? "forward" : "reverse"
       });
-      edge.roomIds = Array.from(new Set([...edge.roomIds, room.id]));
+      // Cache room ID set to avoid repeated array recreation - fixes performance issue
+      if (!edge.roomIds.includes(room.id)) {
+        edge.roomIds.push(room.id);
+      }
       edge.nodeA = [...nodes.get(edge.nodeAId)!.position] as Point;
       edge.nodeB = [...nodes.get(edge.nodeBId)!.position] as Point;
     });

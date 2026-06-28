@@ -10,7 +10,7 @@ import type { SiteAddress, SiteBuildingFootprint, SiteContext, SiteRoadSegment, 
 import type { Point } from "@/lib/project-types";
 
 const FetchSiteRequestSchema = z.object({
-  address: z.string().min(3),
+  address: z.string().min(3).max(200), // Add max length to prevent DoS
   radiusMeters: z.number().min(50).max(500).default(180)
 });
 

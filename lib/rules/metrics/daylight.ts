@@ -31,6 +31,10 @@ export const scoreDaylight = (context: ScoringContext): MetricResult => {
   }
 
   const samples = computeDaylightSamples(context.version, daylightRooms);
+
+  // Create a Map for O(1) lookup instead of O(n) find() - fixes performance issue
+  const samplesByRoomId = new Map(samples.map((sample) => [sample.roomId, sample]));
+
   const evidence: MetricEvidence[] = [];
   let totalScore = 0;
   let depthFailures = 0;
@@ -39,7 +43,7 @@ export const scoreDaylight = (context: ScoringContext): MetricResult => {
   let orientationMatches = 0;
 
   daylightRooms.forEach((room) => {
-    const sample = samples.find((item) => item.roomId === room.id);
+    const sample = samplesByRoomId.get(room.id);
     const touchesExterior = hasExternalWall(context.version, room);
     const hasOpening = hasWindow(context.version, room);
     const depth = sample?.penetration ?? 0;
