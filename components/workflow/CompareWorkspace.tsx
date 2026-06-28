@@ -1,9 +1,10 @@
 "use client";
 
-import { GitCompareArrows, Pin } from "lucide-react";
+import { GitCompareArrows, Pin, Info } from "lucide-react";
 import { CompareLensPanel } from "@/components/comparison/CompareLensPanel";
 import { VersionCompareGrid } from "@/components/version-compare/VersionCompareGrid";
 import { ProposalReviewPanel } from "@/components/workflow/ProposalReviewPanel";
+import { SimpleTooltip } from "@/components/ui/Tooltip";
 import type { ProjectDomain, ProgramModel, StoredCopilotProposal } from "@/lib/building-domain";
 import type { PlanVersion } from "@/lib/project-types";
 
@@ -56,20 +57,24 @@ export function CompareWorkspace({
         <div>
           <h1 className="flex items-center gap-2 text-base font-semibold text-white">
             <GitCompareArrows className="h-4 w-4 text-accent" />
-            Compare workspace
+            方案对比工作区
+            <SimpleTooltip title="对比多个方案的平面、指标和混合选项，最多可同时对比3个版本">
+              <Info className="h-3.5 w-3.5 text-muted" />
+            </SimpleTooltip>
           </h1>
           <p className="mt-1 text-xs text-muted">
-            Pin up to three versions from the tree or cards below. Review metrics, side-by-side plans, hybrid options,
-            and recommendations.
+            从版本树或下方卡片中固定最多3个版本，对比指标、平面布局、混合选项和优化建议
           </p>
         </div>
-        <button
-          className="h-8 rounded border border-line px-3 text-xs text-slate-200 hover:border-accent/50"
-          type="button"
-          onClick={onClose}
-        >
-          Exit compare
-        </button>
+        <SimpleTooltip title="退出对比模式，返回正常编辑视图">
+          <button
+            className="h-8 rounded border border-line px-3 text-xs text-slate-200 hover:border-accent/50 hover:bg-panel/30"
+            type="button"
+            onClick={onClose}
+          >
+            退出对比
+          </button>
+        </SimpleTooltip>
       </header>
 
       {selectedProposal && proposalBaseVersion ? (
@@ -77,12 +82,14 @@ export function CompareWorkspace({
       ) : null}
 
       {compareVersionIds.length < 2 ? (
-        <div className="flex items-start gap-3 rounded border border-warning/30 bg-warning/5 p-3 text-xs text-warning">
-          <Pin className="mt-0.5 h-4 w-4 shrink-0" />
-          <p>
-            Pin at least two versions to enable lens comparison, geometry diff, recommendations, and report export. You can still use
-            the grid below to compare all generated schemes.
-          </p>
+        <div className="flex items-start gap-3 rounded border border-blue-500/30 bg-blue-500/5 p-4 text-sm">
+          <Pin className="mt-0.5 h-5 w-5 shrink-0 text-blue-400" />
+          <div>
+            <p className="font-medium text-blue-200">需要固定至少2个版本</p>
+            <p className="mt-1 text-xs text-blue-300/80">
+              在版本树中点击图钉图标或在下方卡片中选择版本进行对比。固定2-3个版本后，您可以使用镜头对比、几何差异分析、优化建议和导出报告等功能。
+            </p>
+          </div>
         </div>
       ) : (
         <CompareLensPanel

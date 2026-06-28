@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, FileText, Loader2 } from "lucide-react";
+import { Download, FileText, Loader2, Info } from "lucide-react";
 import { useMemo, useState } from "react";
 import { DiagramCanvas } from "@/components/diagrams/DiagramCanvas";
 import { CompareOverlayPlan } from "@/components/comparison/CompareOverlayPlan";
@@ -8,6 +8,7 @@ import { CompareRecommendationBar } from "@/components/comparison/CompareRecomme
 import { SchemeGeometryDiff } from "@/components/comparison/SchemeGeometryDiff";
 import { FloorPlan } from "@/components/floor-plan";
 import { MepCanvas } from "@/components/mep/MepCanvas";
+import { SimpleTooltip } from "@/components/ui/Tooltip";
 import { buildCompareReport } from "@/lib/compare/build-compare-report";
 import { compareLensDefinitions, analysisLayersForCompareLens, mepLayersForCompareLens, usesAnalysisEngine } from "@/lib/compare/lens-config";
 import { downloadCompareReportPdfViaApi } from "@/lib/compare/export-compare-client";
@@ -153,62 +154,78 @@ export function CompareLensPanel({
     <section className="space-y-3 rounded border border-line bg-panel/90 p-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold text-white">Pinned comparison</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-white">固定版本对比</h2>
+            <SimpleTooltip title="使用不同镜头对比已固定的方案版本">
+              <Info className="h-3.5 w-3.5 text-muted" />
+            </SimpleTooltip>
+          </div>
           <p className="mt-1 text-xs text-muted">
-            {lensDefinition?.description ?? "Switch lenses to review plans, metrics, overlays, and geometry diff."}
+            {lensDefinition?.description ?? "切换镜头以查看平面、指标、叠加图和几何差异"}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {levelOptions.length > 1 ? (
-            <select
-              className="h-8 rounded border border-line bg-[#0b1118] px-2 text-xs text-slate-100"
-              value={resolvedLevelId}
-              onChange={(event) => onCompareLevelChange?.(event.target.value)}
-            >
-              {levelOptions.map((level) => (
-                <option key={level.id} value={level.id}>
-                  {level.name}
-                </option>
-              ))}
-            </select>
+            <SimpleTooltip title="选择要对比的楼层">
+              <select
+                className="h-8 rounded border border-line bg-[#0b1118] px-2 text-xs text-slate-100 hover:border-accent/50"
+                value={resolvedLevelId}
+                onChange={(event) => onCompareLevelChange?.(event.target.value)}
+              >
+                {levelOptions.map((level) => (
+                  <option key={level.id} value={level.id}>
+                    {level.name}
+                  </option>
+                ))}
+              </select>
+            </SimpleTooltip>
           ) : null}
-          <button
-            className="flex h-8 items-center gap-2 rounded border border-line px-3 text-xs text-slate-100 hover:border-accent/50"
-            type="button"
-            onClick={exportHtmlReport}
-          >
-            <Download className="h-3.5 w-3.5" />
-            Export HTML
-          </button>
-          <button
-            className="flex h-8 items-center gap-2 rounded border border-line px-3 text-xs text-slate-100 hover:border-accent/50"
-            type="button"
-            disabled={isExportingPdf}
-            onClick={() => void exportPdfReport()}
-          >
-            {isExportingPdf ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
-            Export PDF
-          </button>
+          <SimpleTooltip title="导出HTML格式的对比报告（可在浏览器中打开）">
+            <button
+              className="flex h-8 items-center gap-2 rounded border border-line px-3 text-xs text-slate-100 hover:border-accent/50 hover:bg-panel/30 transition-colors"
+              type="button"
+              onClick={exportHtmlReport}
+            >
+              <Download className="h-3.5 w-3.5" />
+              导出HTML
+            </button>
+          </SimpleTooltip>
+          <SimpleTooltip title="导出PDF格式的对比报告（通过服务器处理，适合打印和分享）">
+            <button
+              className="flex h-8 items-center gap-2 rounded border border-line px-3 text-xs text-slate-100 hover:border-accent/50 hover:bg-panel/30 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+              type="button"
+              disabled={isExportingPdf}
+              onClick={() => void exportPdfReport()}
+            >
+              {isExportingPdf ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
+              导出PDF
+            </button>
+          </SimpleTooltip>
           <div className="flex flex-wrap gap-1 rounded border border-line p-0.5">
             {compareLensDefinitions.map((item) => {
               const disabled = item.requiresPair && compared.length < 2;
 
               return (
-                <button
-                  className={`rounded px-2 py-1 text-[11px] ${
-                    activeLens === item.id
+                <SimpleTooltip
+                  key={item.id}
+                  title={item.description}
+                  disabled={disabled}
+                >
+                  <button
+                    className={`rounded px-2 py-1 text-[11px] transition-colors ${
+                      activeLens === item.id
                       ? "bg-accent/15 text-accent"
                       : disabled
                         ? "cursor-not-allowed text-muted/40"
                         : "text-muted hover:bg-white/[0.04] hover:text-slate-100"
                   }`}
-                  disabled={disabled}
-                  key={item.id}
-                  type="button"
-                  onClick={() => setLens(item.id)}
-                >
-                  {item.label}
-                </button>
+                    disabled={disabled}
+                    type="button"
+                    onClick={() => setLens(item.id)}
+                  >
+                    {item.label}
+                  </button>
+                </SimpleTooltip>
               );
             })}
           </div>
