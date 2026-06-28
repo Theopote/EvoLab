@@ -18,7 +18,9 @@ export function RecentToolSessionsList({
 }: RecentToolSessionsListProps) {
   if (sessions.length === 0) {
     return (
-      <p className="rounded border border-dashed border-line px-4 py-6 text-sm text-muted">{emptyMessage}</p>
+      <div className="space-y-2">
+        <p className="rounded border border-dashed border-line px-4 py-6 text-sm text-muted">{emptyMessage}</p>
+      </div>
     );
   }
 
