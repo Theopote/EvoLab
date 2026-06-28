@@ -128,7 +128,12 @@ export function MassingPanel({ activeVersion, onOpenModel }: MassingPanelProps) 
 
         <div className="relative overflow-hidden rounded border border-line bg-[#081018] shadow-insetGrid">
           <div className="pointer-events-none absolute inset-0 cad-grid opacity-70" />
-          <svg className="relative h-full min-h-[560px] w-full" viewBox={viewBox} role="img">
+          <svg
+            className="relative h-full min-h-[560px] w-full"
+            viewBox={viewBox}
+            role="img"
+            aria-label={`建筑体量图，包含${activeVersion.rooms.length}个空间，总面积${quantities.summary.grossArea}平方米`}
+          >
             {showEnvironmentOverlay ? (
               <>
                 <EnvironmentOverlay

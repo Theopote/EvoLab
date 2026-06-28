@@ -8,8 +8,23 @@ import { DEFAULT_PROMPT_REFS, resolvePrompt } from "@/lib/prompts/registry";
 import { ProposePlanChangesToolInputSchema } from "@/lib/schemas/plan-change-proposal-schema";
 import type { PlanVersion } from "@/lib/project-types";
 import type { ModifyPlanResponse } from "@/lib/copilot-modify-types";
+import { z } from "zod";
 
 export type { ModifyPlanResponse } from "@/lib/copilot-modify-types";
+
+const ModifyPlanRequestSchema = z.object({
+  currentVersion: z.object({}).passthrough(), // PlanVersion schema
+  userRequest: z.string().min(1).max(2000),
+  lockedElementIds: z.array(z.string()).optional(),
+  referenceImages: z.array(
+    z.object({
+      base64: z.string(),
+      mediaType: z.string().optional(),
+      fileName: z.string().optional()
+    })
+  ).max(5).optional(), // Limit to 5 images
+  stream: z.boolean().optional()
+});
 
 interface ModifyPlanRequest {
   currentVersion?: PlanVersion;

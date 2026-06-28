@@ -43,9 +43,10 @@ export function SiteContextPanel() {
       </div>
 
       <div className="space-y-3">
-        <label className="block text-xs text-muted">
+        <label htmlFor="site-address" className="block text-xs text-muted">
           Project address
           <input
+            id="site-address"
             className="mt-1 h-9 w-full rounded border border-line bg-[#0b1118] px-2 text-sm text-slate-100"
             placeholder="e.g. 200 Renmin Avenue, Changchun"
             value={siteAddressQuery}
@@ -119,16 +120,18 @@ export function SiteContextPanel() {
           </div>
         ) : null}
 
-        <label className="flex items-center gap-2 text-xs text-muted">
+        <label htmlFor="show-site-context" className="flex items-center gap-2 text-xs text-muted">
           <input
+            id="show-site-context"
             checked={showSiteContextLayer}
             type="checkbox"
             onChange={(event) => setShowSiteContextLayer(event.target.checked)}
           />
           Show surrounding buildings & roads
         </label>
-        <label className="flex items-center gap-2 text-xs text-muted">
+        <label htmlFor="show-environment-overlay" className="flex items-center gap-2 text-xs text-muted">
           <input
+            id="show-environment-overlay"
             checked={showEnvironmentOverlay}
             type="checkbox"
             onChange={(event) => setShowEnvironmentOverlay(event.target.checked)}
@@ -151,10 +154,14 @@ function NumberField({
   step?: number;
   onChange: (value: number) => void;
 }) {
+  // Generate stable ID from label
+  const id = `number-field-${label.toLowerCase().replace(/\s+/g, '-')}`;
+
   return (
-    <label className="block text-xs text-muted">
+    <label htmlFor={id} className="block text-xs text-muted">
       {label}
       <input
+        id={id}
         className="mt-1 h-8 w-full rounded border border-line bg-[#0b1118] px-2 text-sm text-slate-100"
         step={step}
         type="number"
