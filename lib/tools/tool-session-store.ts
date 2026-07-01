@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { create } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import type { PresentationDeck } from "@/lib/presentation/types";
@@ -82,24 +82,59 @@ function recentToolSessionSummaries(sessions: ToolSessionMap, limit: number): To
     .map(toSummary);
 }
 
+let hydrationStarted = false;
+
+export function hydrateToolSessionStore() {
+  if (hydrationStarted || typeof window === "undefined") {
+    return;
+  }
+
+  hydrationStarted = true;
+
+  const sessions = readToolSessions();
+  if (Object.keys(sessions).length > 0) {
+    useToolSessionStore.setState({ sessions });
+  }
+
+  void hydrateSessionsFromDetailCache(useToolSessionStore.getState().sessions).then((cachedSessions) => {
+    if (Object.keys(cachedSessions).length === 0) {
+      return;
+    }
+
+    useToolSessionStore.setState((state) => ({
+      sessions: {
+        ...state.sessions,
+        ...cachedSessions
+      }
+    }));
+  });
+}
+
+function ensureToolSessionsHydrated() {
+  hydrateToolSessionStore();
+}
+
 export function selectRecentToolSessions(limit = 6) {
   return (state: ToolSessionState): ToolSessionSummary[] =>
     recentToolSessionSummaries(state.sessions, limit);
 }
 
 export const useToolSessionStore = create<ToolSessionState>((set, get) => ({
-  sessions: readToolSessions(),
+  sessions: {},
   activeSessionId: undefined,
 
-  upsertSession: (session) =>
-    set((state) => {
+  upsertSession: (session) => {
+    ensureToolSessionsHydrated();
+    return set((state) => {
       const normalized = normalizeToolSession(session);
       const sessions = { ...state.sessions, [normalized.id]: normalized };
       persistSessions(sessions);
       return { sessions, activeSessionId: normalized.id };
-    }),
+    });
+  },
 
   createSession: (toolId, title) => {
+    ensureToolSessionsHydrated();
     const tool = getToolDefinition(toolId);
     const now = new Date().toISOString();
     const session: ToolSessionDetail = {
@@ -118,6 +153,7 @@ export const useToolSessionStore = create<ToolSessionState>((set, get) => ({
   },
 
   updateSession: (sessionId, patch) => {
+    ensureToolSessionsHydrated();
     const current = get().sessions[sessionId];
     if (!current) {
       return undefined;
@@ -142,11 +178,18 @@ export const useToolSessionStore = create<ToolSessionState>((set, get) => ({
 
   setActiveSessionId: (sessionId) => set({ activeSessionId: sessionId }),
 
-  getSession: (sessionId) => get().sessions[sessionId],
+  getSession: (sessionId) => {
+    ensureToolSessionsHydrated();
+    return get().sessions[sessionId];
+  },
 
-  listRecentSessions: (limit = 6) => selectRecentToolSessions(limit)(get()),
+  listRecentSessions: (limit = 6) => {
+    ensureToolSessionsHydrated();
+    return selectRecentToolSessions(limit)(get());
+  },
 
   appendOutput: (sessionId, output) => {
+    ensureToolSessionsHydrated();
     const current = get().sessions[sessionId];
     if (!current) {
       return undefined;
@@ -175,23 +218,12 @@ export function useToolSessionActions() {
 }
 
 export function useRecentToolSessions(limit = 6) {
+  useEffect(() => {
+    hydrateToolSessionStore();
+  }, []);
+
   const sessions = useToolSessionStore((state) => state.sessions);
   return useMemo(() => recentToolSessionSummaries(sessions, limit), [limit, sessions]);
-}
-
-if (typeof window !== "undefined") {
-  void hydrateSessionsFromDetailCache(useToolSessionStore.getState().sessions).then((sessions) => {
-    if (Object.keys(sessions).length === 0) {
-      return;
-    }
-
-    useToolSessionStore.setState((state) => ({
-      sessions: {
-        ...state.sessions,
-        ...sessions
-      }
-    }));
-  });
 }
 
 export function saveTraceToCadSession(input: {

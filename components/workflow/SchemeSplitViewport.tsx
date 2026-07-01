@@ -2,8 +2,8 @@
 
 import { memo, useState } from "react";
 import { FloorPlan } from "@/components/floor-plan";
+import { LazyScene } from "@/components/viewer-3d/lazy-scene";
 import { ExplodeSlider } from "@/components/viewer-3d/ExplodeSlider";
-import { Scene } from "@/components/viewer-3d/Scene";
 import { VerticalAlignmentPanel } from "@/components/workflow/VerticalAlignmentPanel";
 import { useProjectActions } from "@/lib/project-store";
 import { isLevelLinkedToStandardGroup, standardFloorGroupLabel } from "@/lib/standard-floor-group";
@@ -123,7 +123,7 @@ export const SchemeSplitViewport = memo(function SchemeSplitViewport({
               <ExplodeSlider className="max-w-xs flex-1" />
             </div>
             <div className="h-[calc(100%-2.75rem)] min-h-[380px]">
-              <Scene />
+              <LazyScene />
             </div>
           </article>
         </div>

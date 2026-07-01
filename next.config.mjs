@@ -5,7 +5,10 @@ const nextConfig = {
     serverComponentsExternalPackages: ["pdf-parse", "pdfjs-dist"],
   },
   webpack: (config) => {
-    config.cache = false; // disable disk cache to prevent stale chunk errors on Windows
+    // Re-enable disk cache for faster dev navigation; set DISABLE_WEBPACK_CACHE=1 to opt out
+    if (process.env.DISABLE_WEBPACK_CACHE === "1") {
+      config.cache = false;
+    }
     return config;
   },
 };

@@ -1,27 +1,29 @@
 "use client";
 
 import { memo, useCallback } from "react";
-import { DiagramCanvas } from "@/components/diagrams/DiagramCanvas";
-import { DiagramLayerList } from "@/components/diagrams/DiagramLayerList";
-import { ExportPanel } from "@/components/export-panel";
-import { MassingPanel } from "@/components/massing-panel";
-import { MepCanvas } from "@/components/mep/MepCanvas";
-import { MepLayerList } from "@/components/mep/MepLayerList";
-import { QuantityTable } from "@/components/quantity/QuantityTable";
-import { DeliverPresentationView } from "@/components/presentation/DeliverPresentationView";
-import { SchemeSplitViewport } from "@/components/workflow/SchemeSplitViewport";
-import { ExplodeSlider } from "@/components/viewer-3d/ExplodeSlider";
-import { IntakeWorkspace } from "@/components/workflow/IntakeWorkspace";
-import { ProgramWorkspace } from "@/components/workflow/ProgramWorkspace";
-import { ReviewWorkspace } from "@/components/workflow/ReviewWorkspace";
-import { SiteWorkspace } from "@/components/workflow/SiteWorkspace";
-import { StructureWorkspace } from "@/components/workflow/StructureWorkspace";
-import { FacadeWorkspace } from "@/components/workflow/FacadeWorkspace";
-import { FurnitureWorkspace } from "@/components/workflow/FurnitureWorkspace";
-import { CompareWorkspace } from "@/components/workflow/CompareWorkspace";
-import { BubbleDiagramCanvas } from "@/components/workflow/BubbleDiagramCanvas";
-import { PlanResultGrid } from "@/components/plan-editor/PlanResultGrid";
-import { Scene } from "@/components/viewer-3d/Scene";
+import {
+  LazyBubbleDiagramCanvas,
+  LazyCompareWorkspace,
+  LazyDeliverPresentationView,
+  LazyDiagramCanvas,
+  LazyDiagramLayerList,
+  LazyExportPanel,
+  LazyExplodeSlider,
+  LazyFacadeWorkspace,
+  LazyFurnitureWorkspace,
+  LazyIntakeWorkspace,
+  LazyMassingPanel,
+  LazyMepCanvas,
+  LazyMepLayerList,
+  LazyPlanResultGrid,
+  LazyProgramWorkspace,
+  LazyQuantityTable,
+  LazyReviewWorkspace,
+  LazySchemeSplitViewport,
+  LazySiteWorkspace,
+  LazyStructureWorkspace
+} from "@/components/evolab-workspace/workspace-lazy-panels";
+import { LazyScene } from "@/components/viewer-3d/lazy-scene";
 import type { ImportWizardResult } from "@/components/workflow/import/ImportWizard";
 import { useCopilotTimelineStore } from "@/lib/copilot-timeline-store";
 import { useInteractionStore } from "@/lib/interaction-store";
@@ -206,7 +208,7 @@ export const WorkspaceMainViewport = memo(function WorkspaceMainViewport() {
           </div>
         </aside>
         <div className="rounded border border-line bg-panel/90 p-4">
-          <BubbleDiagramCanvas
+          <LazyBubbleDiagramCanvas
             topology={project.domain.program.topology}
             programLabel={project.domain.program.label}
             onTopologyChange={updateTopologyGraph}
@@ -218,7 +220,7 @@ export const WorkspaceMainViewport = memo(function WorkspaceMainViewport() {
 
   if (activeTab === "Compare" || compareModeOpen) {
     return (
-      <CompareWorkspace
+      <LazyCompareWorkspace
         projectName={project.projectName}
         versions={project.versions}
         activeVersionId={project.activeVersionId}
@@ -247,7 +249,7 @@ export const WorkspaceMainViewport = memo(function WorkspaceMainViewport() {
 
   if (activeTab === "Review") {
     return (
-      <ReviewWorkspace
+      <LazyReviewWorkspace
         changeSets={changeSets}
         copilotProposals={copilotProposals}
         versions={project.versions}
@@ -270,7 +272,7 @@ export const WorkspaceMainViewport = memo(function WorkspaceMainViewport() {
 
   if (workflowPhase === "import" || activeTab === "Import") {
     return (
-      <IntakeWorkspace
+      <LazyIntakeWorkspace
         onImportComplete={handleImportComplete}
         onContinueToScheme={() => {
           setWorkflowPhase("scheme");
@@ -283,7 +285,7 @@ export const WorkspaceMainViewport = memo(function WorkspaceMainViewport() {
 
   if (workflowPhase === "program" || activeTab === "Program") {
     return (
-      <ProgramWorkspace
+      <LazyProgramWorkspace
         brief={brief}
         program={project.domain.program}
         outline={outline}
@@ -301,7 +303,7 @@ export const WorkspaceMainViewport = memo(function WorkspaceMainViewport() {
 
   if (workflowPhase === "site" || activeTab === "Site") {
     return (
-      <SiteWorkspace
+      <LazySiteWorkspace
         outline={outline}
         outlineClosed={outlineClosed}
         outlineStale={outlineStale}
@@ -330,19 +332,19 @@ export const WorkspaceMainViewport = memo(function WorkspaceMainViewport() {
             </span>
           </div>
         </div>
-        <ExplodeSlider className="rounded border border-line bg-panel/90 px-3 py-2" />
-        <Scene />
+        <LazyExplodeSlider className="rounded border border-line bg-panel/90 px-3 py-2" />
+        <LazyScene />
       </section>
     );
   }
 
   if (activeTab === "Massing") {
-    return <MassingPanel activeVersion={activeVersion} onOpenModel={() => setActiveTab("Model")} />;
+    return <LazyMassingPanel activeVersion={activeVersion} onOpenModel={() => setActiveTab("Model")} />;
   }
 
   if (activeTab === "Structure") {
     return (
-      <StructureWorkspace
+      <LazyStructureWorkspace
         version={activeVersion}
         activeLevelId={activeLevelId}
         structuralSystem={project.domain.structuralSystem}
@@ -356,7 +358,7 @@ export const WorkspaceMainViewport = memo(function WorkspaceMainViewport() {
 
   if (activeTab === "Facade") {
     return (
-      <FacadeWorkspace
+      <LazyFacadeWorkspace
         version={activeVersion}
         activeLevelId={activeLevelId}
         facadeEnvelope={project.domain.facadeEnvelope}
@@ -369,18 +371,18 @@ export const WorkspaceMainViewport = memo(function WorkspaceMainViewport() {
   }
 
   if (activeTab === "Furniture") {
-    return <FurnitureWorkspace layout={project.domain.furnitureLayout} activeVersion={activeVersion} />;
+    return <LazyFurnitureWorkspace layout={project.domain.furnitureLayout} activeVersion={activeVersion} />;
   }
 
   if (activeTab === "Analysis") {
     return (
       <section className="grid min-h-full grid-cols-[320px_minmax(0,1fr)] gap-4">
-        <DiagramLayerList
+        <LazyDiagramLayerList
           activeLayers={activeAnalysisLayers}
           onChange={setActiveAnalysisLayers}
           projectType={project.projectType}
         />
-        <DiagramCanvas
+        <LazyDiagramCanvas
           activeLayers={activeAnalysisLayers}
           levelId={activeLevelId}
           projectType={project.projectType}
@@ -394,7 +396,7 @@ export const WorkspaceMainViewport = memo(function WorkspaceMainViewport() {
     return (
       <section className="grid min-h-full grid-cols-[320px_minmax(0,1fr)] gap-4">
         <div>
-          <MepLayerList
+          <LazyMepLayerList
             activeLayers={activeMepLayers}
             canGenerate={Boolean(activeVersion)}
             isGenerating={isGeneratingMep}
@@ -407,7 +409,7 @@ export const WorkspaceMainViewport = memo(function WorkspaceMainViewport() {
             </div>
           ) : null}
         </div>
-        <MepCanvas activeLayers={activeMepLayers} version={activeVersion} activeLevelId={activeLevelId} />
+        <LazyMepCanvas activeLayers={activeMepLayers} version={activeVersion} activeLevelId={activeLevelId} />
       </section>
     );
   }
@@ -416,7 +418,7 @@ export const WorkspaceMainViewport = memo(function WorkspaceMainViewport() {
     const displayQuantities = scopedQuantities ?? quantities;
 
     return displayQuantities ? (
-      <QuantityTable
+      <LazyQuantityTable
         activeLevelId={activeLevelId}
         activeSchedule={activeSchedule}
         includeSchedules={false}
@@ -434,7 +436,7 @@ export const WorkspaceMainViewport = memo(function WorkspaceMainViewport() {
 
   if (activeTab === "Presentation" || activeTab === "Sheets" || activeTab === "Render") {
     return (
-      <DeliverPresentationView
+      <LazyDeliverPresentationView
         activeTab={activeTab}
         activeVersion={activeVersion}
         versions={project.versions}
@@ -454,7 +456,7 @@ export const WorkspaceMainViewport = memo(function WorkspaceMainViewport() {
 
   if (activeTab === "Export") {
     return (
-      <ExportPanel
+      <LazyExportPanel
         project={project}
         activeVersion={activeVersion}
         quantities={quantities}
@@ -465,13 +467,13 @@ export const WorkspaceMainViewport = memo(function WorkspaceMainViewport() {
 
   return (
     <section className="grid min-h-full grid-rows-[minmax(560px,1fr)_minmax(280px,0.8fr)] gap-4">
-      <SchemeSplitViewport
+      <LazySchemeSplitViewport
         activeVersion={activeVersion}
         activeLevelId={activeLevelId}
         geometryRevision={geometryRevision}
         onLevelChange={setActiveLevel}
       />
-      <PlanResultGrid
+      <LazyPlanResultGrid
         outline={outline}
         closed={outlineClosed}
         brief={brief}

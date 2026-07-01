@@ -1,9 +1,14 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { Suspense } from "react";
-import { EvoLabWorkspace } from "@/components/evolab-workspace";
 import { WorkspaceBootstrap } from "@/components/workspace/WorkspaceBootstrap";
 import { EvoProjectProvider } from "@/lib/project-store";
+
+const EvoLabWorkspace = dynamic(
+  () => import("@/components/evolab-workspace").then((module) => ({ default: module.EvoLabWorkspace })),
+  { loading: () => <div className="grid min-h-screen place-items-center bg-canvas text-sm text-muted">加载工作台界面…</div> }
+);
 
 function WorkspacePageContent() {
   return (
