@@ -1,4 +1,3 @@
-import { PDFParse } from "pdf-parse";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import type { PDFPageProxy, TextItem } from "pdfjs-dist/types/src/display/api";
 import type { RecognizedLevelGraph, RecognizedPlanGraph } from "@/lib/schemas/recognized-plan-graph-schema";
@@ -442,6 +441,7 @@ export async function renderPdfPageToImage(
   buffer: Buffer,
   pageNumber = 1
 ): Promise<{ base64: string; mediaType: "image/png"; byteLength: number; fileName: string }> {
+  const { PDFParse } = await import("pdf-parse");
   const parser = new PDFParse({ data: buffer });
 
   try {
