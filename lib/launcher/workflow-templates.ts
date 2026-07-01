@@ -13,8 +13,8 @@ export const workflowTemplates: WorkflowTemplate[] = [
   {
     id: "blank",
     title: "空白项目",
-    description: "从资料导入开始，逐步建立场地、任务书与方案。",
-    href: "/workspace?phase=import"
+    description: "从项目选择页新建空白项目，从资料导入开始。",
+    href: "/workspace"
   },
   {
     id: "office",

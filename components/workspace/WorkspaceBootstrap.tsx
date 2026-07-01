@@ -17,10 +17,8 @@ export function WorkspaceBootstrap() {
   const project = useProjectState((state) => state.project);
   const { loadDemoProject, setWorkflowPhase, setActiveTab } = useProjectActions();
   const template = searchParams.get("template");
-  const projectId = searchParams.get("projectId");
-  const skipRestore = Boolean(template && templateIds.has(template as TypologyPackId));
 
-  useWorkspacePersistence({ skipRestore, preferredProjectId: projectId });
+  useWorkspacePersistence();
   useWorkspaceEditHistoryShortcuts();
 
   useEffect(() => {

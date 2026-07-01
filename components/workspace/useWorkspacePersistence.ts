@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useCopilotTimelineStore } from "@/lib/copilot-timeline-store";
 import { fetchProjectSnapshot, saveProjectSnapshot } from "@/lib/project-sync-client";
 import { useEvoProjectStore } from "@/lib/store/store";
@@ -10,33 +10,54 @@ import { readWorkspaceSnapshot, writeWorkspaceSnapshot } from "@/lib/store/works
 const SAVE_DEBOUNCE_MS = 400;
 const SERVER_SYNC_DEBOUNCE_MS = 1500;
 
-export function useWorkspacePersistence(options?: { skipRestore?: boolean; preferredProjectId?: string | null }) {
-  const hydratedRef = useRef(false);
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const serverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+export function useWorkspaceHydration(options?: { skipRestore?: boolean; preferredProjectId?: string | null }) {
+  const [isReady, setIsReady] = useState(() => Boolean(options?.skipRestore || !options?.preferredProjectId?.trim()));
+  const hydratedProjectIdRef = useRef<string | null>(null);
   const hydrateWorkspaceSnapshot = useEvoProjectStore((state) => state.hydrateWorkspaceSnapshot);
 
   useEffect(() => {
-    if (options?.skipRestore || hydratedRef.current) {
+    if (options?.skipRestore) {
+      setIsReady(true);
       return;
     }
 
-    hydratedRef.current = true;
+    const projectId = options?.preferredProjectId?.trim() || useEvoProjectStore.getState().project.projectId;
+
+    if (!projectId) {
+      setIsReady(true);
+      return;
+    }
+
+    if (hydratedProjectIdRef.current === projectId) {
+      setIsReady(true);
+      return;
+    }
+
+    hydratedProjectIdRef.current = projectId;
+    setIsReady(false);
 
     void (async () => {
-      const projectId = options?.preferredProjectId?.trim() || useEvoProjectStore.getState().project.projectId;
       const remoteSnapshot = await fetchProjectSnapshot(projectId);
       const localSnapshot = await readWorkspaceSnapshot(projectId);
       const snapshot = pickNewestSnapshot(remoteSnapshot, localSnapshot);
 
-      if (snapshot?.project?.versions?.length) {
+      if (snapshot) {
         hydrateWorkspaceSnapshot(snapshot);
         if (snapshot.copilotTimelineEntries?.length) {
           useCopilotTimelineStore.getState().hydrateEntries(snapshot.copilotTimelineEntries);
         }
       }
+
+      setIsReady(true);
     })();
   }, [hydrateWorkspaceSnapshot, options?.preferredProjectId, options?.skipRestore]);
+
+  return isReady;
+}
+
+export function useWorkspacePersistence() {
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const serverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const unsubscribe = useEvoProjectStore.subscribe((state, previousState) => {

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowRight, Boxes, Clock3, Sparkles, Wrench } from "lucide-react";
 import { RecentToolSessionsList } from "@/components/tools/RecentToolSessionsList";
 import { workflowTemplates } from "@/lib/launcher/workflow-templates";
+import { getBuildingTypeLabel } from "@/lib/building-types/catalog";
 import type { ProjectRegistryEntry } from "@/lib/project-registry";
 import { listLauncherProjects } from "@/lib/project-sync-client";
 import { useRecentToolSessions } from "@/lib/tools/tool-session-store";
@@ -13,7 +14,7 @@ const entryCards = [
   {
     href: "/workspace",
     title: "项目工作台",
-    description: "场地、任务书、方案、分析、交付 — 完整设计流程与版本管理。",
+    description: "按项目管理完整设计流程，支持多种建筑类型与方案版本。",
     icon: Boxes,
     accent: "border-accent/40 bg-accent/10 text-accent"
   },
@@ -53,7 +54,7 @@ export function LauncherHome() {
           <p className="text-sm uppercase tracking-[0.2em] text-muted">Welcome</p>
           <h2 className="mt-2 text-3xl font-semibold text-white">从哪里开始？</h2>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-muted">
-            进入项目工作台继续完整流程，或打开 AI 工具箱完成扫描转 CAD 等单项任务。
+            进入项目工作台：选择已有项目或新建项目，支持办公、住宅、医疗、学校、商业、工业等多种建筑类型。
           </p>
         </div>
 
@@ -98,7 +99,7 @@ export function LauncherHome() {
                     <div>
                       <div className="text-sm text-slate-100">{project.projectName}</div>
                       <div className="mt-1 text-xs text-muted">
-                        {project.versionCount} 版本 · {project.projectType}
+                        {project.versionCount} 版本 · {getBuildingTypeLabel(project.projectType)}
                       </div>
                     </div>
                     <span className="text-[11px] text-muted">
