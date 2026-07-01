@@ -23,7 +23,7 @@ export async function GET(_request: Request, context: RouteContext) {
 export async function PUT(request: Request, context: RouteContext) {
   const body = (await request.json().catch(() => null)) as WorkspacePersistedSnapshot | null;
 
-  if (!body?.project?.versions?.length) {
+  if (!body?.projectId || !body.project) {
     return apiError("Invalid project snapshot payload.", 400, "INVALID_PAYLOAD");
   }
 

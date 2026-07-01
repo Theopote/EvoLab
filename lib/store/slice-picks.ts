@@ -49,6 +49,7 @@ export function pickProjectActions(state: EvoProjectStore): ProjectSliceActions 
     setProjectTypology: state.setProjectTypology,
     updateProjectIntake: state.updateProjectIntake,
     loadDemoProject: state.loadDemoProject,
+    createNewProject: state.createNewProject,
     updateScoringConfig: state.updateScoringConfig,
     resetScoringConfig: state.resetScoringConfig,
     updateFacadeEnvelope: state.updateFacadeEnvelope,

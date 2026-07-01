@@ -11,7 +11,7 @@ export async function GET() {
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as WorkspacePersistedSnapshot | null;
 
-  if (!body?.projectId || !body.project?.versions?.length) {
+  if (!body?.projectId || !body.project) {
     return apiError("Invalid project snapshot payload.", 400, "INVALID_PAYLOAD");
   }
 

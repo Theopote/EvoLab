@@ -11,7 +11,7 @@ import {
 } from "@/lib/workflow-navigation";
 import { programFromBrief } from "@/lib/project-domain";
 import { applyTypologyPackToDomain, briefFromTypologyPack } from "@/lib/typologies/domain";
-import { createDemoProjectData } from "@/lib/typologies/demo-project";
+import { createProjectBundle, type CreateProjectInput } from "@/lib/projects/create-project";
 import type { TypologyPackId } from "@/lib/typology/types";
 import { createEmptyIntakeRecord } from "@/lib/intake/project-intake-types";
 import { relayoutPlanCommand, resolveRelayoutOutline } from "@/lib/store/commands/relayout-plan";
@@ -88,11 +88,33 @@ export const createProjectSlice: StateCreator<EvoProjectStore, [], [], ProjectSl
   loadDemoProject: (typologyId: TypologyPackId) =>
     set(
       produce<EvoProjectStore>((state) => {
-        const demo = createDemoProjectData(typologyId);
-        state.project = demo;
-        state.brief = briefFromTypologyPack(typologyId);
-        state.workflowPhase = "scheme";
-        state.activeTab = "Plan";
+        const bundle = createProjectBundle(
+          {
+            projectName: `EvoLab ${typologyId} Demo`,
+            buildingTypeId: typologyId,
+            startMode: "demo"
+          },
+          `evolab-demo-${typologyId}`
+        );
+        state.project = bundle.project;
+        state.brief = bundle.brief;
+        state.workflowPhase = bundle.workflowPhase;
+        state.activeTab = bundle.activeTab;
+        state.undoStack = [];
+        state.redoStack = [];
+        clearSelectionDraft(state);
+        bumpGeometryRevision(state);
+        refreshDerivedDraft(state);
+      })
+    ),
+  createNewProject: (input: CreateProjectInput) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        const bundle = createProjectBundle(input);
+        state.project = bundle.project;
+        state.brief = bundle.brief;
+        state.workflowPhase = bundle.workflowPhase;
+        state.activeTab = bundle.activeTab;
         state.undoStack = [];
         state.redoStack = [];
         clearSelectionDraft(state);

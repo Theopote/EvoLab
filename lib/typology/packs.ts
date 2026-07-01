@@ -249,7 +249,7 @@ const schoolTopology: TypologyTopologyConfig = {
 export const healthcareTypologyPack: TypologyPack = {
   id: "healthcare",
   label: "Healthcare",
-  aliases: ["healthcare", "hospital", "clinic", "medical"],
+  aliases: ["healthcare", "hospital", "clinic", "medical", "eldercare"],
   roomTypes: ["lobby", "corridor", "consultation", "ward", "office", "bathroom", "equipment_room", "shaft", "stair", "elevator"],
   adjacencyRules: [
     { fromRoomTypes: ["consultation", "ward"], toRoomTypes: ["corridor"], relationship: "must" },
@@ -310,7 +310,33 @@ export const healthcareTypologyPack: TypologyPack = {
 export const officeTypologyPack: TypologyPack = {
   id: "office",
   label: "Office",
-  aliases: ["office", "commercial", "workplace"],
+  aliases: [
+    "office",
+    "commercial",
+    "workplace",
+    "coworking",
+    "retail",
+    "shop",
+    "store",
+    "mall",
+    "supermarket",
+    "factory",
+    "industrial",
+    "warehouse",
+    "workshop",
+    "logistics",
+    "hotel",
+    "hospitality",
+    "restaurant",
+    "cultural",
+    "museum",
+    "sports",
+    "theater",
+    "exhibition",
+    "mixed-use",
+    "parking",
+    "religious"
+  ],
   roomTypes: ["lobby", "corridor", "office", "bathroom", "equipment_room", "shaft", "stair", "elevator"],
   adjacencyRules: [
     { fromRoomTypes: ["office"], toRoomTypes: ["corridor"], relationship: "must" },
@@ -366,7 +392,7 @@ export const officeTypologyPack: TypologyPack = {
 export const residentialTypologyPack: TypologyPack = {
   id: "residential",
   label: "Residential",
-  aliases: ["residential", "housing", "apartment"],
+  aliases: ["residential", "housing", "apartment", "villa", "dormitory"],
   roomTypes: ["lobby", "corridor", "living_room", "bedroom", "kitchen", "bathroom", "shaft", "stair", "elevator"],
   adjacencyRules: [
     { fromRoomTypes: ["bedroom", "living_room"], toRoomTypes: ["corridor"], relationship: "prefer" },
@@ -423,7 +449,7 @@ export const residentialTypologyPack: TypologyPack = {
 export const schoolTypologyPack: TypologyPack = {
   id: "school",
   label: "School",
-  aliases: ["school", "education", "campus"],
+  aliases: ["school", "education", "campus", "university", "kindergarten"],
   roomTypes: ["lobby", "corridor", "office", "bathroom", "equipment_room", "shaft", "stair", "elevator", "other"],
   adjacencyRules: [
     { fromRoomTypes: ["other"], toRoomTypes: ["corridor"], relationship: "must" },

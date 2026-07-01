@@ -6,7 +6,7 @@ import type { ProjectData } from "@/lib/project-types";
 import { DEFAULT_TYPOLOGY_ID, DEMO_PROJECT_OUTLINE } from "@/lib/typologies/defaults";
 import type { TypologyPackId } from "@/lib/typology/types";
 
-export function createDemoProjectData(typologyId: TypologyPackId = DEFAULT_TYPOLOGY_ID): ProjectData {
+export function createDemoProjectData(typologyId: TypologyPackId = DEFAULT_TYPOLOGY_ID, projectId?: string): ProjectData {
   const pack = resolveTypologyPack(typologyId);
   const [primaryScheme] = createMockPlanVersionsFromPack(pack, DEMO_PROJECT_OUTLINE);
 
@@ -15,7 +15,7 @@ export function createDemoProjectData(typologyId: TypologyPackId = DEFAULT_TYPOL
   }
 
   return normalizeProjectData({
-    projectId: "evolab-demo-001",
+    projectId: projectId ?? `evolab-demo-${typologyId}`,
     projectName: `EvoLab ${pack.label} Concept Study`,
     projectType: pack.id,
     activeVersionId: primaryScheme.id,

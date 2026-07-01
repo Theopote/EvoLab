@@ -19,6 +19,27 @@ export async function fetchProjectSnapshot(projectId: string): Promise<Workspace
   }
 }
 
+export async function createProjectSnapshot(snapshot: WorkspacePersistedSnapshot): Promise<boolean> {
+  try {
+    const response = await fetch("/api/projects", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(snapshot)
+    });
+
+    if (!response.ok) {
+      return false;
+    }
+
+    await readApiResponse<{ projectId: string }>(response);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function saveProjectSnapshot(snapshot: WorkspacePersistedSnapshot): Promise<boolean> {
   try {
     const response = await fetch(`/api/projects/${encodeURIComponent(snapshot.projectId)}`, {
