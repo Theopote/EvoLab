@@ -99,6 +99,7 @@ export interface EvoProjectStore {
   updateProjectIntake: (patch: Partial<import("@/lib/intake/project-intake-types").ProjectIntakeRecord>) => void;
   loadDemoProject: (typologyId: import("@/lib/typology/types").TypologyPackId) => void;
   createNewProject: (input: import("@/lib/projects/create-project").CreateProjectInput) => void;
+  renameProject: (projectName: string) => void;
   updateScoringConfig: (patch: Partial<ScoringConfig>) => void;
   resetScoringConfig: () => void;
   updateFacadeEnvelope: (patch: Partial<FacadeEnvelope>) => void;

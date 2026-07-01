@@ -76,6 +76,23 @@ export async function listRemoteProjects(): Promise<ProjectRegistryEntry[]> {
   }
 }
 
+export async function deleteRemoteProject(projectId: string): Promise<boolean> {
+  try {
+    const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}`, {
+      method: "DELETE"
+    });
+
+    if (!response.ok) {
+      return false;
+    }
+
+    await readApiResponse<{ projectId: string }>(response);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function listLauncherProjects(limit = 5): Promise<ProjectRegistryEntry[]> {
   const remote = await listRemoteProjects();
   const local = readProjectRegistry();

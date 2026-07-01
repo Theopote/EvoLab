@@ -46,7 +46,12 @@ export function recordProjectAccess(project: Pick<ProjectData, "projectId" | "pr
     lastAccessedAt: new Date().toISOString()
   };
 
-  writeProjectRegistry([next, ...entries].slice(0, 8));
+  writeProjectRegistry([next, ...entries].slice(0, 20));
+}
+
+export function removeProjectFromRegistry(projectId: string) {
+  const entries = readProjectRegistry().filter((entry) => entry.projectId !== projectId);
+  writeProjectRegistry(entries);
 }
 
 export function listRecentProjects(limit = 5) {

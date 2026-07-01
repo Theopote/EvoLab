@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Cloud, GitCompareArrows, Home, Share2, Sparkles, Wrench } from "lucide-react";
 import { WorkspaceEditHistoryControls } from "@/components/workspace/WorkspaceEditHistoryControls";
+import { WorkspaceProjectSwitcher } from "@/components/workspace/WorkspaceProjectSwitcher";
 import { pendingChangeSets } from "@/lib/project-domain";
 import { topNavPhaseDefinitions, type WorkflowPhase, type WorkflowPhaseId } from "@/lib/workflow-phases";
 import type { ProjectData } from "@/lib/project-types";
@@ -61,7 +62,7 @@ export function TopNav({ project, workflowPhase, onPhaseChange, onOpenReviews }:
         >
           <Home className="h-4 w-4" />
         </Link>
-        <span className="max-w-48 truncate text-slate-300">{project.projectName}</span>
+        <WorkspaceProjectSwitcher />
         {pendingReviewCount > 0 ? (
           <button
             className="flex items-center gap-1 rounded border border-warning/40 bg-warning/10 px-2 py-1 text-xs text-warning hover:border-warning"

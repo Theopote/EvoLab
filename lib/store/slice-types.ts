@@ -10,6 +10,7 @@ export type ProjectSliceActions = Pick<
   | "updateProjectIntake"
   | "loadDemoProject"
   | "createNewProject"
+  | "renameProject"
   | "updateScoringConfig"
   | "resetScoringConfig"
   | "updateFacadeEnvelope"

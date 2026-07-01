@@ -122,6 +122,17 @@ export const createProjectSlice: StateCreator<EvoProjectStore, [], [], ProjectSl
         refreshDerivedDraft(state);
       })
     ),
+  renameProject: (projectName: string) =>
+    set(
+      produce<EvoProjectStore>((state) => {
+        const trimmed = projectName.trim();
+        if (!trimmed) {
+          return;
+        }
+
+        state.project.projectName = trimmed;
+      })
+    ),
   updateScoringConfig: (patch) =>
     set(
       produce<EvoProjectStore>((state) => {

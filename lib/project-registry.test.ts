@@ -3,7 +3,9 @@ import {
   listRecentProjects,
   mergeProjectSummaries,
   recordProjectAccess,
-  readProjectRegistry
+  readProjectRegistry,
+  removeProjectFromRegistry,
+  type ProjectRegistryEntry
 } from "@/lib/project-registry";
 
 describe("project registry", () => {
@@ -78,5 +80,37 @@ describe("project registry", () => {
     expect(merged.map((entry) => entry.projectId)).toEqual(["shared", "remote-only", "local-only"]);
     expect(merged[0]?.projectName).toBe("Local Shared");
     expect(merged[0]?.versionCount).toBe(4);
+  });
+
+  it("removes a project from the registry", () => {
+    const stored: ProjectRegistryEntry[] = [
+      {
+        projectId: "keep",
+        projectName: "Keep",
+        projectType: "office",
+        versionCount: 1,
+        lastAccessedAt: "2026-06-27T10:00:00.000Z"
+      },
+      {
+        projectId: "remove",
+        projectName: "Remove",
+        projectType: "school",
+        versionCount: 2,
+        lastAccessedAt: "2026-06-27T09:00:00.000Z"
+      }
+    ];
+
+    vi.stubGlobal("window", {
+      localStorage: {
+        getItem: vi.fn(() => JSON.stringify(stored)),
+        setItem: vi.fn()
+      }
+    });
+
+    removeProjectFromRegistry("remove");
+
+    const payload = JSON.parse(String((window.localStorage.setItem as ReturnType<typeof vi.fn>).mock.calls[0]?.[1]));
+    expect(payload).toHaveLength(1);
+    expect(payload[0]?.projectId).toBe("keep");
   });
 });
